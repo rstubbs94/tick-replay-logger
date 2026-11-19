@@ -181,7 +181,7 @@ public final class ObservedSelfDamageTextResolver
 		}
 	}
 
-	public ObservedActorActivityResolver.Result resolve(DamageRecord hit, WorldSnapshot impact, CombatCatalog catalog)
+	public ObservedActorActivityResolver.Result resolve(DamageRecord hit, WorldSnapshot impact, Object catalog)
 	{
 		List<Candidate> output = new ArrayList<>();
 		if (!ordinaryLocalOutcome(hit, catalog))
@@ -224,7 +224,7 @@ public final class ObservedSelfDamageTextResolver
 
 	/** A qualified response can contradict only its matching retained input source, never other causes. */
 	public List<String> eligibilityExclusions(DamageRecord hit, WorldSnapshot impact, Candidate candidate,
-		CombatCatalog catalog)
+		Object catalog)
 	{
 		if (candidate == null || !ordinaryLocalOutcome(hit, catalog) || hit.getAmount() < 0 || impact == null
 			|| !Objects.equals(candidate.getSceneKey(), impact.getSceneKey())
@@ -243,8 +243,9 @@ public final class ObservedSelfDamageTextResolver
 		return Collections.emptyList();
 	}
 
-	private static boolean ordinaryLocalOutcome(DamageRecord hit, CombatCatalog catalog)
+	private static boolean ordinaryLocalOutcome(DamageRecord hit, Object referenceData)
 	{
+		LegacyCombatCatalog catalog=LegacyCombatCatalog.from(referenceData);
 		return hit != null && catalog != null && "player".equals(hit.getDefenderRef())
 			&& Arrays.asList("RECEIVED", "RESOURCE_IMPACT").contains(hit.getDirection())
 			&& Boolean.TRUE.equals(hit.getHitsplatTypeKnown())

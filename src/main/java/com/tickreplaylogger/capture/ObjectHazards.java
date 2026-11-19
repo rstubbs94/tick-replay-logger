@@ -24,10 +24,9 @@
  */
 package com.tickreplaylogger.capture;
 
+import static net.runelite.client.util.Text.removeTags;
 import lombok.Value;
-import net.runelite.api.Client;
-import net.runelite.api.ObjectComposition;
-import net.runelite.api.TileObject;
+import net.runelite.api.*;
 
 /** Resolves the currently observed object definition, including varbit/varp-driven floors. */
 public final class ObjectHazards
@@ -76,14 +75,18 @@ public final class ObjectHazards
 	public static Resolved resolve(Client client, TileObject object, DamageMap map)
 	{
 		if (object == null || map == null)
+		{
 			return null;
+		}
 		return resolve(client, object.getId(), map);
 	}
 
 	static Resolved resolve(Client client, int baseId, DamageMap map)
 	{
 		if (map == null)
+		{
 			return null;
+		}
 		int id = baseId;
 		String evidence = "OBJECT_DEFINITION";
 		DamageMap.ObjectHazardRule baseRule = map.objectHazardRule(baseId);
@@ -95,11 +98,15 @@ public final class ObjectHazards
 		catch (RuntimeException unavailable)
 		{
 			if (baseRule != null && baseRule.getSurfaceOperator() != null)
+			{
 				return surface(baseId, baseRule, null);
+			}
 			throw unavailable;
 		}
 		if (baseRule != null && baseRule.getSurfaceOperator() != null)
+		{
 			return surface(baseId, baseRule, definition);
+		}
 		boolean resolved = definition != null || baseRule == null || !"inactive".equals(baseRule.getState());
 		if (definition != null && definition.getImpostorIds() != null)
 		{
@@ -107,14 +114,20 @@ public final class ObjectHazards
 			resolved = definition != null;
 			evidence = resolved ? "TRANSFORMED_OBJECT_DEFINITION" : "TRANSFORM_UNAVAILABLE";
 			if (resolved)
+			{
 				id = definition.getId();
+			}
 		}
 		DamageMap.ObjectHazardRule rule = map.objectHazardRule(id);
 		String name = rule != null ? rule.getName() : map.hazardName("object", id);
 		if (name == null && baseRule != null)
+		{
 			name = baseRule.getName();
+		}
 		if (name == null)
+		{
 			return null;
+		}
 		boolean possible = resolved && rule != null && Boolean.TRUE.equals(rule.getDamaging())
 			|| !resolved && (rule != null || baseRule != null);
 		String eligibility = !resolved ? "STATE_UNAVAILABLE"
@@ -144,9 +157,9 @@ public final class ObjectHazards
 		boolean resource = "RESOURCE_TILE".equals(rule.getSurfaceOperator());
 		String eligibility = !qualified ? "DEFINITION_NOT_QUALIFIED"
 			: resource ? "RESOURCE_REFERENCE_ONLY"
-				: "CONDITIONAL_HP_TILE".equals(rule.getSurfaceOperator()) || "CONDITIONAL_HP_OBJECT_FOOTPRINT".equals(rule.getSurfaceOperator())
-					? "CONDITION_NOT_OBSERVED"
-					: "ELIGIBLE_REFERENCE_SURFACE";
+				: "CONDITIONAL_HP_TILE".equals(rule.getSurfaceOperator())
+					|| "CONDITIONAL_HP_OBJECT_FOOTPRINT".equals(rule.getSurfaceOperator()) ? "CONDITION_NOT_OBSERVED"
+						: "ELIGIBLE_REFERENCE_SURFACE";
 		return new Resolved(id, id, rule.getName(), qualified ? rule.getState() : "unknown",
 			qualified ? rule.getDamaging() : null,
 			qualified ? "REVIEWED_STATIC_OBJECT_SURFACE" : "SURFACE_DEFINITION_UNAVAILABLE_OR_CONFLICTING",
@@ -155,6 +168,6 @@ public final class ObjectHazards
 
 	private static String clean(String value)
 	{
-		return value == null ? "" : value.replaceAll("<[^>]*>", "").trim().toLowerCase(java.util.Locale.ROOT);
+		return value == null ? "" : removeTags(value).trim().toLowerCase(java.util.Locale.ROOT);
 	}
 }

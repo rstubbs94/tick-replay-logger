@@ -427,8 +427,8 @@ public class GenericCaptureTest
 			assertEquals("HP", catalog.hitsplatSurface(id));
 		assertEquals("UNCLASSIFIED", catalog.hitsplatSurface(999999));
 		DamageMap map = DamageMap.load(gson);
-		assertEquals("UNKNOWN", map.determinationFor("Nex"));
-		assertEquals("UNKNOWN", map.determinationFor("Phantom Muspah"));
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
+		assertEquals("UNKNOWN", legacy.determinationForAttack(-1, -1, null, true));
 		assertEquals("transition", catalog.animationKind(9035, 8754));
 	}
 

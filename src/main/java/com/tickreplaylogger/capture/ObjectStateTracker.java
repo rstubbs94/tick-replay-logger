@@ -25,26 +25,10 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.ObservedObjectState;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import net.runelite.api.Animation;
-import net.runelite.api.Client;
-import net.runelite.api.DecorativeObject;
-import net.runelite.api.DynamicObject;
-import net.runelite.api.GameObject;
-import net.runelite.api.GroundObject;
-import net.runelite.api.ObjectComposition;
+import net.runelite.api.*;
 import net.runelite.api.Point;
-import net.runelite.api.Renderable;
-import net.runelite.api.TileObject;
-import net.runelite.api.WallObject;
-import net.runelite.api.WorldView;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 
@@ -101,7 +85,9 @@ public final class ObjectStateTracker
 	public void spawned(String kind, TileObject object)
 	{
 		if (object == null || objects.containsKey(object))
+		{
 			return;
+		}
 		if (objects.size() >= MAX_OBJECTS)
 		{
 			dropped++;
@@ -155,7 +141,9 @@ public final class ObjectStateTracker
 		info.put("currentDropped", currentDropped);
 		info.put("currentFailures", currentFailures);
 		if (metadataFailuresObserved)
+		{
 			info.put("currentMetadataFailures", currentMetadataFailures);
+		}
 		info.put("reconciledEverySnapshot", true);
 		info.put("membershipStatus", !membershipAvailable ? "UNAVAILABLE"
 			: membershipComplete ? "COMPLETE_EXPOSED_SCENE_SCAN" : "PARTIAL_EXPOSED_SCENE_SCAN");
@@ -191,7 +179,9 @@ public final class ObjectStateTracker
 			enumerationOrder.add(row.object);
 		}
 		for (int i = 0; i < traversal.objectFailures(); i++)
+		{
 			failedRead();
+		}
 		return found;
 	}
 
@@ -214,7 +204,9 @@ public final class ObjectStateTracker
 		SceneCaptureTraversal traversal)
 	{
 		if (traversal == null || !traversal.matches(client, active))
+		{
 			throw new IllegalArgumentException("Mismatched scene traversal");
+		}
 		sampledPlane = plane;
 		currentFailures = 0;
 		currentDropped = 0;
@@ -234,20 +226,30 @@ public final class ObjectStateTracker
 			return null;
 		}
 		if (found == null)
-			return null; // Unavailable scene is not a current observation of cached membership.
+		{
+			return null;
+		} // Unavailable scene is not a current observation of cached membership.
 		membershipComplete = currentFailures == 0 && currentDropped == 0;
 		if (membershipComplete)
+		{
 			objects.keySet().removeIf(object -> !found.containsKey(object));
+		}
 		for (TileObject observed : enumerationOrder)
+		{
 			spawned(found.get(observed), observed);
+		}
 		if (currentDropped > 0)
+		{
 			membershipComplete = false;
+		}
 		List<ObservedObjectState> out = new ArrayList<>();
 		for (TileObject object : found.keySet())
 		{
 			Entry entry = objects.get(object);
 			if (entry == null)
+			{
 				continue;
+			}
 			try
 			{
 				// A stationary object can acquire a new renderable/config without a lifecycle callback.
@@ -259,7 +261,9 @@ public final class ObjectStateTracker
 					metadataFailuresObserved = true;
 				}
 				if (!current.equals(entry.state))
+				{
 					entry.state = current;
+				}
 				out.add(entry.state);
 			}
 			catch (RuntimeException error)
@@ -270,7 +274,9 @@ public final class ObjectStateTracker
 		observedObjects = out.size();
 		out.sort(Comparator.comparingLong(ObservedObjectState::getObjectKey));
 		if (previousSnapshot != null && out.equals(previousSnapshot))
+		{
 			return previousSnapshot;
+		}
 		previousSnapshot = Collections.unmodifiableList(out);
 		return previousSnapshot;
 	}
@@ -315,9 +321,13 @@ public final class ObjectStateTracker
 		boolean single = object instanceof GroundObject;
 		List<Renderable> models = new ArrayList<>();
 		if (object instanceof GameObject)
+		{
 			models.add(fields.read("renderable", ((GameObject) object)::getRenderable));
+		}
 		if (object instanceof GroundObject)
+		{
 			models.add(fields.read("renderable", ((GroundObject) object)::getRenderable));
+		}
 		if (object instanceof WallObject)
 		{
 			models.add(fields.read("renderable1", ((WallObject) object)::getRenderable1));
@@ -330,6 +340,7 @@ public final class ObjectStateTracker
 		}
 		List<Integer> animations = new ArrayList<>(), frames = new ArrayList<>();
 		for (int index = 0; index < models.size(); index++)
+		{
 			if (models.get(index) instanceof DynamicObject)
 			{
 				entry.dynamic = true;
@@ -340,13 +351,18 @@ public final class ObjectStateTracker
 					: fields.read(prefix + "animationId", animation::getId));
 				frames.add(fields.read(prefix + "animationFrame", dynamic::getAnimFrame));
 			}
+		}
 		Integer varbit = base == null ? null : fields.read("varbitId", base::getVarbitId),
 			varp = base == null ? null : fields.read("varpId", base::getVarPlayerId);
 		Integer control = null;
 		if (varbit != null && varbit >= 0)
+		{
 			control = fields.read("controlValue", () -> client.getVarbitValue(varbit));
+		}
 		else if (varbit != null && varp != null && varp >= 0)
+		{
 			control = fields.read("controlValue", () -> client.getVarpValue(varp));
+		}
 		Integer orientation = null, modelOrientation = null, orientationA = null, orientationB = null, config = null,
 			offsetX = null, offsetY = null, offsetX2 = null, offsetY2 = null;
 		if (object instanceof GameObject)
@@ -357,7 +373,9 @@ public final class ObjectStateTracker
 			config = fields.read("config", g::getConfig);
 		}
 		if (object instanceof GroundObject)
+		{
 			config = fields.read("config", ((GroundObject) object)::getConfig);
+		}
 		if (object instanceof WallObject)
 		{
 			WallObject wall = (WallObject) object;

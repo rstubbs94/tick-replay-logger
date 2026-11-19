@@ -345,7 +345,7 @@ public final class ObservedActorMechanismResolver
 					.familyKey(cue.actorKnown ? null : "npc-definition:" + cue.id).sceneKey(cue.event.getSceneKey())
 					.worldViewId(cue.view).plane(sourcePlane).strength("POSSIBLE")
 					.evidence(Collections.unmodifiableList(evidence)).build();
-				SourceEvidenceResolver.Hypothesis hypothesis = SourceEvidenceResolver.Hypothesis.builder()
+				LegacyConstraintOracle.Hypothesis hypothesis = LegacyConstraintOracle.Hypothesis.builder()
 					.candidate(candidate).mechanism(rule.getDelivery()).damageComponent(rule.getComponent())
 					.causalAssociationOnly(true).build();
 				output.add(new ObservedMechanismResolver.Contribution(hypothesis, "NPC", cue.id, definition));
@@ -510,7 +510,7 @@ public final class ObservedActorMechanismResolver
 		for (Map.Entry<String, SourceResolution.Candidate> entry : grouped.entrySet())
 		{
 			MechanismRules.ActorRule rule = components.get(entry.getKey());
-			SourceEvidenceResolver.Hypothesis.HypothesisBuilder hypothesis = SourceEvidenceResolver.Hypothesis.builder()
+			LegacyConstraintOracle.Hypothesis.HypothesisBuilder hypothesis = LegacyConstraintOracle.Hypothesis.builder()
 				.candidate(entry.getValue()).mechanism("TERMINAL_AREA").damageComponent(rule.getComponent())
 				.worldMode("NORMAL").causalAssociationOnly(true);
 			Integer maximum = maxima.get(entry.getKey());

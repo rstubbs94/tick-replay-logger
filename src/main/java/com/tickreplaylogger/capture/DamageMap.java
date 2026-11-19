@@ -48,14 +48,12 @@ public class DamageMap
 {
 	private CombatCatalog catalog;
 	private String version = "unknown";
-	private Map<String, List<String>> npcStyles = Collections.emptyMap();
 	private Map<String, Integer> npcAttackSpeeds = Collections.emptyMap();
 	private Map<String, Map<String, String>> hazardNamesByKind = Collections.emptyMap();
 	private Map<String, ObjectHazardRule> objectHazardRules = Collections.emptyMap();
 	private Map<String, String> effectSpotanims = Collections.emptyMap();
 	private Map<String, String> projectileStyles = Collections.emptyMap();
 	private Map<String, String> playerAnimationStyles = Collections.emptyMap();
-	private Map<String, DamageRule> damageRules = Collections.emptyMap();
 	private Map<String, Map<String, AttackRule>> npcAttackRules = Collections.emptyMap();
 
 	@Getter
@@ -82,16 +80,6 @@ public class DamageMap
 	}
 
 	@Getter
-	public static class DamageRule
-	{
-		private String name;
-		private String damageType;
-		private String prayable;
-		private String mapRef;
-		private List<String> sourceKeys;
-	}
-
-	@Getter
 	public static class AttackRule
 	{
 		private String name;
@@ -103,55 +91,65 @@ public class DamageMap
 	private static class Model
 	{
 		String version;
-		Map<String, List<String>> npcStyles;
 		Map<String, Integer> npcAttackSpeeds;
 		Map<String, Map<String, String>> hazardNamesByKind;
 		Map<String, ObjectHazardRule> objectHazardRules;
 		Map<String, String> effectSpotanims;
 		Map<String, String> projectileStyles;
 		Map<String, String> playerAnimationStyles;
-		Map<String, DamageRule> damageRules;
 		Map<String, Map<String, AttackRule>> npcAttackRules;
 	}
 
 	/** Load the bundled {@code damage_map.json} resource. Never throws — logs and no-ops on failure. */
 	public static DamageMap load(Gson gson)
 	{
+		return load(gson, CombatCatalog.load(gson));
+	}
+
+	static DamageMap load(Gson gson, CombatCatalog references)
+	{
 		DamageMap map = new DamageMap();
-		map.catalog = CombatCatalog.load(gson);
-		try (InputStream in = DamageMap.class.getResourceAsStream("/com/tickreplaylogger/damage_map.json"))
+		map.catalog = references;
+		try
 		{
-			if (in == null)
-			{
-				log.warn("Bundled damage_map.json not found on classpath; labels will degrade to observed.");
-				return map;
-			}
-			Model m = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), Model.class);
+			Model m = gson.fromJson(RuntimeCatalog.load(gson).section("capture"), Model.class);
 			if (m != null)
 			{
 				if (m.version != null)
+				{
 					map.version = m.version;
-				if (m.npcStyles != null)
-					map.npcStyles = m.npcStyles;
+				}
 				if (m.npcAttackSpeeds != null)
+				{
 					map.npcAttackSpeeds = m.npcAttackSpeeds;
+				}
 				if (m.hazardNamesByKind != null)
+				{
 					map.hazardNamesByKind = m.hazardNamesByKind;
+				}
 				if (m.objectHazardRules != null)
+				{
 					map.objectHazardRules = m.objectHazardRules;
+				}
 				if (m.effectSpotanims != null)
+				{
 					map.effectSpotanims = m.effectSpotanims;
+				}
 				if (m.projectileStyles != null)
+				{
 					map.projectileStyles = m.projectileStyles;
+				}
 				if (m.playerAnimationStyles != null)
+				{
 					map.playerAnimationStyles = m.playerAnimationStyles;
-				if (m.damageRules != null)
-					map.damageRules = m.damageRules;
+				}
 				if (m.npcAttackRules != null)
+				{
 					map.npcAttackRules = m.npcAttackRules;
+				}
 			}
 			log.debug("Loaded damage map v{}: {} npc ids, {} hazards, {} effect spotanims", map.version,
-				map.npcStyles.size(), map.hazardNamesByKind.values().stream().mapToInt(Map::size).sum(),
+				map.npcAttackSpeeds.size(), map.hazardNamesByKind.values().stream().mapToInt(Map::size).sum(),
 				map.effectSpotanims.size());
 		}
 		catch (Exception e)
@@ -181,16 +179,6 @@ public class DamageMap
 		return playerAnimationStyles.get(String.valueOf(id));
 	}
 
-	public DamageRule environmentalRule()
-	{
-		return damageRules.get("environmental");
-	}
-
-	public DamageRule pickpocketRule()
-	{
-		return damageRules.get("pickpocket");
-	}
-
 	public AttackRule attackRuleForNpc(int npcId, int animationId)
 	{
 		return attackRuleForNpc(npcId, animationId, null);
@@ -204,38 +192,11 @@ public class DamageMap
 	public AttackRule attackRuleForNpc(int npcId, int animationId, Integer level, boolean normalContext)
 	{
 		if (!normalContext || (catalog != null && !catalog.baseVariantEstablished(npcId, level, true)))
+		{
 			return null;
+		}
 		Map<String, AttackRule> attacks = npcAttackRules.get(String.valueOf(npcId));
 		return attacks == null ? null : attacks.get(String.valueOf(animationId));
-	}
-
-	/** Attack styles (damage types) for an NPC id, or empty. */
-	public List<String> stylesForNpc(int npcId)
-	{
-		List<String> s = npcStyles.get(String.valueOf(npcId));
-		return s != null ? s : Collections.emptyList();
-	}
-
-	/** Single infobox/reference candidate, not proof of an individual hit's damage type. */
-	public String soleStyleForNpc(int npcId)
-	{
-		return soleStyleForNpc(npcId, null);
-	}
-
-	public String soleStyleForNpc(int npcId, Integer level)
-	{
-		return soleStyleForNpc(npcId, level, false);
-	}
-
-	public String soleStyleForNpc(int npcId, Integer level, boolean normalContext)
-	{
-		if (!normalContext || (catalog != null && !catalog.baseVariantEstablished(npcId, level, true)))
-			return null;
-		String reviewed = catalog == null ? null : catalog.entityDamageType(npcId, level, normalContext);
-		if (reviewed != null)
-			return reviewed;
-		List<String> s = stylesForNpc(npcId);
-		return s.size() == 1 ? s.get(0) : null;
 	}
 
 	/** Attack speed in ticks for an NPC id, or 0 if unknown. */
@@ -252,7 +213,9 @@ public class DamageMap
 	public int attackSpeedForNpc(int npcId, Integer level, boolean normalContext)
 	{
 		if (!normalContext || (catalog != null && !catalog.baseVariantEstablished(npcId, level, true)))
+		{
 			return 0;
+		}
 		Integer s = npcAttackSpeeds.get(String.valueOf(npcId));
 		return s != null ? s : 0;
 	}
@@ -277,25 +240,4 @@ public class DamageMap
 		return effectSpotanims.get(String.valueOf(spotanimId));
 	}
 
-	/** Legacy name-only lookup. An actor name never establishes an individual attack's timing. */
-	public String determinationFor(String attackerName)
-	{
-		// A boss name does not distinguish its ordinary, melee and special attacks.
-		return "UNKNOWN";
-	}
-
-	public String determinationForAttack(int npcId, int projectileId)
-	{
-		return catalog == null ? "UNKNOWN" : catalog.prayerTiming(npcId, projectileId);
-	}
-
-	public String determinationForAttack(int npcId, int projectileId, Integer level)
-	{
-		return catalog == null ? "UNKNOWN" : catalog.prayerTiming(npcId, projectileId, level);
-	}
-
-	public String determinationForAttack(int npcId, int projectileId, Integer level, boolean normalContext)
-	{
-		return catalog == null ? "UNKNOWN" : catalog.prayerTiming(npcId, projectileId, level, normalContext);
-	}
 }

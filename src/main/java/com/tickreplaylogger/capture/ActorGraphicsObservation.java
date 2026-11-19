@@ -25,13 +25,8 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.ActorGraphicsState;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Supplier;
 import net.runelite.api.Actor;
 import net.runelite.api.ActorSpotAnim;
@@ -72,7 +67,9 @@ public final class ActorGraphicsObservation
 						issues.put("graphicId", entryIssues.get("id"));
 					}
 					else if (id >= 0)
+					{
 						found.add(id);
+					}
 					Integer start = read(entryIssues, "startCycle", animation::getStartCycle);
 					Integer height = read(entryIssues, "height", animation::getHeight);
 					Integer frame = read(entryIssues, "frame", animation::getFrame);
@@ -90,7 +87,9 @@ public final class ActorGraphicsObservation
 		}
 		Integer primary = read(issues, "primaryGraphicId", actor::getGraphic);
 		if (primary != null && primary >= 0)
+		{
 			found.add(primary);
+		}
 		idsKnown = collectionKnown && entryIdsKnown && primary != null;
 		ids = found.isEmpty() && !idsKnown ? null : found.stream().mapToInt(Integer::intValue).toArray();
 		state = ActorGraphicsState.builder().version(1).primaryGraphicId(primary).primaryGraphicKnown(primary != null)

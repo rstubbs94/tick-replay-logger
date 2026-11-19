@@ -24,45 +24,20 @@
  */
 package com.tickreplaylogger.ui.playback;
 
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.TickRecording;
-import com.tickreplaylogger.model.MovementData;
-import com.tickreplaylogger.model.PlayerAction;
-import com.tickreplaylogger.model.TickData;
+import com.google.gson.Gson;
+import com.tickreplaylogger.ui.LiveTickPanel;
+import com.tickreplaylogger.util.DisplayFormat;
+import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
+import static com.tickreplaylogger.ui.LiveTickPanel.buildTelemetryText;
+import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.capture.DamageMap;
 import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
-
-import javax.swing.AbstractAction;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.DefaultListModel;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.KeyStroke;
-import javax.swing.ListCellRenderer;
-import javax.swing.ListSelectionModel;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingConstants;
+import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.Image;
-import java.awt.Insets;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -102,7 +77,7 @@ public class PlaybackPanel extends JPanel
 	private final Runnable onBackCallback;
 	private final SpriteManager spriteManager;
 	private final DamageMap damageMap;
-	private final com.google.gson.Gson gson;
+	private final Gson gson;
 	private TickRecording recording;
 	private List<TickData> ticks;
 
@@ -154,8 +129,7 @@ public class PlaybackPanel extends JPanel
 	// Combat detection - ticks to look back for "In Combat" status
 	private static final int COMBAT_LOOKBACK_TICKS = 5;
 
-	public PlaybackPanel(Runnable onBackCallback, SpriteManager spriteManager, DamageMap damageMap,
-		com.google.gson.Gson gson)
+	public PlaybackPanel(Runnable onBackCallback, SpriteManager spriteManager, DamageMap damageMap, Gson gson)
 	{
 		this.onBackCallback = onBackCallback;
 		this.spriteManager = spriteManager;
@@ -243,9 +217,7 @@ public class PlaybackPanel extends JPanel
 		headerPanel.add(titleLabel);
 
 		// Location row
-		locationLabel = new JLabel("Location");
-		locationLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		locationLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+		locationLabel = createTextLabel("Location", ColorScheme.LIGHT_GRAY_COLOR, Font.PLAIN, 12);
 		locationLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		headerPanel.add(locationLabel);
 
@@ -295,14 +267,10 @@ public class PlaybackPanel extends JPanel
 		damageRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		damageRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		damageTakenLabel = new JLabel("Taken: 0");
-		damageTakenLabel.setForeground(DAMAGE_RECEIVED_COLOR);
-		damageTakenLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		damageTakenLabel = createTextLabel("Taken: 0", DAMAGE_RECEIVED_COLOR, Font.BOLD, 13);
 		damageRow.add(damageTakenLabel);
 
-		damageDealtLabel = new JLabel("Dealt: 0");
-		damageDealtLabel.setForeground(DAMAGE_DEALT_COLOR);
-		damageDealtLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		damageDealtLabel = createTextLabel("Dealt: 0", DAMAGE_DEALT_COLOR, Font.BOLD, 13);
 		damageRow.add(damageDealtLabel);
 
 		statsPanel.add(damageRow);
@@ -319,14 +287,10 @@ public class PlaybackPanel extends JPanel
 		prayersSection.setMinimumSize(new Dimension(0, 90));
 		prayersSection.setMaximumSize(new Dimension(Integer.MAX_VALUE, 90));
 
-		JLabel prayersTitleLabel = new JLabel("Active Prayers:");
-		prayersTitleLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		prayersTitleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		JLabel prayersTitleLabel = createTextLabel("Active Prayers:", ColorScheme.LIGHT_GRAY_COLOR, Font.BOLD, 13);
 		prayersSection.add(prayersTitleLabel, BorderLayout.NORTH);
 
-		prayersLabel = new JLabel("None");
-		prayersLabel.setForeground(PRAYER_COLOR);
-		prayersLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
+		prayersLabel = createTextLabel("None", PRAYER_COLOR, Font.PLAIN, 13);
 		prayersLabel.setVerticalAlignment(SwingConstants.TOP);
 		prayersSection.add(prayersLabel, BorderLayout.CENTER);
 
@@ -341,9 +305,7 @@ public class PlaybackPanel extends JPanel
 		currentTickSection.setMinimumSize(new Dimension(0, 100));
 		currentTickSection.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
 
-		JLabel currentTickTitle = new JLabel("This Tick:");
-		currentTickTitle.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		currentTickTitle.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		JLabel currentTickTitle = createTextLabel("This Tick:", ColorScheme.LIGHT_GRAY_COLOR, Font.BOLD, 13);
 		currentTickSection.add(currentTickTitle, BorderLayout.NORTH);
 
 		currentTickPanel = new JPanel();
@@ -354,9 +316,8 @@ public class PlaybackPanel extends JPanel
 		mainPanel.add(currentTickSection);
 
 		// Event log title
-		JLabel eventLogTitle = new JLabel("Event Log (click to jump)");
-		eventLogTitle.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		eventLogTitle.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		JLabel eventLogTitle = createTextLabel("Event Log (click to jump)", ColorScheme.LIGHT_GRAY_COLOR, Font.BOLD,
+			13);
 		eventLogTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 		mainPanel.add(eventLogTitle);
 
@@ -375,7 +336,9 @@ public class PlaybackPanel extends JPanel
 			{
 				super.setBounds(x, y, width, height);
 				if (width > 0 && width != getFixedCellWidth())
+				{
 					setFixedCellWidth(width);
+				}
 			}
 		};
 		eventLogList.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -454,21 +417,15 @@ public class PlaybackPanel extends JPanel
 		speedCombo.addActionListener(e -> updatePlaybackSpeed());
 		infoRow.add(speedCombo);
 
-		tickCounterLabel = new JLabel("Tick 0/0");
-		tickCounterLabel.setForeground(Color.WHITE);
-		tickCounterLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		tickCounterLabel = createTextLabel("Tick 0/0", Color.WHITE, Font.BOLD, 13);
 		infoRow.add(tickCounterLabel);
 
 		// Status indicator
-		statusLabel = new JLabel("Idle");
-		statusLabel.setForeground(STATUS_IDLE);
-		statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		statusLabel = createTextLabel("Idle", STATUS_IDLE, Font.BOLD, 13);
 		infoRow.add(statusLabel);
 
 		// Telemetry indicator
-		telemetryLabel = new JLabel("");
-		telemetryLabel.setForeground(TELEMETRY_COLOR);
-		telemetryLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		telemetryLabel = createTextLabel("", TELEMETRY_COLOR, Font.PLAIN, 11);
 		infoRow.add(telemetryLabel);
 
 		controlBar.add(infoRow);
@@ -540,10 +497,9 @@ public class PlaybackPanel extends JPanel
 
 		// Update header
 		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.preparedTitle(recording, damageMap);
-		titleLabel.setText(com.tickreplaylogger.util.DisplayFormat.humanize(displayName));
+		titleLabel.setText(DisplayFormat.humanize(displayName));
 		titleLabel.setToolTipText(java.util.Objects.equals(displayName, recording.getKillerName()) ? null
-			: "Observed encounter; fatal source: "
-				+ com.tickreplaylogger.util.DisplayFormat.fatalSourceName(recording));
+			: "Observed encounter; fatal source: " + DisplayFormat.fatalSourceName(recording));
 		locationLabel.setText(recording.getLocation() + " - " + recording.getTimeSinceRecording());
 		deathSummaryLabel.setText(buildDeathSummary());
 
@@ -790,41 +746,6 @@ public class PlaybackPanel extends JPanel
 		}
 	}
 
-	private static String buildTelemetryText(TickData tick)
-	{
-		long tickMs = tick.getTickDurationMs();
-		int pingMs = tick.getPingMs();
-		int lossPercent = tick.getPacketLossPercent();
-
-		if (tickMs <= 0 && pingMs <= 0 && lossPercent <= 0)
-		{
-			return null;
-		}
-
-		StringBuilder sb = new StringBuilder();
-		if (tickMs > 0)
-		{
-			sb.append(tickMs).append("ms tick");
-		}
-		if (pingMs > 0)
-		{
-			if (sb.length() > 0)
-			{
-				sb.append(" | ");
-			}
-			sb.append(pingMs).append("ms ping");
-		}
-		if (lossPercent > 0)
-		{
-			if (sb.length() > 0)
-			{
-				sb.append(" | ");
-			}
-			sb.append(lossPercent).append("% failed");
-		}
-		return sb.toString();
-	}
-
 	/**
 	 * Check if player has been in combat recently (dealt or received damage in last N ticks)
 	 */
@@ -850,10 +771,7 @@ public class PlaybackPanel extends JPanel
 		// Damage events — icon = type (sword/bow/wand/dot), colour = direction (red in / green out).
 		for (DamageEvent dmg : tick.getDamageEvents())
 		{
-			JLabel label = createIconLabel(com.tickreplaylogger.util.DisplayFormat.damageLineText(dmg),
-				com.tickreplaylogger.ui.CombatIcons.iconFor(dmg),
-				com.tickreplaylogger.util.DisplayFormat.damageDirectionColor(dmg),
-				com.tickreplaylogger.util.DisplayFormat.damageTooltip(dmg));
+			JLabel label = LiveTickPanel.createDamageLabel(dmg, 13);
 			currentTickPanel.add(label);
 		}
 
@@ -867,8 +785,7 @@ public class PlaybackPanel extends JPanel
 			}
 			ImageIcon icon = getActionIcon(action);
 			Color color = getActionColor(action);
-			JLabel label = createIconLabel(com.tickreplaylogger.util.DisplayFormat.actionText(action), icon, color,
-				action.getDescription());
+			JLabel label = createIconLabel(DisplayFormat.actionText(action), icon, color, action.getDescription());
 			currentTickPanel.add(label);
 		}
 
@@ -891,25 +808,16 @@ public class PlaybackPanel extends JPanel
 		}
 
 		// Telemetry
-		String telText = buildTelemetryText(tick);
-		if (telText != null)
+		JLabel telLabel = LiveTickPanel.createTelemetryLabel(tick);
+		if (telLabel != null)
 		{
-			boolean isLagSpike = tick.getTickDurationMs() > 700 || tick.getPingMs() > 200
-				|| tick.getPacketLossPercent() > 0;
-			JLabel telLabel = new JLabel(telText);
-			telLabel.setForeground(isLagSpike ? TELEMETRY_LAG_COLOR : TELEMETRY_COLOR);
-			telLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-			telLabel.setBorder(new EmptyBorder(1, 20, 1, 0));
-			telLabel.setToolTipText("Client tick interval / Latest ping sample / Failed ping attempts");
 			currentTickPanel.add(telLabel);
 		}
 
 		// Empty state
 		if (currentTickPanel.getComponentCount() == 0)
 		{
-			JLabel emptyLabel = new JLabel("(no events)");
-			emptyLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-			emptyLabel.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 13));
+			JLabel emptyLabel = createTextLabel("(no events)", ColorScheme.LIGHT_GRAY_COLOR, Font.ITALIC, 13);
 			currentTickPanel.add(emptyLabel);
 		}
 
@@ -924,21 +832,7 @@ public class PlaybackPanel extends JPanel
 
 	private JLabel createIconLabel(String text, ImageIcon icon, Color color, String tooltip)
 	{
-		JLabel label = new com.tickreplaylogger.ui.SingleLineLabel(text);
-		label.setForeground(color);
-		label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-		label.setToolTipText(tooltip);
-		if (icon != null)
-		{
-			label.setIcon(icon);
-			label.setIconTextGap(6);
-			label.setBorder(new EmptyBorder(1, 4, 1, 0));
-		}
-		else
-		{
-			label.setBorder(new EmptyBorder(1, 20, 1, 0));
-		}
-		return label;
+		return LiveTickPanel.createIconLabel(text, icon, color, tooltip, 13);
 	}
 
 	private ImageIcon getActionIcon(PlayerAction action)
@@ -983,19 +877,25 @@ public class PlaybackPanel extends JPanel
 		deathTimingLabel.setToolTipText(null);
 		deathSummaryLabel.setToolTipText(null);
 		if ("Live Snapshot".equals(recording.getLocation()))
+		{
 			return " ";
+		}
 		if (ticks == null || ticks.isEmpty())
 		{
 			return " ";
 		}
 		if ("UNRESOLVED_IMPACT_IN_DEATH_TICK".equals(recording.getFatalHitBasis()))
+		{
 			return "Fatal impact not established";
+		}
 		int fatalTick = ticks.get(ticks.size() - 1).getTickNumber();
 		String prefix = "Last received hit: ";
 		String fatalBasis = recording.getFatalHitBasis();
 		if ("NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK".equals(fatalBasis)
 			|| recording.getUnresolvedImpactObservationCount() > 0)
+		{
 			return "Fatal impact not established";
+		}
 		if (fatalBasis != null)
 		{
 			prefix = "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK".equals(fatalBasis) ? "Fatal: " : "Last hit: ";
@@ -1009,7 +909,9 @@ public class PlaybackPanel extends JPanel
 		for (int i = ticks.size() - 1; i >= 0; i--)
 		{
 			if (ticks.get(i).getTickNumber() != fatalTick)
+			{
 				continue;
+			}
 			List<DamageEvent> events = ticks.get(i).getDamageEvents();
 			for (int j = events.size() - 1; j >= 0; j--)
 			{
@@ -1019,15 +921,12 @@ public class PlaybackPanel extends JPanel
 					continue;
 				}
 				StringBuilder sb = new StringBuilder(prefix);
-				sb.append(d.getAmount()).append(" from ")
-					.append(com.tickreplaylogger.util.DisplayFormat.damageSourceName(d));
+				sb.append(d.getAmount()).append(" from ").append(DisplayFormat.damageSourceName(d));
 				String det = d.getDetermination();
-				boolean typeless = com.tickreplaylogger.util.DisplayFormat
-					.displayDamageType(d) == DamageEvent.DamageType.TYPELESS;
-				deathTimingLabel
-					.setText(typeless ? "Typeless" : com.tickreplaylogger.util.DisplayFormat.timingLabel(det));
-				deathSummaryLabel.setToolTipText(com.tickreplaylogger.util.DisplayFormat.damageTooltip(d));
-				deathTimingLabel.setToolTipText(com.tickreplaylogger.util.DisplayFormat.damageTooltip(d));
+				boolean typeless = DisplayFormat.displayDamageType(d) == DamageEvent.DamageType.TYPELESS;
+				deathTimingLabel.setText(typeless ? "Typeless" : DisplayFormat.timingLabel(det));
+				deathSummaryLabel.setToolTipText(DisplayFormat.damageTooltip(d));
+				deathTimingLabel.setToolTipText(DisplayFormat.damageTooltip(d));
 				return sb.toString();
 			}
 		}
@@ -1075,7 +974,7 @@ public class PlaybackPanel extends JPanel
 			boolean isCurrent = (index == currentTickIndex);
 
 			// Collect event colors for this tick
-			java.util.List<Color> eventColors = new java.util.ArrayList<>();
+			List<Color> eventColors = new java.util.ArrayList<>();
 
 			if (hasDamageReceived(tick))
 			{
@@ -1161,7 +1060,7 @@ public class PlaybackPanel extends JPanel
 					if (dmg.getAmount() > topRecv)
 					{
 						topRecv = dmg.getAmount();
-						recvSource = com.tickreplaylogger.util.DisplayFormat.damageSourceName(dmg);
+						recvSource = DisplayFormat.damageSourceName(dmg);
 					}
 				}
 				else if (dmg.getDirection() == DamageEvent.DamageDirection.DEALT)
@@ -1176,22 +1075,21 @@ public class PlaybackPanel extends JPanel
 			}
 			if (dmgReceived > 0)
 			{
-				fragments.add("-" + dmgReceived
-					+ (recvSource != null ? " " + com.tickreplaylogger.util.DisplayFormat.humanize(recvSource) : ""));
+				fragments.add("-" + dmgReceived + (recvSource != null ? " " + DisplayFormat.humanize(recvSource) : ""));
 			}
 			if (dmgDealt > 0)
 			{
-				fragments.add("+" + dmgDealt
-					+ (dealtTarget != null ? " " + com.tickreplaylogger.util.DisplayFormat.humanize(dealtTarget) : ""));
+				fragments.add("+" + dmgDealt + (dealtTarget != null ? " " + DisplayFormat.humanize(dealtTarget) : ""));
 			}
 
 			// Name recorded actions as well as colouring the row. Prayer-only ticks must not be blank.
 			for (PlayerAction action : tick.getPlayerActions())
 			{
 				if (action.getType() == PlayerAction.ActionType.PRAYER_DRAINED)
+				{
 					continue;
-				String text = compact ? com.tickreplaylogger.util.DisplayFormat.actionText(action)
-					: action.getDescription();
+				}
+				String text = compact ? DisplayFormat.actionText(action) : action.getDescription();
 				if (compact && action.getTarget() != null
 					&& (action.getType() == PlayerAction.ActionType.PRAYER_ACTIVATED
 						|| action.getType() == PlayerAction.ActionType.PRAYER_DEACTIVATED))
@@ -1315,12 +1213,12 @@ public class PlaybackPanel extends JPanel
 	 */
 	private class AngledStripePanel extends JPanel
 	{
-		private final java.util.List<Color> colors;
+		private final List<Color> colors;
 		private final int rowIndex;
 		private boolean isDeathTick = false;
 		private boolean isCurrentTick = false;
 
-		public AngledStripePanel(java.util.List<Color> colors, int rowIndex)
+		public AngledStripePanel(List<Color> colors, int rowIndex)
 		{
 			this.colors = colors;
 			this.rowIndex = rowIndex;

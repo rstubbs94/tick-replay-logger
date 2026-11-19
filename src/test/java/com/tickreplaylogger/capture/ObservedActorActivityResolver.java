@@ -42,7 +42,7 @@ import java.util.Objects;
 public final class ObservedActorActivityResolver
 {
 	private static final int MAX_INPUT = 65536, MAX_CUES = 4096;
-	private final CombatCatalog catalog;
+	private final LegacyCombatCatalog catalog;
 	private final Map<Integer, List<Activity>> ticks = new HashMap<>();
 	private Integer truncatedThroughTick;
 	private boolean unordered;
@@ -157,9 +157,9 @@ public final class ObservedActorActivityResolver
 		}
 	}
 
-	public ObservedActorActivityResolver(List<ObservedEvent> events, CombatCatalog catalog)
+	public ObservedActorActivityResolver(List<ObservedEvent> events, Object catalog)
 	{
-		this.catalog = catalog;
+		this.catalog = LegacyCombatCatalog.from(catalog);
 		if (events == null)
 			return;
 		int input = 0, indexed = 0;

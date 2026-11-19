@@ -57,7 +57,7 @@ public final class RecordedSourceResolver
 	private final Map<Integer, List<WorldSnapshot>> nativeFramesByTick = new HashMap<>();
 	private final Map<Long, ActorSourceSample> projectileActorSamples = new HashMap<>();
 	private final DamageMap map;
-	private final CombatCatalog catalog;
+	private final LegacyCombatCatalog catalog;
 	private final ObservedActorMechanismResolver actorMechanisms;
 	private final ObservedActorActivityResolver actorActivity;
 	private final ObservedNpcContactHintResolver npcContactHints;
@@ -113,7 +113,7 @@ public final class RecordedSourceResolver
 		boolean projectileBatchComplete, boolean retainedLifecycleWindowComplete)
 	{
 		this.map = map;
-		this.catalog = map == null ? null : map.catalog();
+		this.catalog = map == null ? null : LegacyCombatCatalog.from(map.catalog());
 		if (sceneData != null)
 			for (SceneData scene : sceneData)
 				if (scene != null)
@@ -159,7 +159,7 @@ public final class RecordedSourceResolver
 
 	public SourceResolution resolve(DamageRecord hit)
 	{
-		List<SourceEvidenceResolver.Hypothesis> hypotheses = new ArrayList<>();
+		List<LegacyConstraintOracle.Hypothesis> hypotheses = new ArrayList<>();
 		WorldSnapshot impact = impactFrame(hit);
 		boolean unidentified = impact == null || sourceContextUnavailable(hit, impact);
 		List<Map<String, Object>> retained = hit.getAttributionCandidates();
@@ -195,7 +195,7 @@ public final class RecordedSourceResolver
 				}
 				if ("ITEM_POSSESSION_CANDIDATE".equals(kind))
 				{
-					SourceEvidenceResolver.Hypothesis possession = catalog == null ? null
+					LegacyConstraintOracle.Hypothesis possession = catalog == null ? null
 						: catalog.inventorySourceHints().hypothesis(raw, hit);
 					if (possession == null)
 						unidentified = true;
@@ -301,7 +301,7 @@ public final class RecordedSourceResolver
 					else
 					{
 						Candidate input = candidate(key, name, impact, family, kind, "POSSIBLE");
-						SourceEvidenceResolver.Hypothesis hypothesis = plain(input).toBuilder()
+						LegacyConstraintOracle.Hypothesis hypothesis = plain(input).toBuilder()
 							.eligibilityExclusions(selfResponses.eligibilityExclusions(hit, impact, input, catalog))
 							.build();
 						if ("SELF_DAMAGE_INPUT_CANDIDATE".equals(kind))
@@ -418,7 +418,7 @@ public final class RecordedSourceResolver
 			if (candidate != null)
 				hypotheses.add(hypothesis(candidate, npc, Collections.emptyMap(), hit, impact, false));
 		}
-		return SourceEvidenceResolver.resolve(hypotheses, hit.getAmount(), unidentified,
+		return LegacyConstraintOracle.resolve(hypotheses, hit.getAmount(), unidentified,
 			catalog == null ? null : catalog.id());
 	}
 
@@ -604,7 +604,7 @@ public final class RecordedSourceResolver
 	}
 
 	private boolean addStatusHints(String damageType, WorldSnapshot frame,
-		List<SourceEvidenceResolver.Hypothesis> hypotheses)
+		List<LegacyConstraintOracle.Hypothesis> hypotheses)
 	{
 		boolean active = false;
 		if (frame != null && frame.getLocalStatuses() != null)
@@ -1034,7 +1034,7 @@ public final class RecordedSourceResolver
 		return reference != null ? reference : npcId == null ? null : "NPC #" + npcId;
 	}
 
-	private SourceEvidenceResolver.Hypothesis hypothesis(Candidate candidate, NpcState npc, Map<String, Object> raw,
+	private LegacyConstraintOracle.Hypothesis hypothesis(Candidate candidate, NpcState npc, Map<String, Object> raw,
 		DamageRecord hit, WorldSnapshot impact, boolean originalProjectile)
 	{
 		Map<String, Boolean> observations = new HashMap<>();
@@ -1123,7 +1123,7 @@ public final class RecordedSourceResolver
 			apiSourceCorrelation = original != null && originalActorSample(original) != null
 				&& candidate.getActorRef() != null && candidate.getActorRef().equals(originalSourceRef(original));
 		}
-		SourceEvidenceResolver.Hypothesis result = SourceEvidenceResolver.Hypothesis.builder().candidate(candidate)
+		LegacyConstraintOracle.Hypothesis result = LegacyConstraintOracle.Hypothesis.builder().candidate(candidate)
 			.constraints(constraints).observations(observations).mechanism("ORDINARY_ATTACK")
 			.observedAttackStyle(qualifiedAttackStyle(npc, animation, projectileId, normal))
 			.observedHitsplatType(hitsplatObserved(hit) ? hit.getHitsplatType() : null)
@@ -1209,7 +1209,7 @@ public final class RecordedSourceResolver
 	}
 
 	/** A source-wide guard may constrain a direct activity possibility without identifying an ordinary attack. */
-	private SourceEvidenceResolver.Hypothesis activityHypothesis(Candidate candidate, NpcState source, DamageRecord hit,
+	private LegacyConstraintOracle.Hypothesis activityHypothesis(Candidate candidate, NpcState source, DamageRecord hit,
 		WorldSnapshot impact)
 	{
 		if (catalog == null || source == null || source.getNpcId() == null || source.getName() == null
@@ -1242,7 +1242,7 @@ public final class RecordedSourceResolver
 		observed.put("NPC_DIRECT_SOURCE_HYPOTHESIS", true);
 		observed.put("SINGLE_HIT_COMPONENT", hit.getObservationSequence() != null && hit.getObservationSequence() > 0
 			&& Boolean.TRUE.equals(hit.getHitsplatTypeKnown()) && hitsplatObserved(hit));
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(candidate.toBuilder().familyKey(family).build())
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(candidate.toBuilder().familyKey(family).build())
 			.constraints(Collections.unmodifiableList(constraints)).observations(Collections.unmodifiableMap(observed))
 			.numericObservations(numericFacts(constraints, source, hit, impact, false))
 			.observedHitsplatType(hit.getHitsplatType()).mechanism("NPC_DIRECT_SOURCE").damageComponent("SINGLE_HIT")
@@ -1295,7 +1295,7 @@ public final class RecordedSourceResolver
 	}
 
 	private void addCallbackHazards(DamageRecord hit, WorldSnapshot impact,
-		List<SourceEvidenceResolver.Hypothesis> output)
+		List<LegacyConstraintOracle.Hypothesis> output)
 	{
 		if (hit.getObservedHazardContacts() == null)
 			return;
@@ -1332,7 +1332,7 @@ public final class RecordedSourceResolver
 			String family = graphicId != null ? "graphic-definition:" + graphicId
 				: objectId != null ? objectFamily(objectId) : npcId != null ? "npc-contact:" + npcId : null;
 			boolean sameScope = sameContactScope(contact, impact);
-			SourceEvidenceResolver.Hypothesis hypothesis = plain(candidate(
+			LegacyConstraintOracle.Hypothesis hypothesis = plain(candidate(
 				"callback-contact:" + family + ":"
 					+ (graphicId == null ? contact.get("objectObservationId") : contact.get("graphicObservationId"))
 					+ ":" + output.size(),
@@ -1349,7 +1349,7 @@ public final class RecordedSourceResolver
 	}
 
 	private void addSettledHazards(DamageRecord hit, WorldSnapshot impact,
-		List<SourceEvidenceResolver.Hypothesis> output)
+		List<LegacyConstraintOracle.Hypothesis> output)
 	{
 		if (impact == null || !Boolean.TRUE.equals(hit.getImpactPositionKnown()) || impact.getHazards() == null
 			|| hit.getCaptureIssues() != null && hit.getCaptureIssues().stream()
@@ -1371,7 +1371,7 @@ public final class RecordedSourceResolver
 			{
 				String family = "graphicsObject".equals(hazard.getKind()) ? "graphic-definition:" + hazard.getId()
 					: objectFamily(hazard.getId());
-				SourceEvidenceResolver.Hypothesis hypothesis = plain(candidate(
+				LegacyConstraintOracle.Hypothesis hypothesis = plain(candidate(
 					"settled-contact:" + family + ":" + hazard.getObjectKey(), hazard.getMappedName(), impact, family,
 					conditional ? "SETTLED_RECORDED_FOOTPRINT_CONTACT; activation or damage conditions unestablished"
 						: "SETTLED_RECORDED_FOOTPRINT_CONTACT; creation/activation order and causality unresolved",
@@ -1564,20 +1564,20 @@ public final class RecordedSourceResolver
 		return hit.getDamageType();
 	}
 
-	private SourceEvidenceResolver.Hypothesis outcomeCompatibility(SourceEvidenceResolver.Hypothesis hypothesis,
+	private LegacyConstraintOracle.Hypothesis outcomeCompatibility(LegacyConstraintOracle.Hypothesis hypothesis,
 		DamageRecord hit, String kind, Integer sourceId, Map<String, Boolean> observed)
 	{
 		return outcomeCompatibility(hypothesis, hit, kind, sourceId, observed,
 			"NPC_ORDINARY_ATTACK".equals(kind) ? "ORDINARY_ATTACK" : "ENVIRONMENT_CONTACT");
 	}
 
-	private SourceEvidenceResolver.Hypothesis outcomeCompatibility(SourceEvidenceResolver.Hypothesis hypothesis,
+	private LegacyConstraintOracle.Hypothesis outcomeCompatibility(LegacyConstraintOracle.Hypothesis hypothesis,
 		DamageRecord hit, String kind, Integer sourceId, Map<String, Boolean> observed, String mechanism)
 	{
 		return outcomeCompatibility(hypothesis, hit, kind, sourceId, observed, mechanism, null);
 	}
 
-	private SourceEvidenceResolver.Hypothesis outcomeCompatibility(SourceEvidenceResolver.Hypothesis hypothesis,
+	private LegacyConstraintOracle.Hypothesis outcomeCompatibility(LegacyConstraintOracle.Hypothesis hypothesis,
 		DamageRecord hit, String kind, Integer sourceId, Map<String, Boolean> observed, String mechanism,
 		Map<String, Object> input)
 	{
@@ -1744,9 +1744,9 @@ public final class RecordedSourceResolver
 			.evidence(Collections.singletonList(evidence == null ? "RETAINED_SOURCE_HYPOTHESIS" : evidence)).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis plain(Candidate candidate)
+	private static LegacyConstraintOracle.Hypothesis plain(Candidate candidate)
 	{
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(candidate).causalAssociationOnly(true).build();
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(candidate).causalAssociationOnly(true).build();
 	}
 
 	private static NpcState findNpc(WorldSnapshot frame, String ref)

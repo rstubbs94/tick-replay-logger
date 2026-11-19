@@ -1,6 +1,24 @@
 # Phase 1 release checklist
 
-## Final release pass - 19 November 2026
+## Current maintainer corrections - in progress
+
+PR #20986 passed compilation but is not review-ready: the maintainer requested
+standard build mode and the review input is 302,079 tokens against a 200,000 limit.
+Follow the [single-resolver consolidation plan](resolver-consolidation-plan.md).
+The refactor must preserve existing standalone features and exported game facts.
+
+- [ ] Freeze the behaviour/metadata inventory and establish a measured reduction budget.
+- [ ] Support the actual standard package without disabling existing reference-backed interpretation.
+- [ ] Consolidate mechanics data, evidence normalization and all attribution entry points.
+- [ ] Remove replaced code only after behaviour and data parity are demonstrated.
+- [ ] Pass final functionality, package/API and official review-size gates.
+- [ ] Update the existing PR and obtain RuneLite approval.
+
+Implementation is active in `C:/Dev/tick-replay-refactor` on
+`refactor/standard-single-resolver-20261119`. Earlier local checks below describe
+previous candidates; the refactor still needs its behaviour and review-size gates.
+
+## Previous candidate validation - 19 November 2026
 
 - [x] Rerun the complete current runtime suite: 1,049 tests in 103 suites, with no failures, errors or skips.
 - [x] Build the Java 11 production JAR against the retrieved Hub target, RuneLite 1.13.6; scan it for restricted APIs and unintended client/test classes.
@@ -8,12 +26,12 @@
 - [x] Review the update against the published source revision and prepare plain-language release notes focused on retrospective recording and analysis.
 - [x] Document tick intervals and periodic ping sampling accurately.
 - [x] Recheck current Hub rules and developer conventions, correct formatting and telemetry wording, then rerun all 1,049 tests and scan the cleaned production JAR against current official API rules.
-- [ ] Push the reviewed release revision and submit the Plugin Hub commit-marker update when publication is authorized.
+- [x] Push the reviewed release revision and submit the Plugin Hub commit-marker update (PR #20986; corrections requested).
 - [ ] Confirm the accepted update is available through the Plugin Hub.
 
 Older counts and checkpoints below describe earlier candidates.
 
-## Completed
+## Previous implementation milestones
 
 - [x] Preserve the rolling journal, death recordings, Live View, manual snapshots, saved recordings and local playback.
 - [x] Capture rich actor, damage, object, graphic, terrain, collision and resource observations with explicit unknowns and source evidence.
@@ -21,8 +39,8 @@ Older counts and checkpoints below describe earlier candidates.
 - [x] Improve replay labels/icons and retain single-line rows without horizontal panel scrolling.
 - [x] Reduce repeated scene capture and copy preparation costs; use lossless compact JSON for large current clipboard exports.
 - [x] Preserve independently readable object/graphic fields after optional getter failures, without false object-removal deltas or stale field reuse.
-- [x] Use the Gradle Hub build so generated metadata reaches the distribution JAR; verify compile provenance separately from runtime reference compatibility.
-- [x] Verify the default build resolves the current Hub target (1.13.6) and keeps qualified references available in normal and packaged classpaths.
+- [x] Validate the earlier custom Gradle package; this approach is superseded by the required standard-build migration above.
+- [x] Validate the earlier RuneLite 1.13.6 target and supported references. Current release checks target RuneLite 1.13.7.
 - [x] Rewrite the README, draft release notes and capture documentation around the plugin's shipped local functionality.
 
 ## Plugin Hub review corrections
@@ -66,14 +84,15 @@ No coaching, forecasts, automatic gameplay, new product features or publication
 are authorized by this work. Keep all interpretation retrospective and preserve
 unknowns where supporting evidence is genuinely missing.
 
-## Publication, after owner review
+## Earlier publication checklist (historical)
 
 - [ ] Publish the approved plugin source commit.
 - [ ] Update the existing Plugin Hub marker to that commit and prepare the update pull request.
 - [ ] Resolve any actual Hub CI or reviewer feedback.
 
-No publication is authorized by this checklist. A client launch/restart also
-requires an explicit owner instruction; verify process state before acting.
+These older notes do not replace the owner's current instructions or the
+maintainer-correction gates above. A client launch/restart requires an explicit
+owner instruction; verify process state before acting.
 Further reproducible defects are handled as ordinary fixes, not an open-ended
 encounter certification project. Video collection and exhaustive owner testing
 are not release requirements.

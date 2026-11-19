@@ -25,6 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.List;
+import java.util.Objects;
 import lombok.Builder;
 import lombok.Data;
 
@@ -46,6 +47,8 @@ public class DamageRecord
 	private final String defenderName;
 	private final Integer observedCycle;
 	private final Long observationSequence;
+	private final Long impactContextEpoch; // Original callback lifetime counter; not a server tick or causal verdict.
+	private final Long finalizationContextEpoch; // Client lifetime counter when the retained record was finalized.
 	private final String attributionEvidence; // interpretation evidence, not an observed source-of-damage fact
 	private final Boolean launchTickEstimated;
 	private final String launchStateEvidence; // SNAPSHOT | IMPACT_FALLBACK | UNAVAILABLE
@@ -105,4 +108,25 @@ public class DamageRecord
 	private final int impactY;
 
 	private final String mapRef; // sources.json / specials.json / generic rule that labelled it
+
+	/** Identity of a recorded callback, independently of any reconstructed source or style. */
+	public boolean sameOriginalCallback(DamageRecord other)
+	{
+		return other != null && observationSequence != null
+			&& Objects.equals(observationSequence, other.observationSequence) && impactTick == other.impactTick
+			&& Objects.equals(observedCycle, other.observedCycle) && amount == other.amount
+			&& hitsplatType == other.hitsplatType && Objects.equals(hitsplatTypeKnown, other.hitsplatTypeKnown)
+			&& Objects.equals(direction, other.direction) && Objects.equals(defenderRef, other.defenderRef)
+			&& Objects.equals(impactContextEpoch, other.impactContextEpoch)
+			&& Objects.equals(finalizationContextEpoch, other.finalizationContextEpoch);
+	}
+
+	/** Same callback and the same originally recorded native frame assignment. */
+	public boolean sameNativeCallback(DamageRecord other)
+	{
+		return sameOriginalCallback(other) && Objects.equals(impactSceneKey, other.impactSceneKey)
+			&& Objects.equals(impactWorldViewId, other.impactWorldViewId)
+			&& Objects.equals(impactPlane, other.impactPlane);
+	}
+
 }

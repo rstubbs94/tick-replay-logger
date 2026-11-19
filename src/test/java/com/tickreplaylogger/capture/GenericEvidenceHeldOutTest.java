@@ -45,9 +45,9 @@ public class GenericEvidenceHeldOutTest
 			.plane(0).strength("POSSIBLE").evidence(Collections.singletonList("OBSERVED_ATTACK_CUE")).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis hypothesis(Candidate c)
+	private static LegacyConstraintOracle.Hypothesis hypothesis(Candidate c)
 	{
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(c).constraints(Collections.emptyList())
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(c).constraints(Collections.emptyList())
 			.observations(Collections.emptyMap()).mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT")
 			.worldMode("NORMAL").build();
 	}
@@ -62,7 +62,7 @@ public class GenericEvidenceHeldOutTest
 	{
 		Candidate projectile = candidate("projectile:arbitrary", "Unfamiliar A", "actor:a", null, "room-a");
 		Candidate animation = candidate("animation:arbitrary", "Unfamiliar A", "actor:a", null, "room-a");
-		SourceResolution result = SourceEvidenceResolver
+		SourceResolution result = LegacyConstraintOracle
 			.resolve(Arrays.asList(hypothesis(projectile), hypothesis(animation)), 34, false, null);
 		assertEquals("IDENTIFIED", result.getStatus());
 		assertEquals("ACTOR", result.getIdentityLevel());
@@ -76,12 +76,12 @@ public class GenericEvidenceHeldOutTest
 	{
 		Candidate a = candidate("a", "Same displayed name", "actor:a", null, "room-a");
 		Candidate b = candidate("b", "Same displayed name", "actor:b", null, "room-a");
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(hypothesis(a), hypothesis(b)), 7, false,
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(hypothesis(a), hypothesis(b)), 7, false,
 			null);
 		assertEquals("ALTERNATIVES", result.getStatus());
 		assertEquals(2, result.getCandidates().size());
 		Candidate otherArea = candidate("other-area", "Same displayed name", "actor:a", null, "room-b");
-		result = SourceEvidenceResolver.resolve(Arrays.asList(hypothesis(a), hypothesis(otherArea)), 7, false, null);
+		result = LegacyConstraintOracle.resolve(Arrays.asList(hypothesis(a), hypothesis(otherArea)), 7, false, null);
 		assertEquals(2, result.getCandidates().size());
 	}
 
@@ -93,9 +93,9 @@ public class GenericEvidenceHeldOutTest
 			Candidate a = candidate("origin:" + seed, "Novel entity " + seed, "actor:" + seed, null,
 				"unknown-area:" + seed);
 			Candidate b = a.toBuilder().key("animation:" + seed).build();
-			List<SourceEvidenceResolver.Hypothesis> input = seed % 2 == 0 ? Arrays.asList(hypothesis(a), hypothesis(b))
+			List<LegacyConstraintOracle.Hypothesis> input = seed % 2 == 0 ? Arrays.asList(hypothesis(a), hypothesis(b))
 				: Arrays.asList(hypothesis(b), hypothesis(a));
-			SourceResolution result = SourceEvidenceResolver.resolve(input, seed, false, null);
+			SourceResolution result = LegacyConstraintOracle.resolve(input, seed, false, null);
 			assertEquals("IDENTIFIED", result.getStatus());
 			assertEquals(1, result.getCandidates().size());
 			assertEquals(a.getActorRef(), result.getCandidates().get(0).getActorRef());
@@ -112,10 +112,10 @@ public class GenericEvidenceHeldOutTest
 			.requiredObservations(Arrays.asList("OBSERVED_VARIANT", "STANDARD_MODIFIERS")).build();
 		Map<String, Boolean> partial = new LinkedHashMap<>();
 		partial.put("OBSERVED_VARIANT", true);
-		SourceEvidenceResolver.Hypothesis uncertain = SourceEvidenceResolver.Hypothesis.builder().candidate(a)
+		LegacyConstraintOracle.Hypothesis uncertain = LegacyConstraintOracle.Hypothesis.builder().candidate(a)
 			.constraints(Collections.singletonList(limit)).observations(partial).mechanism("ORDINARY_ATTACK")
 			.damageComponent("SINGLE_HIT").worldMode("NORMAL").build();
-		SourceResolution result = SourceEvidenceResolver.resolve(Collections.singletonList(uncertain), 22, false, null);
+		SourceResolution result = LegacyConstraintOracle.resolve(Collections.singletonList(uncertain), 22, false, null);
 		assertEquals(1, result.getCandidates().size());
 		assertTrue(result.getExcludedCandidates() == null || result.getExcludedCandidates().isEmpty());
 		assertTrue(result.getCandidates().get(0).getEvidence().stream()
@@ -126,7 +126,7 @@ public class GenericEvidenceHeldOutTest
 	public void anObservationGapKeepsTheKnownAlternativeWithoutClaimingUniqueIdentity()
 	{
 		Candidate a = candidate("a", "Novel entity", "actor:a", null, "room-a");
-		SourceResolution result = SourceEvidenceResolver.resolve(Collections.singletonList(hypothesis(a)), 0, true,
+		SourceResolution result = LegacyConstraintOracle.resolve(Collections.singletonList(hypothesis(a)), 0, true,
 			null);
 		assertEquals("ALTERNATIVES", result.getStatus());
 		assertTrue(result.isUnidentifiedPossible());

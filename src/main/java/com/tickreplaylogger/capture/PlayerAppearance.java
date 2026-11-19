@@ -55,7 +55,9 @@ public final class PlayerAppearance
 			return result.build();
 		}
 		if (composition == null)
+		{
 			return result.build();
+		}
 		result.itemOffset(PlayerComposition.ITEM_OFFSET).kitOffset(PlayerComposition.KIT_OFFSET);
 		int[] encoded = null;
 		boolean partial = false;
@@ -63,7 +65,9 @@ public final class PlayerAppearance
 		{
 			int[] ids = composition.getEquipmentIds();
 			if (ids != null)
+			{
 				encoded = ids.clone();
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -92,11 +96,17 @@ public final class PlayerAppearance
 		boolean[] known = new boolean[14];
 		result.equipmentSlotKnown(known);
 		if (transform == null)
+		{
 			return result.evidence("PLAYER_COMPOSITION_TRANSFORM_UNAVAILABLE").build();
+		}
 		if (transform >= 0)
+		{
 			return result.evidence("PLAYER_COMPOSITION_NPC_TRANSFORM").build();
+		}
 		if (encoded == null)
+		{
 			return result.build();
+		}
 		int[] items = new int[14];
 		Arrays.fill(items, -1);
 		for (KitType slot : VISIBLE)

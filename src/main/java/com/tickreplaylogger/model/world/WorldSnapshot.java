@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.Map;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -50,38 +51,38 @@ public class WorldSnapshot
 	private final List<WorldSnapshot> additionalViews;
 	private final SceneData nativeScene; // Additional-view checkpoint metadata; omitted from unchanged exported frames.
 	private final List<WorldEntityState> worldEntities;
-	private final java.util.Map<String, Object> planeCoverage;
+	private final Map<String, Object> planeCoverage;
 
 	private final PlayerState player;
-	private final java.util.Map<Integer, ObservedVarbitLayout> varbitLayouts;
+	private final Map<Integer, ObservedVarbitLayout> varbitLayouts;
 	private final List<ObservedStatusState> localStatuses;
 	private final List<NpcState> npcs;
 	private final List<Integer> npcStateRefs; // Current optional sharing: complete ordered full-state rows, never a delta.
 	private final List<OtherPlayerState> players;
 	private final List<ProjectileState> projectiles;
 	private final List<HazardState> hazards;
-	private final java.util.Map<String, Object> hazardCoverage;
+	private final Map<String, Object> hazardCoverage;
 	private final transient List<GroundItemState> observedGroundItems;
 	private final Boolean groundItemBaseline;
 	private final List<GroundItemState> groundItemChanges;
 	private final List<Long> groundItemRemovals;
-	private final java.util.Map<String, Object> groundItemCoverage;
+	private final Map<String, Object> groundItemCoverage;
 	private final Integer apiTickCount;
 	private final transient List<ObservedObjectState> observedObjects; // Shared immutable states; compacted to baseline/deltas at export.
 	private final transient int[] observedVarps;
 	private final transient NumericVariableState observedNumericVariables;
-	private final java.util.Map<Integer, Integer> clientIntegerBaseline;
-	private final java.util.Map<Integer, Integer> clientIntegerChanges;
-	private final java.util.List<Integer> clientIntegerRemovals;
+	private final Map<Integer, Integer> clientIntegerBaseline;
+	private final Map<Integer, Integer> clientIntegerChanges;
+	private final List<Integer> clientIntegerRemovals;
 	private final int[] serverVarpBaseline;
-	private final java.util.Map<Integer, Integer> serverVarpChanges;
+	private final Map<Integer, Integer> serverVarpChanges;
 	private final String[] varpLongBaseline;
-	private final java.util.Map<Integer, String> varpLongChanges;
+	private final Map<Integer, String> varpLongChanges;
 	private final String[] serverVarpLongBaseline;
-	private final java.util.Map<Integer, String> serverVarpLongChanges;
+	private final Map<Integer, String> serverVarpLongChanges;
 	private final transient int[][] observedCollision;
 	private final transient List<TileSurface> observedTerrain;
-	private final java.util.Map<String, Object> terrainCoverage;
+	private final Map<String, Object> terrainCoverage;
 	private final Boolean terrainBaseline;
 	private final List<TileSurface> terrainChanges;
 	private final List<String> terrainRemovals;
@@ -93,10 +94,10 @@ public class WorldSnapshot
 	private final List<ObservedObjectState> objectChanges;
 	private final List<Long> objectRemovals;
 	private final int[] varpBaseline;
-	private final java.util.Map<Integer, Integer> varpChanges;
-	private final java.util.Map<String, Object> objectCoverage;
-	private final java.util.Map<String, String> captureCoverage;
-	private final java.util.List<String> captureIssues;
+	private final Map<Integer, Integer> varpChanges;
+	private final Map<String, Object> objectCoverage;
+	private final Map<String, String> captureCoverage;
+	private final List<String> captureIssues;
 
 	private final ContextBlock context;
 }

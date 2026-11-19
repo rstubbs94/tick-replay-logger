@@ -119,6 +119,12 @@ Additional supporting fields are optional:
   rich callback by tick and sequence, without matching merely on amount.
 - Rich damage `impactSceneKey`, `impactWorldViewId` and `impactPlane` retain the
   original callback scope where available.
+- Rich damage `impactContextEpoch` records the capture-context generation at the
+  original hit callback. `finalizationContextEpoch` records the generation when
+  that hit was finalized. Observation `data.causalSceneEpoch` and projectile
+  source-history `contextEpoch` use the same counter. Missing values remain
+  unknown. A later context change prevents borrowing later scene state; it does
+  not erase independently recorded original hit or source facts.
 - Projectile `proximitySourceCandidate` records a structured hypothesis. It is
   separate from the API's `sourceRef` and includes its own scope and availability.
 - `sourceHistory.firstObservedSource.proximitySampleRetained` records that the

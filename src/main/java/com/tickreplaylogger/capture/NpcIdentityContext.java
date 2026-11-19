@@ -25,9 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import java.util.EnumSet;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.api.WorldType;
+import net.runelite.api.*;
 
 /** Positive context evidence required before applying base-mode rules to shared IDs. */
 public final class NpcIdentityContext
@@ -39,7 +37,9 @@ public final class NpcIdentityContext
 	public static boolean normalWorldObserved(Client client, NPC npc)
 	{
 		if (client == null || npc == null)
+		{
 			return false;
+		}
 		try
 		{
 			return normalWorldObservedWithoutOverrides(client, npc.getModelOverrides() == null);
@@ -53,18 +53,24 @@ public final class NpcIdentityContext
 	public static boolean normalWorldObservedWithoutOverrides(Client client, boolean noOverridesObserved)
 	{
 		if (client == null || !noOverridesObserved)
+		{
 			return false;
+		}
 		try
 		{
 			EnumSet<WorldType> types = client.getWorldType();
 			if (types == null)
+			{
 				return false;
+			}
 			for (WorldType type : types)
 			{
 				String name = type.name();
 				if (name.contains("SEASONAL") || name.contains("DEADMAN") || name.contains("TOURNAMENT")
 					|| name.contains("BETA"))
+				{
 					return false;
+				}
 			}
 			return client.getVarbitValue(10032) == 0; // LEAGUE_TYPE, gameval identity checked by the catalog compiler.
 		}

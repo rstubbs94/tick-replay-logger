@@ -24,32 +24,22 @@
  */
 package com.tickreplaylogger.capture;
 
+import com.tickreplaylogger.util.RecordingLimits;
 import com.google.gson.Gson;
-import com.tickreplaylogger.model.world.DamageRecord;
-import com.tickreplaylogger.model.world.DeathRecordingV2;
-import com.tickreplaylogger.model.world.EffectEvent;
-import com.tickreplaylogger.model.world.NpcState;
-import com.tickreplaylogger.model.world.ObservedEvent;
-import com.tickreplaylogger.model.world.ObservedEventLink;
-import com.tickreplaylogger.model.world.SceneData;
-import com.tickreplaylogger.model.world.SourceResolution;
-import com.tickreplaylogger.model.world.WorldSnapshot;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Rolling buffer of {@link WorldSnapshot}s plus the scenes they reference and the damage/effect/
- * action events, assembled into a versioned {@link DeathRecordingV2} on export. All raw capture is
- * kept as compact objects; JSON work happens only at export (§6).
+ * action events, assembled into a versioned {@link DeathRecordingV2} on export. Raw capture stays
+ * in detached objects; interpretation and JSON preparation run on workers.
  *
  * <p>Scene grids are retained for every scene a buffered snapshot still references (so travel-heavy
  * deaths reconstruct — architecture §4b), and events are windowed to the buffered tick range.
  */
+@Slf4j
 public class WorldSnapshotRecorder
 {
 	private int capacity;
@@ -63,27 +53,24 @@ public class WorldSnapshotRecorder
 	private final List<DeathRecordingV2.Events.PlayerActionRecord> playerActions = new ArrayList<>();
 	public static final int MAX_OBSERVATIONS = 100_000;
 	private final Deque<ObservedEvent> observations = new ArrayDeque<>();
-	private final Map<Integer, Deque<ObservedEvent>> projectileDefinitionObservations = new HashMap<>();
-	private final Map<Long, Deque<ObservedEvent>> projectileInstanceObservations = new HashMap<>();
-	private static final int PROJECTILE_QUERY_LIMIT = 4096;
 	private boolean observationsTickOrdered = true;
 	public static final int MAX_OBSERVATION_LINKS = 100_000;
 	private final Deque<ObservedEventLink> observationLinks = new ArrayDeque<>();
-	private final java.util.NavigableMap<Integer, Long> omittedObservationLinks = new java.util.TreeMap<>();
-	private final java.util.NavigableMap<Integer, Long> omittedObservations = new java.util.TreeMap<>();
+	private final NavigableMap<Integer, Long> omittedObservationLinks = new TreeMap<>();
+	private final NavigableMap<Integer, Long> omittedObservations = new TreeMap<>();
 	private final List<DeathRecordingV2.Events.DeathMark> deaths = new ArrayList<>();
 
 	private final Gson gson;
 
 	public WorldSnapshotRecorder(int capacity, Gson gson)
 	{
-		this.gson = java.util.Objects.requireNonNull(gson, "gson");
-		this.capacity = com.tickreplaylogger.util.RecordingLimits.ticks(capacity);
+		this.gson = Objects.requireNonNull(gson, "gson");
+		this.capacity = RecordingLimits.ticks(capacity);
 	}
 
 	public synchronized void resize(int newCapacity)
 	{
-		this.capacity = com.tickreplaylogger.util.RecordingLimits.ticks(newCapacity);
+		this.capacity = RecordingLimits.ticks(newCapacity);
 		trim();
 	}
 
@@ -114,24 +101,22 @@ public class WorldSnapshotRecorder
 			buffer.removeFirst();
 		}
 		if (newestTick == null)
+		{
 			return;
+		}
 		damageEvents.removeIf(e -> e.getImpactTick() < first);
 		effectEvents.removeIf(e -> e.getStartTick() < first);
 		playerActions.removeIf(e -> e.getTick() < first);
-		observations.removeIf(e ->
-		{
-			if (e.getTick() >= first)
-				return false;
-			unindexProjectileObservation(e);
-			return true;
-		});
+		observations.removeIf(e -> e.getTick() < first);
 		observationLinks.removeIf(e -> e.getTick() < first);
 		omittedObservationLinks.headMap(first, false).clear();
 		omittedObservations.headMap(first, false).clear();
 		deaths.removeIf(e -> e.getTick() < first);
-		java.util.Set<String> used = new java.util.HashSet<>();
+		Set<String> used = new java.util.HashSet<>();
 		for (WorldSnapshot tick : buffer)
+		{
 			used.add(tick.getSceneKey());
+		}
 		scenes.keySet().retainAll(used);
 	}
 
@@ -178,164 +163,50 @@ public class WorldSnapshotRecorder
 	public synchronized void addObservation(ObservedEvent observation)
 	{
 		if (observation == null)
+		{
 			return;
+		}
 		while (observations.size() >= MAX_OBSERVATIONS)
 		{
 			ObservedEvent omitted = observations.removeFirst();
-			unindexProjectileObservation(omitted);
 			omittedObservations.merge(omitted.getTick(), 1L, Long::sum);
 		}
-		while (omittedObservations.size() > com.tickreplaylogger.util.RecordingLimits.MAX_TICKS)
+		while (omittedObservations.size() > RecordingLimits.MAX_TICKS)
+		{
 			omittedObservations.pollFirstEntry();
+		}
 		if (observations.isEmpty())
+		{
 			observationsTickOrdered = true;
+		}
 		else if (observations.peekLast().getTick() > observation.getTick())
+		{
 			observationsTickOrdered = false;
+		}
 		observations.addLast(observation);
-		indexProjectileObservation(observation);
-	}
-
-	private void indexProjectileObservation(ObservedEvent event)
-	{
-		Long instance = ObservedProjectileEndpointResolver.observationId(event);
-		if (instance == null || instance <= 0)
-			return;
-		projectileInstanceObservations.computeIfAbsent(instance, ignored -> new ArrayDeque<>()).addLast(event);
-		Integer definition = ObservedProjectileEndpointResolver.projectileId(event);
-		if (definition != null && definition >= 0)
-			projectileDefinitionObservations.computeIfAbsent(definition, ignored -> new ArrayDeque<>()).addLast(event);
-	}
-
-	private void unindexProjectileObservation(ObservedEvent event)
-	{
-		Long instance = ObservedProjectileEndpointResolver.observationId(event);
-		if (instance == null)
-			return;
-		removeIndexedEvent(projectileInstanceObservations, instance, event);
-		Integer definition = ObservedProjectileEndpointResolver.projectileId(event);
-		if (definition != null)
-			removeIndexedEvent(projectileDefinitionObservations, definition, event);
-	}
-
-	private static <T> void removeIndexedEvent(Map<T, Deque<ObservedEvent>> index, T key, ObservedEvent event)
-	{
-		Deque<ObservedEvent> events = index.get(key);
-		if (events == null)
-			return;
-		java.util.Iterator<ObservedEvent> iterator = events.iterator();
-		while (iterator.hasNext())
-			if (iterator.next() == event)
-			{
-				iterator.remove();
-				break;
-			}
-		if (events.isEmpty())
-			index.remove(key);
-	}
-
-	public static final class ProjectileObservationBatch
-	{
-		private final List<ObservedEvent> events;
-		private final boolean complete;
-
-		private ProjectileObservationBatch(List<ObservedEvent> events, boolean complete)
-		{
-			this.events = java.util.Collections.unmodifiableList(events);
-			this.complete = complete;
-		}
-
-		public List<ObservedEvent> getEvents()
-		{
-			return events;
-		}
-
-		public boolean isComplete()
-		{
-			return complete;
-		}
-	}
-
-	/** Referenced projectile timelines plus the current tail; never copy the complete raw journal. */
-	public synchronized ProjectileObservationBatch projectileObservationsForSourceResolution(java.util.Set<Integer> ids,
-		int tick, List<ObservedEvent> currentTail)
-	{
-		java.util.Set<Long> instances = new java.util.LinkedHashSet<>();
-		int visited = 0;
-		boolean complete = omittedObservations.isEmpty();
-		outer: for (Integer id : ids == null ? java.util.Collections.<Integer>emptySet() : ids)
-		{
-			Deque<ObservedEvent> events = projectileDefinitionObservations.get(id);
-			if (events == null)
-				continue;
-			java.util.Iterator<ObservedEvent> iterator = events.descendingIterator();
-			while (iterator.hasNext())
-			{
-				if (++visited > PROJECTILE_QUERY_LIMIT)
-				{
-					complete = false;
-					break outer;
-				}
-				ObservedEvent event = iterator.next();
-				if (event.getTick() <= tick)
-					instances.add(ObservedProjectileEndpointResolver.observationId(event));
-			}
-		}
-		Map<Long, ObservedEvent> merged = new LinkedHashMap<>();
-		visited = 0;
-		outer: for (Long instance : instances)
-		{
-			Deque<ObservedEvent> events = projectileInstanceObservations.get(instance);
-			if (events == null)
-				continue;
-			java.util.Iterator<ObservedEvent> iterator = events.descendingIterator();
-			while (iterator.hasNext())
-			{
-				if (++visited > PROJECTILE_QUERY_LIMIT)
-				{
-					complete = false;
-					break outer;
-				}
-				ObservedEvent event = iterator.next();
-				if (event.getTick() <= tick)
-				{
-					ObservedEvent previous = merged.putIfAbsent(event.getSequence(), event);
-					if (event.getSequence() <= 0 || previous != null && previous != event)
-						complete = false;
-				}
-			}
-		}
-		if (currentTail != null)
-			for (ObservedEvent event : currentTail)
-			{
-				if (event == null)
-				{
-					complete = false;
-					continue;
-				}
-				ObservedEvent previous = merged.putIfAbsent(event.getSequence(), event);
-				if (previous != null && previous != event)
-					complete = false;
-			}
-		List<ObservedEvent> out = new ArrayList<>(merged.values());
-		out.sort(java.util.Comparator.comparingLong(ObservedEvent::getSequence));
-		return new ProjectileObservationBatch(out, complete);
 	}
 
 	public synchronized void addObservationLink(ObservedEventLink link)
 	{
 		if (link == null)
+		{
 			return;
+		}
 		if (link.getTick() != link.getResolvedTick() || link.getObservationSequence() < 1
 			|| !"player".equals(link.getActorRef()) || !"SETTLED_LOCAL_REFERENCE_MATCH".equals(link.getEvidence())
-			|| !java.util.Arrays.asList("HITSPLAT", "ACTOR_DEATH").contains(link.getObservationType()))
+			|| !Arrays.asList("HITSPLAT", "ACTOR_DEATH").contains(link.getObservationType()))
+		{
 			throw new IllegalArgumentException("Unsupported observation recipient link");
+		}
 		while (observationLinks.size() >= MAX_OBSERVATION_LINKS)
 		{
 			ObservedEventLink omitted = observationLinks.removeFirst();
 			omittedObservationLinks.merge(omitted.getTick(), 1L, Long::sum);
 		}
-		while (omittedObservationLinks.size() > com.tickreplaylogger.util.RecordingLimits.MAX_TICKS)
+		while (omittedObservationLinks.size() > RecordingLimits.MAX_TICKS)
+		{
 			omittedObservationLinks.pollFirstEntry();
+		}
 		observationLinks.addLast(link);
 	}
 
@@ -343,22 +214,30 @@ public class WorldSnapshotRecorder
 	public synchronized boolean hasUnresolvedPlayerImpact(int tick, DamageRecord known)
 	{
 		if (omittedObservations.containsKey(tick))
+		{
 			return true;
+		}
 		for (ObservedEvent event : observations)
 		{
 			if (event.getTick() != tick || !"HITSPLAT".equals(event.getType()) || !"player".equals(event.getActorRef())
 				|| event.getData() == null)
+			{
 				continue;
+			}
 			Object surface = event.getData().get("resourceSurface"), amount = event.getData().get("amount");
 			if (!(amount instanceof Number) || ((Number) amount).intValue() <= 0)
+			{
 				continue;
+			}
 			if ("HP".equals(surface) || "SKILL_OR_HP".equals(surface) || "HP_OR_COMBAT_RESOURCE".equals(surface)
 				|| "UNCLASSIFIED".equals(surface) || "SANITY".equals(surface) || "STACKS".equals(surface)
 				|| "CONTEXTUAL_RESOURCE".equals(surface))
 			{
 				if (known == null || known.getImpactTick() < tick || known.getObservationSequence() == null
 					|| event.getSequence() > known.getObservationSequence())
+				{
 					return true;
+				}
 			}
 		}
 		return false;
@@ -383,8 +262,6 @@ public class WorldSnapshotRecorder
 		effectEvents.clear();
 		playerActions.clear();
 		observations.clear();
-		projectileDefinitionObservations.clear();
-		projectileInstanceObservations.clear();
 		observationLinks.clear();
 		omittedObservationLinks.clear();
 		omittedObservations.clear();
@@ -419,14 +296,16 @@ public class WorldSnapshotRecorder
 		for (WorldSnapshot tick : buffer)
 		{
 			if (tick.getTick() >= fromTick && tick.getTick() <= throughTick)
+			{
 				ticks.add(tick);
+			}
 		}
 		int minTick = fromTick == Integer.MIN_VALUE ? firstRetainedTick() : fromTick;
 		int maxTick = throughTick == Integer.MAX_VALUE ? (newestTick == null ? 0 : newestTick) : throughTick;
 
 		// scenes referenced by buffered snapshots
 		List<SceneData> usedScenes = new ArrayList<>();
-		java.util.Set<String> referenced = new java.util.HashSet<>();
+		Set<String> referenced = new java.util.HashSet<>();
 		for (WorldSnapshot ws : ticks)
 		{
 			if (ws.getSceneKey() != null)
@@ -466,9 +345,27 @@ public class WorldSnapshotRecorder
 	/** Complete a detached window on a worker, without blocking capture or reading client APIs. */
 	public DeathRecordingV2 completeExport(DeathRecordingV2 frozen)
 	{
-		DeathRecordingV2 resolved = ResolverV1Recording.resolve(frozen, gson);
-		return NpcStateEncoding.compact(resolved.toBuilder().idToName(buildIdToName(resolved.getTicks()))
-			.ticks(WorldStateExport.compact(resolved.getTicks())).build(), gson);
+		if (frozen == null)
+		{
+			return null;
+		}
+		try
+		{
+			DeathRecordingV2 resolved = ResolverV1Recording.resolve(frozen, gson);
+			return NpcStateEncoding.compact(resolved.toBuilder().idToName(buildIdToName(resolved.getTicks()))
+				.ticks(WorldStateExport.compact(resolved.getTicks())).build(), gson);
+		}
+		catch (RuntimeException unavailable)
+		{
+			log.warn("Post-event processing failed; preserving original replay observations", unavailable);
+			DeathRecordingV2.Meta meta = frozen.getMeta();
+			List<String> issues = new ArrayList<>(
+				meta == null || meta.getCaptureIssues() == null ? Collections.emptyList() : meta.getCaptureIssues());
+			issues.add("POST_EVENT_PROCESSING_UNAVAILABLE: " + unavailable.getClass().getSimpleName());
+			return frozen.toBuilder()
+				.meta((meta == null ? DeathRecordingV2.Meta.builder() : meta.toBuilder()).captureIssues(issues).build())
+				.build();
+		}
 	}
 
 	private List<DamageRecord> windowDamage(int min, int max)
@@ -490,11 +387,15 @@ public class WorldSnapshotRecorder
 	{
 		List<DeathRecordingV2.Events.CaptureGap> out = new ArrayList<>();
 		for (Map.Entry<Integer, Long> entry : omittedObservations.subMap(min, true, max, true).entrySet())
+		{
 			out.add(DeathRecordingV2.Events.CaptureGap.builder().tick(entry.getKey()).channel("rawCallbacks")
 				.omittedObservations(entry.getValue()).reason("OBSERVATION_BUFFER_LIMIT").build());
+		}
 		for (Map.Entry<Integer, Long> entry : omittedObservationLinks.subMap(min, true, max, true).entrySet())
+		{
 			out.add(DeathRecordingV2.Events.CaptureGap.builder().tick(entry.getKey()).channel("observationLinks")
 				.omittedObservations(entry.getValue()).reason("OBSERVATION_LINK_BUFFER_LIMIT").build());
+		}
 		return out;
 	}
 
@@ -502,8 +403,12 @@ public class WorldSnapshotRecorder
 	{
 		List<ObservedEventLink> out = new ArrayList<>();
 		for (ObservedEventLink link : observationLinks)
+		{
 			if (link.getTick() >= min && link.getTick() <= max)
+			{
 				out.add(link);
+			}
+		}
 		return out;
 	}
 
@@ -511,8 +416,12 @@ public class WorldSnapshotRecorder
 	{
 		List<ObservedEvent> out = new ArrayList<>();
 		for (ObservedEvent e : observations)
+		{
 			if (e.getTick() >= min && e.getTick() <= max)
+			{
 				out.add(e);
+			}
+		}
 		return out;
 	}
 
@@ -520,8 +429,12 @@ public class WorldSnapshotRecorder
 	{
 		List<DeathRecordingV2.Events.DeathMark> out = new ArrayList<>();
 		for (DeathRecordingV2.Events.DeathMark e : deaths)
+		{
 			if (e.getTick() >= min && e.getTick() <= max)
+			{
 				out.add(e);
+			}
+		}
 		return out;
 	}
 
@@ -580,7 +493,9 @@ public class WorldSnapshotRecorder
 		{
 			frames.add(tick);
 			if (tick.getAdditionalViews() != null)
+			{
 				frames.addAll(tick.getAdditionalViews());
+			}
 		}
 		return frames;
 	}
@@ -614,10 +529,14 @@ public class WorldSnapshotRecorder
 	{
 		List<DamageRecord> out = new ArrayList<>();
 		for (DamageRecord record : damageEvents)
+		{
 			if (record.getImpactTick() == tick && record.getAmount() > 0
 				&& (record.getDirection() == null || "RECEIVED".equals(record.getDirection())))
+			{
 				out.add(record);
-		return java.util.Collections.unmodifiableList(out);
+			}
+		}
+		return Collections.unmodifiableList(out);
 	}
 
 	/** Original received observations, including zeroes, for one completed tick. */
@@ -632,119 +551,63 @@ public class WorldSnapshotRecorder
 				out.add(record);
 			}
 		}
-		return java.util.Collections.unmodifiableList(out);
+		return Collections.unmodifiableList(out);
 	}
 
 	/** Finished capture values only; no live actor or scene API objects leave the recorder. */
 	public synchronized List<WorldSnapshot> snapshotsForSourceResolution()
 	{
-		return java.util.Collections.unmodifiableList(new ArrayList<>(buffer));
+		return Collections.unmodifiableList(new ArrayList<>(buffer));
 	}
 
 	public synchronized List<SceneData> scenesForSourceResolution()
 	{
-		return java.util.Collections.unmodifiableList(new ArrayList<>(scenes.values()));
+		return Collections.unmodifiableList(new ArrayList<>(scenes.values()));
 	}
 
 	public synchronized List<ObservedEvent> observationsForSourceResolution()
 	{
-		return java.util.Collections.unmodifiableList(new ArrayList<>(observations));
+		return Collections.unmodifiableList(new ArrayList<>(observations));
 	}
 
-	/** Same-tick cues need only the ordered tail, not another copy of the full callback history. */
-	public synchronized List<ObservedEvent> observationsAtTickForSourceResolution(int tick)
+	/** Freeze membership only; interpretation and indexing belong to the worker. */
+	public synchronized ResolverV1Recording.EvidenceWindow freezeSourceEvidence(int throughTick, long cutoffSequence,
+		long revision, List<DamageRecord> additionalContexts)
 	{
-		if (!observationsTickOrdered)
-			return java.util.Collections.unmodifiableList(windowObservations(tick, tick));
-		List<ObservedEvent> out = new ArrayList<>();
-		java.util.Iterator<ObservedEvent> iterator = observations.descendingIterator();
-		while (iterator.hasNext())
+		int firstTick = firstRetainedTick();
+		List<DamageRecord> hits = windowDamage(firstTick, throughTick);
+		if (additionalContexts != null)
 		{
-			ObservedEvent event = iterator.next();
-			if (event.getTick() < tick)
-				break;
-			if (event.getTick() == tick)
-				out.add(event);
-		}
-		java.util.Collections.reverse(out);
-		return java.util.Collections.unmodifiableList(out);
-	}
-
-	public static final class LifecycleObservationBatch
-	{
-		private final List<ObservedEvent> events;
-		private final boolean complete;
-
-		private LifecycleObservationBatch(List<ObservedEvent> events, boolean complete)
-		{
-			this.events = java.util.Collections.unmodifiableList(events);
-			this.complete = complete;
-		}
-
-		public List<ObservedEvent> getEvents()
-		{
-			return events;
-		}
-
-		public boolean isComplete()
-		{
-			return complete;
-		}
-	}
-
-	/** Bounded reverse lookback for explicit retained death cues; other past callbacks are never copied. */
-	public synchronized LifecycleObservationBatch retainedLifecycleObservationsForSourceResolution(int tick,
-		int maximumDelay, List<ObservedEvent> currentTail)
-	{
-		List<ObservedEvent> out = new ArrayList<>();
-		if (currentTail != null)
-			out.addAll(currentTail);
-		if (tick < 0 || maximumDelay < 0 || maximumDelay > MechanismRules.MAX_RETAINED_LIFECYCLE_TICKS
-			|| !observationsTickOrdered || currentTail == null)
-			return new LifecycleObservationBatch(out, false);
-		int min = Math.max(0, tick - maximumDelay), visited = 0;
-		boolean complete = omittedObservations.subMap(min, true, tick, true).isEmpty();
-		java.util.Iterator<ObservedEvent> iterator = observations.descendingIterator();
-		while (iterator.hasNext())
-		{
-			if (++visited > 8192)
+			for (DamageRecord context : additionalContexts)
 			{
-				complete = false;
-				break;
+				if (context != null && context.getImpactTick() >= firstTick && context.getImpactTick() <= throughTick)
+				{
+					hits.add(context);
+				}
 			}
-			ObservedEvent event = iterator.next();
-			if (event.getTick() < min)
-				break;
-			if (event.getTick() < tick && "ACTOR_DEATH".equals(event.getType()))
-				out.add(event);
 		}
-		out.sort(java.util.Comparator.comparingLong(ObservedEvent::getSequence));
-		return new LifecycleObservationBatch(out, complete);
+		return new ResolverV1Recording.EvidenceWindow(new ArrayList<>(buffer), new ArrayList<>(scenes.values()),
+			windowObservations(firstTick, throughTick), hits, windowCaptureGaps(firstTick, throughTick),
+			windowObservationLinks(firstTick, throughTick), firstTick, throughTick, cutoffSequence, revision);
 	}
 
 	public synchronized List<DeathRecordingV2.Events.CaptureGap> captureGapsForSourceResolution()
 	{
-		return java.util.Collections.unmodifiableList(windowCaptureGaps(Integer.MIN_VALUE, Integer.MAX_VALUE));
+		return Collections.unmodifiableList(windowCaptureGaps(Integer.MIN_VALUE, Integer.MAX_VALUE));
 	}
 
 	public synchronized List<DeathRecordingV2.Events.CaptureGap> captureGapsAtTickForSourceResolution(int tick)
 	{
-		return java.util.Collections.unmodifiableList(windowCaptureGaps(tick, tick));
-	}
-
-	public synchronized List<DeathRecordingV2.Events.CaptureGap> retainedLifecycleGapsForSourceResolution(int tick,
-		int maximumDelay)
-	{
-		if (tick < 0 || maximumDelay < 0 || maximumDelay > MechanismRules.MAX_RETAINED_LIFECYCLE_TICKS)
-			return java.util.Collections.emptyList();
-		return java.util.Collections.unmodifiableList(windowCaptureGaps(Math.max(0, tick - maximumDelay), tick));
+		return Collections.unmodifiableList(windowCaptureGaps(tick, tick));
 	}
 
 	/** Enrich an original callback by identity. Derived source context never becomes a new HP event. */
 	public synchronized void enrichHitsplatObservations(int tick, Map<Long, Map<String, Object>> enrichments)
 	{
 		if (enrichments == null || enrichments.isEmpty())
+		{
 			return;
+		}
 		if (observationsTickOrdered)
 		{
 			List<ObservedEvent> tail = new ArrayList<>();
@@ -759,7 +622,9 @@ public class WorldSnapshotRecorder
 			finally
 			{
 				for (int index = tail.size() - 1; index >= 0; index--)
+				{
 					observations.addLast(tail.get(index));
+				}
 			}
 			return;
 		}
@@ -767,7 +632,9 @@ public class WorldSnapshotRecorder
 		// The recorder's existing MAX_OBSERVATIONS cap bounds this exceptional full scan.
 		List<ObservedEvent> updated = new ArrayList<>(observations.size());
 		for (ObservedEvent event : observations)
+		{
 			updated.add(enrichedHitsplat(event, tick, enrichments, "COMPLETE_BUFFER_SCAN"));
+		}
 		observations.clear();
 		observations.addAll(updated);
 	}
@@ -779,19 +646,25 @@ public class WorldSnapshotRecorder
 			? enrichments.get(event.getSequence())
 			: null;
 		if (derived == null)
+		{
 			return event;
+		}
 		Map<String, Object> data = new LinkedHashMap<>(
-			event.getData() == null ? java.util.Collections.emptyMap() : event.getData());
-		for (String key : java.util.Arrays.asList("attributionContext", "attributionContextEvidence",
-			"sourceResolution", "attributionCandidates", "observedHazardContacts", "possibleOutcomeSurfaces",
-			"attributionCaptureStatus", "resourceOutcomeStatus"))
+			event.getData() == null ? Collections.emptyMap() : event.getData());
+		for (String key : Arrays.asList("attributionContext", "attributionContextEvidence", "sourceResolution",
+			"attributionCandidates", "observedHazardContacts", "possibleOutcomeSurfaces", "attributionCaptureStatus",
+			"resourceOutcomeStatus"))
+		{
 			if (derived.containsKey(key))
+			{
 				data.put(key, derived.get(key));
+			}
+		}
 		data.put("sourceEnrichmentCoverage", coverage);
 		return ObservedEvent.builder().tick(event.getTick()).gameCycle(event.getGameCycle())
 			.sequence(event.getSequence()).type(event.getType()).actorRef(event.getActorRef())
 			.actorName(event.getActorName()).relatedActorRef(event.getRelatedActorRef()).sceneKey(event.getSceneKey())
-			.data(java.util.Collections.unmodifiableMap(data)).build();
+			.data(Collections.unmodifiableMap(data)).build();
 	}
 
 	/** Replace derived interpretations by callback identity, leaving the original records intact. */
@@ -813,6 +686,25 @@ public class WorldSnapshotRecorder
 			if (resolution != null)
 			{
 				damageEvents.set(index, record.toBuilder().sourceResolution(resolution).build());
+			}
+		}
+	}
+
+	/** Apply derived records only to their original observed hit; never replace a different callback. */
+	public synchronized void applyResolvedDamageRecords(int tick, Map<Long, DamageRecord> resolved)
+	{
+		if (resolved == null || resolved.isEmpty())
+		{
+			return;
+		}
+		for (int index = damageEvents.size() - 1; index >= 0; index--)
+		{
+			DamageRecord original = damageEvents.get(index);
+			DamageRecord replacement = resolved.get(original.getObservationSequence());
+			if (original.getImpactTick() == tick && original.getObservationSequence() != null && replacement != null
+				&& original.sameNativeCallback(replacement))
+			{
+				damageEvents.set(index, replacement);
 			}
 		}
 	}

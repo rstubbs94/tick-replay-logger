@@ -47,15 +47,15 @@ public class ProjectileObservationIndexTest
 	}
 	private static ObservedEvent other(int tick, long sequence)
 	{ return ObservedEvent.builder().type("HITSPLAT").tick(tick).sequence(sequence).data(Collections.emptyMap()).build(); }
-	private static WorldSnapshotRecorder recorder() { return new WorldSnapshotRecorder(100, new Gson()); }
-	private static WorldSnapshotRecorder.ProjectileObservationBatch query(WorldSnapshotRecorder recorder, int tick, List<ObservedEvent> tail)
+	private static LegacyWorldSnapshotRecorder recorder() { return new LegacyWorldSnapshotRecorder(100, new Gson()); }
+	private static LegacyWorldSnapshotRecorder.ProjectileObservationBatch query(LegacyWorldSnapshotRecorder recorder, int tick, List<ObservedEvent> tail)
 	{ return recorder.projectileObservationsForSourceResolution(Collections.singleton(42), tick, tail); }
 
 	@Test public void queryDoesNotIterateTheFullRawJournalAndMergesCurrentTailByOriginalSequence() throws Exception
 	{
-		WorldSnapshotRecorder recorder = recorder(); ObservedEvent first = projectile(42, 1, 1, 1), latest = projectile(42, 1, 2, 1002);
+		LegacyWorldSnapshotRecorder recorder = recorder(); ObservedEvent first = projectile(42, 1, 1, 1), latest = projectile(42, 1, 2, 1002);
 		recorder.addObservation(first); for (int index = 2; index < 1002; index++) recorder.addObservation(other(1, index)); recorder.addObservation(latest);
-		Field raw = WorldSnapshotRecorder.class.getDeclaredField("observations"); raw.setAccessible(true);
+		Field raw = LegacyWorldSnapshotRecorder.class.getDeclaredField("observations"); raw.setAccessible(true);
 		@SuppressWarnings("unchecked") java.util.Deque<ObservedEvent> original = (java.util.Deque<ObservedEvent>) raw.get(recorder);
 		ArrayDeque<ObservedEvent> noScan = new ArrayDeque<ObservedEvent>(original)
 		{
@@ -64,28 +64,28 @@ public class ProjectileObservationIndexTest
 		};
 		raw.set(recorder, noScan);
 		ObservedEvent hp = other(2, 1003);
-		WorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 2, Arrays.asList(latest, hp));
+		LegacyWorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 2, Arrays.asList(latest, hp));
 		assertTrue(batch.isComplete()); assertEquals(Arrays.asList(first, latest, hp), batch.getEvents());
 		assertSame(first, batch.getEvents().get(0)); assertSame(latest, batch.getEvents().get(1));
 	}
 
 	@Test public void knownDefinitionAndUnknownDefinitionRetargetsRemainInTheTrackedInstanceTimeline()
 	{
-		WorldSnapshotRecorder recorder = recorder(); ObservedEvent first = projectile(42, 1, 1, 1);
+		LegacyWorldSnapshotRecorder recorder = recorder(); ObservedEvent first = projectile(42, 1, 1, 1);
 		ObservedEvent changed = projectile(99, 1, 2, 2), unavailable = projectile(null, 1, 2, 3);
 		recorder.addObservation(first); recorder.addObservation(changed); recorder.addObservation(unavailable);
-		WorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 2, Collections.emptyList());
+		LegacyWorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 2, Collections.emptyList());
 		assertTrue(batch.isComplete()); assertEquals(Arrays.asList(first, changed, unavailable), batch.getEvents());
 	}
 
 	@Test public void trimmingResizingAndClearingRemoveEveryIndexedReference() throws Exception
 	{
-		WorldSnapshotRecorder recorder = recorder(); recorder.addObservation(projectile(42, 1, 1, 1));
+		LegacyWorldSnapshotRecorder recorder = recorder(); recorder.addObservation(projectile(42, 1, 1, 1));
 		recorder.resize(2); recorder.advanceTick(3);
 		assertTrue(query(recorder, 3, Collections.emptyList()).getEvents().isEmpty());
 		for (String fieldName : Arrays.asList("projectileDefinitionObservations", "projectileInstanceObservations"))
 		{
-			Field field = WorldSnapshotRecorder.class.getDeclaredField(fieldName); field.setAccessible(true);
+			Field field = LegacyWorldSnapshotRecorder.class.getDeclaredField(fieldName); field.setAccessible(true);
 			assertTrue(((Map<?, ?>) field.get(recorder)).isEmpty());
 		}
 		recorder.addObservation(projectile(42, 2, 3, 2)); recorder.clear();
@@ -94,29 +94,29 @@ public class ProjectileObservationIndexTest
 
 	@Test public void rawCapacityEvictionAlsoRemovesItsProjectileIndexEntry()
 	{
-		WorldSnapshotRecorder recorder = recorder(); recorder.addObservation(projectile(42, 1, 1, 1));
+		LegacyWorldSnapshotRecorder recorder = recorder(); recorder.addObservation(projectile(42, 1, 1, 1));
 		// Repeated immutable noise is enough to exercise the recorder's actual100000-observation cap.
 		ObservedEvent noise = other(1, 2);
-		for (int index = 0; index < WorldSnapshotRecorder.MAX_OBSERVATIONS; index++) recorder.addObservation(noise);
-		WorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 1, Collections.emptyList());
+		for (int index = 0; index < LegacyWorldSnapshotRecorder.MAX_OBSERVATIONS; index++) recorder.addObservation(noise);
+		LegacyWorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 1, Collections.emptyList());
 		assertTrue(batch.getEvents().isEmpty()); assertFalse(batch.isComplete());
 	}
 
 	@Test public void queryWorkCapReportsIncompleteInsteadOfPretendingAnOlderTimelineWasComplete()
 	{
-		WorldSnapshotRecorder recorder = recorder();
+		LegacyWorldSnapshotRecorder recorder = recorder();
 		for (int index = 1; index <= 4097; index++) recorder.addObservation(projectile(42, 1, 1, index));
-		WorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 1, Collections.emptyList());
+		LegacyWorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 1, Collections.emptyList());
 		assertFalse(batch.isComplete()); assertTrue(batch.getEvents().size() <= 4096);
 		assertTrue(batch.getEvents().stream().allMatch(event -> event.getSequence() > 0));
 	}
 
 	@Test public void originalProjectileReferencesSurviveSameTickHitsplatEnrichment()
 	{
-		WorldSnapshotRecorder recorder = recorder(); ObservedEvent projectile = projectile(42, 1, 5, 1);
+		LegacyWorldSnapshotRecorder recorder = recorder(); ObservedEvent projectile = projectile(42, 1, 5, 1);
 		recorder.addObservation(projectile); recorder.addObservation(other(5, 2));
 		recorder.enrichHitsplatObservations(5, Collections.singletonMap(2L, Collections.singletonMap("resourceOutcomeStatus", "UNRESOLVED")));
-		WorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 5, recorder.observationsAtTickForSourceResolution(5));
+		LegacyWorldSnapshotRecorder.ProjectileObservationBatch batch = query(recorder, 5, recorder.observationsAtTickForSourceResolution(5));
 		assertEquals(2, batch.getEvents().size()); assertSame(projectile, batch.getEvents().get(0)); assertTrue(batch.isComplete());
 	}
 }

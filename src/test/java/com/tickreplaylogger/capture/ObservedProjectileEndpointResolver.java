@@ -169,35 +169,35 @@ public final class ObservedProjectileEndpointResolver
 	}
 
 	private final Rules rules;
-	private final CombatCatalog catalog;
+	private final LegacyCombatCatalog catalog;
 	private final Map<Long, List<Cue>> instances = new LinkedHashMap<>();
 	private boolean incomplete;
 	private final BiFunction<Long, Map<?, ?>, Candidate> originalSourceLookup;
 
 	public ObservedProjectileEndpointResolver(JsonObject namespace, List<ObservedEvent> observations,
-		CombatCatalog catalog, boolean complete)
+		Object catalog, boolean complete)
 	{
 		this(new Rules(namespace), observations, catalog, complete, (BiFunction<Long, Map<?, ?>, Candidate>) null);
 	}
 
-	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, CombatCatalog catalog,
+	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, Object catalog,
 		boolean complete)
 	{
 		this(rules, observations, catalog, complete, (BiFunction<Long, Map<?, ?>, Candidate>) null);
 	}
 
-	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, CombatCatalog catalog,
+	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, Object catalog,
 		boolean complete, Function<Long, Candidate> originalSourceLookup)
 	{
 		this(rules, observations, catalog, complete,
 			originalSourceLookup == null ? null : (id, source) -> originalSourceLookup.apply(id));
 	}
 
-	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, CombatCatalog catalog,
+	public ObservedProjectileEndpointResolver(Rules rules, List<ObservedEvent> observations, Object catalog,
 		boolean complete, BiFunction<Long, Map<?, ?>, Candidate> originalSourceLookup)
 	{
 		this.rules = rules;
-		this.catalog = catalog;
+		this.catalog = LegacyCombatCatalog.from(catalog);
 		this.originalSourceLookup = originalSourceLookup;
 		incomplete = !complete || rules.unavailable;
 		if (rules.index.isEmpty())
@@ -333,7 +333,7 @@ public final class ObservedProjectileEndpointResolver
 							: "FIRST_AVAILABLE_API_SOURCE_OBSERVED_LATER; hidden launch owner is unestablished",
 						"Analysis-policy coincidence only; arrival, cause, attack style, damage bound and unique hit assignment are unestablished"))
 					.build();
-				out.add(new ObservedMechanismResolver.Contribution(SourceEvidenceResolver.Hypothesis.builder()
+				out.add(new ObservedMechanismResolver.Contribution(LegacyConstraintOracle.Hypothesis.builder()
 					.candidate(candidate).mechanism("PROJECTILE_ENDPOINT_COOCCURRENCE").damageComponent(rule.key)
 					.causalAssociationOnly(true).build(), "NPC_PROJECTILE_ENDPOINT", sourceId, true));
 				unknown = true;

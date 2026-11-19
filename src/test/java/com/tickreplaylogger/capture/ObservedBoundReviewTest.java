@@ -57,14 +57,14 @@ public class ObservedBoundReviewTest
 				"SINGLE_HIT_COMPONENT", "ORDINARY_ATTACK_COMPONENT")).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis hypothesis(AttributionConstraint bound, Boolean componentKnown,
+	private static LegacyConstraintOracle.Hypothesis hypothesis(AttributionConstraint bound, Boolean componentKnown,
 		Map<String, Number> facts, boolean api)
 	{
 		Map<String, Boolean> observations = new LinkedHashMap<>();
 		for (String key : bound.getRequiredObservations()) observations.put(key, true);
 		if (componentKnown == null) observations.remove("ORDINARY_ATTACK_COMPONENT");
 		else observations.put("ORDINARY_ATTACK_COMPONENT", componentKnown);
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
 			.key("review:source").name("Recorded source").actorRef("npc:lifetime:1").familyKey("review:source")
 			.sceneKey("room").worldViewId(0).plane(0).strength(api ? "STRONG" : "POSSIBLE").build())
 			.mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT").worldMode("NORMAL")
@@ -72,9 +72,9 @@ public class ObservedBoundReviewTest
 			.observedApiSourceCorrelation(api).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis other()
+	private static LegacyConstraintOracle.Hypothesis other()
 	{
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
 			.key("review:other").name("Other source").actorRef("npc:lifetime:2").familyKey("review:other")
 			.sceneKey("room").worldViewId(0).plane(0).strength("POSSIBLE").build()).build();
 	}
@@ -84,7 +84,7 @@ public class ObservedBoundReviewTest
 	{
 		for (Boolean componentKnown : Arrays.asList(null, false))
 		{
-			SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(
+			SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(
 				hypothesis(bound("{\"op\":\"CONST\",\"value\":5}"), componentKnown,
 					Collections.singletonMap("context.activity.review", 1), false), other()), 20, false, "review");
 			assertEquals("ALTERNATIVES", result.getStatus());
@@ -95,7 +95,7 @@ public class ObservedBoundReviewTest
 	@Test
 	public void positivelyObservedComponentCanUseTheSameBound()
 	{
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(
 			hypothesis(bound("{\"op\":\"CONST\",\"value\":5}"), true,
 				Collections.singletonMap("context.activity.review", 1), false), other()), 20, false, "review");
 		assertEquals(1, result.getCandidates().size());
@@ -105,7 +105,7 @@ public class ObservedBoundReviewTest
 	@Test
 	public void missingScaleDoesNotUseTheScalarFallbackOrDropTheActor()
 	{
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(
 			hypothesis(bound("{\"op\":\"MULTIPLY\",\"args\":[{\"op\":\"CONST\",\"value\":5},{\"op\":\"FACT\",\"name\":\"observed.scale\"}]}"),
 				true, Collections.singletonMap("context.activity.review", 1), false), other()), 20, false, "review");
 		assertEquals("ALTERNATIVES", result.getStatus());
@@ -117,7 +117,7 @@ public class ObservedBoundReviewTest
 	{
 		for (String scope : Arrays.asList(null, "TOTAL_ATTACK_DAMAGE", "PER_PHASE_MAXIMUM"))
 		{
-			SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(
+			SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(
 				hypothesis(bound("{\"op\":\"CONST\",\"value\":5}", scope), true,
 					Collections.singletonMap("context.activity.review", 1), false), other()), 20, false, "review");
 			assertEquals("ALTERNATIVES", result.getStatus());
@@ -128,13 +128,13 @@ public class ObservedBoundReviewTest
 	@Test
 	public void explicitApiCorrelationSurvivesReferenceConflictButNotIncompatibleObservedOutcome()
 	{
-		SourceEvidenceResolver.Hypothesis source = hypothesis(bound("{\"op\":\"CONST\",\"value\":5}"), true,
+		LegacyConstraintOracle.Hypothesis source = hypothesis(bound("{\"op\":\"CONST\",\"value\":5}"), true,
 			Collections.singletonMap("context.activity.review", 1), true);
-		SourceResolution conflict = SourceEvidenceResolver.resolve(Collections.singletonList(source), 20, false, "review");
+		SourceResolution conflict = LegacyConstraintOracle.resolve(Collections.singletonList(source), 20, false, "review");
 		assertEquals(1, conflict.getCandidates().size());
 		assertEquals("POSSIBLE", conflict.getCandidates().get(0).getStrength());
 		assertTrue(conflict.isUnidentifiedPossible());
-		SourceResolution contradicted = SourceEvidenceResolver.resolve(Collections.singletonList(source.toBuilder()
+		SourceResolution contradicted = LegacyConstraintOracle.resolve(Collections.singletonList(source.toBuilder()
 			.eligibilityExclusions(Collections.singletonList("HITSPLAT_TYPE_MISMATCH:review")).build()), 20, false, "review");
 		assertTrue(contradicted.getCandidates().isEmpty());
 	}

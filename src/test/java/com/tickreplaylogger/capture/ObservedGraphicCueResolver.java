@@ -232,8 +232,9 @@ public final class ObservedGraphicCueResolver
 		}
 	}
 
-	public ObservedMechanismResolver.Result resolve(DamageRecord hit, CombatCatalog catalog)
+	public ObservedMechanismResolver.Result resolve(DamageRecord hit, Object referenceData)
 	{
+		LegacyCombatCatalog catalog=LegacyCombatCatalog.from(referenceData);
 		List<ObservedMechanismResolver.Contribution> output = new ArrayList<>();
 		if (hit == null || catalog == null || !"player".equals(hit.getDefenderRef())
 			|| !Arrays.asList("RECEIVED", "RESOURCE_IMPACT").contains(hit.getDirection())
@@ -272,7 +273,7 @@ public final class ObservedGraphicCueResolver
 					.key("graphic-cue:" + rule.key + ":" + cue.identity).name(rule.name)
 					.familyKey("graphic-definition:" + cue.id).sceneKey(cue.scene).worldViewId(cue.view)
 					.plane(cue.plane).strength("POSSIBLE").evidence(Collections.unmodifiableList(evidence)).build();
-				output.add(new ObservedMechanismResolver.Contribution(SourceEvidenceResolver.Hypothesis.builder()
+				output.add(new ObservedMechanismResolver.Contribution(LegacyConstraintOracle.Hypothesis.builder()
 					.candidate(candidate).mechanism("ENVIRONMENT_AREA_IMPACT").damageComponent(rule.key)
 					.causalAssociationOnly(true).build(), "GRAPHIC", cue.id, true));
 				unknown = true; // A cue never closes the list of possible causes.

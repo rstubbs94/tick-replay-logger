@@ -63,13 +63,17 @@ final class WeakIdentityIds
 	{
 		Key key;
 		while ((key = (Key) queue.poll()) != null)
+		{
 			ids.remove(key);
+		}
 	}
 
 	synchronized long id(Object value)
 	{
 		if (value == null)
+		{
 			return 0;
+		}
 		clean();
 		Key lookup = new Key(value, null);
 		Long id = ids.get(lookup);
@@ -86,6 +90,8 @@ final class WeakIdentityIds
 	{
 		clean();
 		if (value != null)
+		{
 			ids.remove(new Key(value, null));
+		}
 	}
 }

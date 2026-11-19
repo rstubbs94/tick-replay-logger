@@ -67,12 +67,12 @@ public class CaptureBuildRuntimeTest
 	public void missingIncompleteFutureOrExtraManifestsCannotQualify() throws Exception
 	{
 		Fixture f = new Fixture();
-		assertEquals("BUILD_METADATA_UNAVAILABLE",
+		assertEquals("REFERENCE_MANIFEST_UNAVAILABLE",
 			CaptureBuild.verifyReferenceRuntime(new JsonObject(), "test-version", p -> null));
 		f.info.addProperty("runtimeReferencePolicy", "future-policy");
-		assertEquals("BUILD_METADATA_UNAVAILABLE", f.verify("test-version"));
+		assertEquals("REFERENCE_MANIFEST_UNAVAILABLE", f.verify("test-version"));
 		f.info.addProperty("runtimeReferencePolicy", "SELECTED_CLASSES_AND_VERSION_V1");
-		JsonObject hashes = f.info.getAsJsonObject("runeLiteArtifacts").getAsJsonObject("runelite-api")
+		JsonObject hashes = f.reference.getAsJsonObject("artifacts").getAsJsonObject("runelite-api")
 			.getAsJsonObject("referenceClassSha256s");
 		hashes.addProperty("extra.class", "a".repeat(64));
 		assertEquals("INVALID_REFERENCE_CLASS_MANIFEST", f.verify("test-version"));
@@ -82,39 +82,63 @@ public class CaptureBuildRuntimeTest
 	}
 
 	@Test
-	public void actualClasspathKeepsSupportedBindingsAndSeparatesCompileProvenance()
+	public void actualClasspathKeepsSupportedBindingsWithoutCompileProvenance()
 	{
-		assertEquals("COMPILE_CLASSPATH_REFERENCE", CaptureBuild.artifactIdentityScope());
+		assertEquals("REVIEWED_RUNTIME_REFERENCE", CaptureBuild.artifactIdentityScope());
 		assertEquals("MATCHED_SELECTED_CLASSES_AND_VERSION", CaptureBuild.runtimeReferenceVerification());
 		assertEquals(CaptureBuild.runtimeVersion(), CaptureBuild.apiVersion());
-		assertEquals(CaptureBuild.compiledApiArtifactSha256(), CaptureBuild.apiArtifactSha256());
-		assertEquals(CaptureBuild.compiledClientArtifactSha256(), CaptureBuild.clientArtifactSha256());
-		assertTrue(CaptureBuild.supportsClientReference(CaptureBuild.compiledApiVersion(),
-			CaptureBuild.compiledClientArtifactSha256()));
-		assertFalse(CaptureBuild.supportsClientReference(CaptureBuild.compiledApiVersion(), "0".repeat(64)));
+		assertNull(CaptureBuild.sourceTreeHash());
+		assertNull(CaptureBuild.compiledApiVersion());
+		assertNull(CaptureBuild.compiledApiArtifactSha256());
+		assertNull(CaptureBuild.compiledClientArtifactSha256());
+		assertTrue(CaptureBuild.supportsClientReference(CaptureBuild.referenceVersion(),
+			CaptureBuild.referenceClientArtifactSha256()));
+		assertFalse(CaptureBuild.supportsClientReference(CaptureBuild.referenceVersion(), "0".repeat(64)));
 		assertFalse(
-			CaptureBuild.supportsClientReference("different-version", CaptureBuild.compiledClientArtifactSha256()));
+			CaptureBuild.supportsClientReference("different-version", CaptureBuild.referenceClientArtifactSha256()));
 		assertSame("Cached result, no per-tick resource scan", CaptureBuild.runtimeReferenceVerification(),
 			CaptureBuild.runtimeReferenceVerification());
+	}
+
+	@Test
+	public void duplicateVersionsCannotSelectAnArbitraryReference() throws Exception
+	{
+		Fixture f = new Fixture();
+		f.info.getAsJsonArray("references").add(f.reference.deepCopy());
+		assertEquals("INVALID_REFERENCE_CLASS_MANIFEST", f.verify("test-version"));
+		assertEquals(0, f.reads.get());
+	}
+
+	@Test
+	public void aCompileManifestCannotMasqueradeAsAReviewedRuntimeReference() throws Exception
+	{
+		Fixture f = new Fixture();
+		f.info.addProperty("artifactIdentityScope", "COMPILE_CLASSPATH_REFERENCE");
+		assertEquals("REFERENCE_MANIFEST_UNAVAILABLE", f.verify("test-version"));
+		assertEquals(0, f.reads.get());
 	}
 
 	private static final class Fixture
 	{
 		final JsonObject info = new JsonObject();
+		final JsonObject reference = new JsonObject();
 		final Map<String, byte[]> resources = new HashMap<>();
 		final AtomicInteger reads = new AtomicInteger();
 
 		Fixture() throws Exception
 		{
-			info.addProperty("artifactIdentityScope", "COMPILE_CLASSPATH_REFERENCE");
+			info.addProperty("schemaVersion", 1);
+			info.addProperty("artifactIdentityScope", "REVIEWED_RUNTIME_REFERENCE");
 			info.addProperty("runtimeReferencePolicy", "SELECTED_CLASSES_AND_VERSION_V1");
-			info.addProperty("runeLiteApiVersion", "test-version");
+			JsonArray references = new JsonArray();
+			references.add(reference);
+			info.add("references", references);
+			reference.addProperty("version", "test-version");
 			JsonObject artifacts = new JsonObject();
-			info.add("runeLiteArtifacts", artifacts);
+			reference.add("artifacts", artifacts);
 			for (Map.Entry<String, List<String>> group : CaptureBuild.REFERENCE_CLASSES.entrySet())
 			{
 				JsonObject artifact = new JsonObject();
-				artifact.addProperty("version", "test-version");
 				artifact.addProperty("sha256", "a".repeat(64));
 				JsonObject hashes = new JsonObject();
 				artifact.add("referenceClassSha256s", hashes);

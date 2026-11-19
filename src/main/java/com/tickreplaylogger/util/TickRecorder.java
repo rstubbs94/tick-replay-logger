@@ -24,16 +24,12 @@
  */
 package com.tickreplaylogger.util;
 
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.MovementData;
-import com.tickreplaylogger.model.PlayerAction;
-import com.tickreplaylogger.model.TickData;
+import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.SourceResolution;
+import com.tickreplaylogger.model.world.DamageRecord;
+import com.tickreplaylogger.capture.ResolverV1Recording;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Circular buffer that records tick data.
@@ -55,7 +51,7 @@ public class TickRecorder
 	private final List<PlayerAction> pendingActions = new ArrayList<>();
 	private final List<DamageEvent> pendingDamage = new ArrayList<>();
 	private final List<String> pendingEffects = new ArrayList<>();
-	private final Map<Integer, Long> pendingEffectSourceSequences = new java.util.LinkedHashMap<>();
+	private final Map<Integer, Long> pendingEffectSourceSequences = new LinkedHashMap<>();
 
 	public TickRecorder(int capacity)
 	{
@@ -104,10 +100,10 @@ public class TickRecorder
 		currentTickNumber++;
 		currentTick = TickData.builder().tickNumber(currentTickNumber).timestamp(System.currentTimeMillis())
 			.playerActions(new ArrayList<>(pendingActions)).damageEvents(new ArrayList<>(pendingDamage))
-			.effectNotes(new ArrayList<>(pendingEffects)).effectNoteSourceSequences(new java.util.LinkedHashMap<>(pendingEffectSourceSequences))
-			.activePrayers(new ArrayList<>()).prayerStateKnown(false)
-			.unavailableStateFields(new ArrayList<>(java.util.Arrays.asList("currentHp", "maxHp", "currentPrayer",
-				"maxPrayer", "gameState", "apiTickCount", "gameCycle")))
+			.effectNotes(new ArrayList<>(pendingEffects))
+			.effectNoteSourceSequences(new LinkedHashMap<>(pendingEffectSourceSequences))
+			.activePrayers(new ArrayList<>()).prayerStateKnown(false).unavailableStateFields(new ArrayList<>(Arrays
+				.asList("currentHp", "maxHp", "currentPrayer", "maxPrayer", "gameState", "apiTickCount", "gameCycle")))
 			.build();
 		pendingActions.clear();
 		pendingDamage.clear();
@@ -128,8 +124,9 @@ public class TickRecorder
 		}
 
 		// Add to circular buffer
-		currentTick.setEffectNoteSourceSequences(java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(
-			currentTick.getEffectNoteSourceSequences() == null ? java.util.Collections.emptyMap() : currentTick.getEffectNoteSourceSequences())));
+		currentTick.setEffectNoteSourceSequences(Collections.unmodifiableMap(
+			new LinkedHashMap<>(currentTick.getEffectNoteSourceSequences() == null ? Collections.emptyMap()
+				: currentTick.getEffectNoteSourceSequences())));
 		buffer[head] = currentTick;
 		head = (head + 1) % capacity;
 		if (count < capacity)
@@ -174,7 +171,9 @@ public class TickRecorder
 	public void setBoundaryContext(String state, Integer apiTick, Integer cycle)
 	{
 		if (currentTick == null)
+		{
 			return;
+		}
 		currentTick.setObservedGameState(state);
 		currentTick.setApiTickCount(apiTick);
 		currentTick.setGameCycle(cycle);
@@ -183,31 +182,45 @@ public class TickRecorder
 		Object[] values =
 		{ state, apiTick, cycle };
 		for (int i = 0; i < fields.length; i++)
+		{
 			if (values[i] == null)
+			{
 				markStateUnavailable(fields[i]);
+			}
 			else
+			{
 				currentTick.getUnavailableStateFields().remove(fields[i]);
+			}
+		}
 	}
 
 	private int observedValue(String field, Integer value)
 	{
 		if (value == null)
+		{
 			markStateUnavailable(field);
+		}
 		else
+		{
 			currentTick.getUnavailableStateFields().remove(field);
+		}
 		return value == null ? 0 : value;
 	}
 
 	public void markStateUnavailable(String field)
 	{
 		if (currentTick != null && !currentTick.getUnavailableStateFields().contains(field))
+		{
 			currentTick.getUnavailableStateFields().add(field);
+		}
 	}
 
 	public void addCaptureIssue(String issue)
 	{
 		if (currentTick != null)
+		{
 			currentTick.getCaptureIssues().add(issue);
+		}
 	}
 
 	/**
@@ -254,8 +267,11 @@ public class TickRecorder
 		{
 			int index = pendingEffects.size();
 			pendingEffects.add(note);
-			if (observationSequence != null && observationSequence > 0 && index <= 4095 && pendingEffectSourceSequences.size() < 256)
+			if (observationSequence != null && observationSequence > 0 && index <= 4095
+				&& pendingEffectSourceSequences.size() < 256)
+			{
 				pendingEffectSourceSequences.put(index, observationSequence);
+			}
 			return;
 		}
 		currentTick.addEffectNote(note, observationSequence);
@@ -344,6 +360,32 @@ public class TickRecorder
 	/** Attach retrospective results only to the original received callback in the selected tick. */
 	public synchronized void applyReceivedSourceResolutions(int tick, Map<Long, SourceResolution> resolutions)
 	{
+		applyReceivedSourceResults(tick, resolutions, Collections.emptyMap());
+	}
+
+	public synchronized void applyResolvedDamageRecords(int tick, Map<Long, DamageRecord> records)
+	{
+		if (records == null || records.isEmpty())
+		{
+			return;
+		}
+		Map<Long, SourceResolution> resolutions = new LinkedHashMap<>();
+		for (Map.Entry<Long, DamageRecord> entry : records.entrySet())
+		{
+			if (entry.getValue() != null && entry.getValue().getImpactTick() == tick
+				&& Objects.equals(entry.getKey(), entry.getValue().getObservationSequence())
+				&& (entry.getValue().getDirection() == null || "RECEIVED".equals(entry.getValue().getDirection())
+					|| "RESOURCE_IMPACT".equals(entry.getValue().getDirection())))
+			{
+				resolutions.put(entry.getKey(), entry.getValue().getSourceResolution());
+			}
+		}
+		applyReceivedSourceResults(tick, resolutions, records);
+	}
+
+	private void applyReceivedSourceResults(int tick, Map<Long, SourceResolution> resolutions,
+		Map<Long, DamageRecord> records)
+	{
 		if (resolutions == null || resolutions.isEmpty())
 		{
 			return;
@@ -360,11 +402,14 @@ public class TickRecorder
 				selectedIndex = index;
 			}
 		}
-		if (selected == null || selected.getDamageEvents() == null)
+		if (selected == null)
 		{
 			return;
 		}
-		List<DamageEvent> updated = new ArrayList<>(selected.getDamageEvents());
+		List<DamageEvent> updated = selected.getDamageEvents() == null ? new ArrayList<>()
+			: new ArrayList<>(selected.getDamageEvents());
+		List<String> updatedNotes = selected.getEffectNotes() == null ? null
+			: new ArrayList<>(selected.getEffectNotes());
 		boolean changed = false;
 		for (int index = 0; index < updated.size(); index++)
 		{
@@ -377,16 +422,52 @@ public class TickRecorder
 			SourceResolution resolution = resolutions.get(damage.getObservationSequence());
 			if (resolution != null)
 			{
-				updated.set(index, damage.toBuilder().sourceResolution(resolution).build());
+				DamageRecord projected = records.get(damage.getObservationSequence());
+				if (projected != null)
+				{
+					if (projected.getAmount() != damage.getAmount()
+						|| "RESOURCE_IMPACT".equals(projected.getDirection()))
+					{
+						continue;
+					}
+					updated.set(index, ResolverV1Recording.projectJournalDamage(damage, projected));
+				}
+				else
+				{
+					updated.set(index, damage.toBuilder().sourceResolution(resolution).build());
+				}
 				changed = true;
+			}
+		}
+		if (updatedNotes != null && selected.getEffectNoteSourceSequences() != null)
+		{
+			for (Map.Entry<Integer, Long> note : selected.getEffectNoteSourceSequences().entrySet())
+			{
+				DamageRecord projected = records.get(note.getValue());
+				int index = note.getKey();
+				if (projected == null || index < 0 || index >= updatedNotes.size()
+					|| !resolutions.containsKey(note.getValue()))
+				{
+					continue;
+				}
+				String before = updatedNotes.get(index);
+				String after = ResolverV1Recording.projectResourceNote(before, projected);
+				if (!Objects.equals(before, after))
+				{
+					updatedNotes.set(index, after);
+					changed = true;
+				}
 			}
 		}
 		if (changed)
 		{
-			TickData replacement = selected.toBuilder().damageEvents(updated)
+			TickData replacement = selected.toBuilder()
+				.damageEvents(selected.getDamageEvents() == null ? null : updated).effectNotes(updatedNotes)
 				.effectNoteSourceSequences(selected.getEffectNoteSourceSequences() == null ? null
-					: selectedIndex >= 0 ? java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(selected.getEffectNoteSourceSequences()))
-						: new java.util.LinkedHashMap<>(selected.getEffectNoteSourceSequences())).build();
+					: selectedIndex >= 0
+						? Collections.unmodifiableMap(new LinkedHashMap<>(selected.getEffectNoteSourceSequences()))
+						: new LinkedHashMap<>(selected.getEffectNoteSourceSequences()))
+				.build();
 			if (selectedIndex >= 0)
 			{
 				buffer[selectedIndex] = replacement;

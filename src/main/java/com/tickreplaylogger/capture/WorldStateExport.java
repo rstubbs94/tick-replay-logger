@@ -24,20 +24,9 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.GroundItemState;
-import com.tickreplaylogger.model.world.NumericVariableState;
-import com.tickreplaylogger.model.world.ObservedObjectState;
-import com.tickreplaylogger.model.world.SceneData;
-import com.tickreplaylogger.model.world.TileSurface;
-import com.tickreplaylogger.model.world.WorldSnapshot;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
 
 /** Compact observed state without losing the checkpoint at the selected window's first tick. */
 final class WorldStateExport
@@ -50,15 +39,23 @@ final class WorldStateExport
 	{
 		Map<String, List<WorldSnapshot>> streams = new LinkedHashMap<>();
 		for (WorldSnapshot tick : ticks)
+		{
 			if (tick.getAdditionalViews() != null)
+			{
 				for (WorldSnapshot child : tick.getAdditionalViews())
+				{
 					streams.computeIfAbsent(child.getSceneKey(), key -> new ArrayList<>()).add(child);
+				}
+			}
+		}
 		IdentityHashMap<WorldSnapshot, WorldSnapshot> children = new IdentityHashMap<>();
 		for (List<WorldSnapshot> stream : streams.values())
 		{
 			List<WorldSnapshot> compacted = compactNative(stream);
 			for (int index = 0; index < stream.size(); index++)
+			{
 				children.put(stream.get(index), compacted.get(index));
+			}
 		}
 		List<WorldSnapshot> nativeTicks = compactNative(ticks), out = new ArrayList<>();
 		for (int index = 0; index < ticks.size(); index++)
@@ -68,7 +65,9 @@ final class WorldStateExport
 			{
 				List<WorldSnapshot> additional = new ArrayList<>();
 				for (WorldSnapshot child : tick.getAdditionalViews())
+				{
 					additional.add(children.get(child));
+				}
 				result = result.toBuilder().additionalViews(additional).build();
 			}
 			out.add(result);
@@ -114,12 +113,20 @@ final class WorldStateExport
 					{
 						current.put(tile.getKey(), tile);
 						if (checkpoint || !tile.equals(previousTerrain.get(tile.getKey())))
+						{
 							changes.add(tile);
+						}
 					}
 					if (!checkpoint)
+					{
 						for (String key : previousTerrain.keySet())
+						{
 							if (!current.containsKey(key))
+							{
 								removals.add(key);
+							}
+						}
+					}
 					frame.terrainBaseline(checkpoint).terrainChanges(changes).terrainRemovals(removals);
 					previousTerrain = current;
 				}
@@ -142,12 +149,20 @@ final class WorldStateExport
 					{
 						current.put(object.getObjectKey(), object);
 						if (objectBaseline || !object.equals(previousObjects.get(object.getObjectKey())))
+						{
 							changes.add(object);
+						}
 					}
 					if (!objectBaseline)
+					{
 						for (Long key : previousObjects.keySet())
+						{
 							if (!current.containsKey(key))
+							{
 								removals.add(key);
+							}
+						}
+					}
 					frame.objectBaseline(objectBaseline).objectChanges(changes).objectRemovals(removals);
 					previousObjects = current;
 				}
@@ -162,12 +177,20 @@ final class WorldStateExport
 				{
 					current.put(item.getItemKey(), item);
 					if (checkpoint || !item.equals(previousItems.get(item.getItemKey())))
+					{
 						changes.add(item);
+					}
 				}
 				if (!checkpoint)
+				{
 					for (Long key : previousItems.keySet())
+					{
 						if (!current.containsKey(key))
+						{
 							removals.add(key);
+						}
+					}
+				}
 				frame.groundItemBaseline(checkpoint).groundItemChanges(changes).groundItemRemovals(removals);
 				previousItems = current;
 			}
@@ -175,13 +198,19 @@ final class WorldStateExport
 			if (vars != null)
 			{
 				if (baseline || old == null || old.length != vars.length)
+				{
 					frame.varpBaseline(vars);
+				}
 				else
 				{
 					Map<Integer, Integer> changes = new LinkedHashMap<>();
 					for (int i = 0; i < vars.length; i++)
+					{
 						if (vars[i] != old[i])
+						{
 							changes.put(i, vars[i]);
+						}
+					}
 					frame.varpChanges(changes);
 				}
 			}
@@ -193,11 +222,15 @@ final class WorldStateExport
 					|| flags[0].length != oldFlags[0].length;
 				List<SceneData.CollisionTile> changes = new ArrayList<>();
 				for (int x = 0; x < flags.length; x++)
+				{
 					for (int y = 0; y < flags[x].length; y++)
 					{
 						if (checkpoint ? flags[x][y] != 0 : flags[x][y] != oldFlags[x][y])
+						{
 							changes.add(SceneData.CollisionTile.builder().x(x).y(y).flag(flags[x][y]).build());
+						}
 					}
+				}
 				frame.collisionBaseline(checkpoint).collisionWidth(flags.length).collisionHeight(flags[0].length)
 					.collisionChanges(changes);
 			}
@@ -211,22 +244,34 @@ final class WorldStateExport
 		NumericVariableState prior, boolean baseline)
 	{
 		if (now == null)
+		{
 			return;
+		}
 		Map<Integer, Integer> current = now.getClientIntegers(), old = prior == null ? null : prior.getClientIntegers();
 		if (current != null)
 		{
 			if (baseline || old == null)
+			{
 				frame.clientIntegerBaseline(current);
+			}
 			else
 			{
 				Map<Integer, Integer> changes = new TreeMap<>();
 				List<Integer> removals = new ArrayList<>();
 				for (Map.Entry<Integer, Integer> entry : current.entrySet())
+				{
 					if (!Objects.equals(old.get(entry.getKey()), entry.getValue()))
+					{
 						changes.put(entry.getKey(), entry.getValue());
+					}
+				}
 				for (Integer key : old.keySet())
+				{
 					if (!current.containsKey(key))
+					{
 						removals.add(key);
+					}
+				}
 				frame.clientIntegerChanges(changes).clientIntegerRemovals(removals);
 			}
 		}
@@ -234,13 +279,19 @@ final class WorldStateExport
 		if (ints != null)
 		{
 			if (baseline || oldInts == null || oldInts.length != ints.length)
+			{
 				frame.serverVarpBaseline(ints);
+			}
 			else
 			{
 				Map<Integer, Integer> changes = new TreeMap<>();
 				for (int i = 0; i < ints.length; i++)
+				{
 					if (ints[i] != oldInts[i])
+					{
 						changes.put(i, ints[i]);
+					}
+				}
 				frame.serverVarpChanges(changes);
 			}
 		}
@@ -248,18 +299,26 @@ final class WorldStateExport
 		if (longs != null)
 		{
 			if (baseline || oldLongs == null || oldLongs.length != longs.length)
+			{
 				frame.varpLongBaseline(decimal(longs));
+			}
 			else
+			{
 				frame.varpLongChanges(longChanges(longs, oldLongs));
+			}
 		}
 		longs = now.getServerVarpsLong();
 		oldLongs = prior == null ? null : prior.getServerVarpsLong();
 		if (longs != null)
 		{
 			if (baseline || oldLongs == null || oldLongs.length != longs.length)
+			{
 				frame.serverVarpLongBaseline(decimal(longs));
+			}
 			else
+			{
 				frame.serverVarpLongChanges(longChanges(longs, oldLongs));
+			}
 		}
 	}
 
@@ -267,7 +326,9 @@ final class WorldStateExport
 	{
 		String[] result = new String[values.length];
 		for (int i = 0; i < values.length; i++)
+		{
 			result[i] = Long.toString(values[i]);
+		}
 		return result;
 	}
 
@@ -275,8 +336,12 @@ final class WorldStateExport
 	{
 		Map<Integer, String> out = new TreeMap<>();
 		for (int i = 0; i < now.length; i++)
+		{
 			if (now[i] != old[i])
+			{
 				out.put(i, Long.toString(now[i]));
+			}
+		}
 		return out;
 	}
 }

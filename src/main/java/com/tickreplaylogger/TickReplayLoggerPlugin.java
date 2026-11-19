@@ -24,75 +24,38 @@
  */
 package com.tickreplaylogger;
 
-import com.tickreplaylogger.capture.DamageMap;
-import com.tickreplaylogger.capture.CallbackFieldObservation;
-import com.tickreplaylogger.capture.ObjectHazards;
-import com.tickreplaylogger.capture.PrayerObservation;
-import com.tickreplaylogger.capture.WorldCaptureService;
-import com.tickreplaylogger.capture.WorldSnapshotRecorder;
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.TickRecording;
-import com.tickreplaylogger.model.MovementData;
-import com.tickreplaylogger.model.PlayerAction;
-import com.tickreplaylogger.model.TickData;
-import com.tickreplaylogger.model.world.DamageRecord;
-import com.tickreplaylogger.model.world.DeathRecordingV2;
-import com.tickreplaylogger.model.world.EffectEvent;
-import com.tickreplaylogger.model.world.ProjectileState;
-import com.tickreplaylogger.model.world.ObservedEvent;
-import com.tickreplaylogger.ui.TickReplayLoggerPanel;
-import com.tickreplaylogger.util.RecordingStorage;
-import com.tickreplaylogger.util.TickRecorder;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.google.inject.Provides;
+import com.tickreplaylogger.capture.*;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.model.world.*;
+import com.tickreplaylogger.ui.TickReplayLoggerPanel;
+import com.tickreplaylogger.util.*;
+import java.awt.image.BufferedImage;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.function.Supplier;
+import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.GameState;
-import net.runelite.api.GraphicsObject;
-import net.runelite.api.Hitsplat;
-import net.runelite.api.HitsplatID;
-import net.runelite.api.NPC;
-import net.runelite.api.NPCComposition;
-import net.runelite.api.Player;
-import net.runelite.api.Prayer;
-import net.runelite.api.Projectile;
-import net.runelite.api.Skill;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.ActorDeath;
-import net.runelite.api.events.AnimationChanged;
-import net.runelite.api.events.NpcSpawned;
-import net.runelite.api.events.NpcDespawned;
-import net.runelite.api.events.NpcChanged;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.InteractingChanged;
-import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.ProjectileMoved;
-import net.runelite.api.events.VarbitChanged;
-import net.runelite.api.VarPlayer;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
+import net.runelite.api.events.*;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.SpriteManager;
+import net.runelite.client.game.WorldService;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.worldhopper.ping.Ping;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
-import com.google.gson.Gson;
-
-import javax.inject.Inject;
-import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import net.runelite.client.util.Text;
+import net.runelite.http.api.worlds.World;
+import net.runelite.http.api.worlds.WorldResult;
 
 @Slf4j
 @PluginDescriptor(name = "Tick Replay Logger", description = "Records tick-by-tick combat actions for post-death analysis and replay", tags =
@@ -102,6 +65,11 @@ public class TickReplayLoggerPlugin extends Plugin
 {
 	private static final int DEFAULT_TICK_CAPACITY = 50;
 	private static final int DEFAULT_MAX_DEATHS = 3;
+	private static final Set<MenuAction> PLAYER_MENU_ACTIONS = EnumSet.of(MenuAction.PLAYER_FIRST_OPTION,
+		MenuAction.PLAYER_SECOND_OPTION, MenuAction.PLAYER_THIRD_OPTION, MenuAction.PLAYER_FOURTH_OPTION,
+		MenuAction.PLAYER_FIFTH_OPTION, MenuAction.PLAYER_SIXTH_OPTION, MenuAction.PLAYER_SEVENTH_OPTION,
+		MenuAction.PLAYER_EIGHTH_OPTION, MenuAction.ITEM_USE_ON_PLAYER, MenuAction.WIDGET_TARGET_ON_PLAYER,
+		MenuAction.RUNELITE_PLAYER);
 
 	@Inject
 	private Client client;
@@ -116,16 +84,16 @@ public class TickReplayLoggerPlugin extends Plugin
 	private SpriteManager spriteManager;
 
 	@Inject
-	private net.runelite.client.game.WorldService worldService;
+	private WorldService worldService;
 
 	@Inject
-	private java.util.concurrent.ScheduledExecutorService executorService;
+	private ScheduledExecutorService executorService;
 
 	@Inject
 	private Gson gson;
 
 	@Inject
-	private net.runelite.client.callback.ClientThread clientThread;
+	private ClientThread clientThread;
 
 	private TickRecorder tickRecorder;
 	private RecordingStorage recordingStorage;
@@ -137,40 +105,26 @@ public class TickReplayLoggerPlugin extends Plugin
 	private final ObjectHazards.ObservationIdentities surfaceObservationIds = new ObjectHazards.ObservationIdentities();
 	private WorldSnapshotRecorder worldRecorder;
 	private DamageMap damageMap;
+	private SourceResolutionWorker sourceWorker;
+	private long sourceEvidenceRevision;
 	// Attributed NPC id/spotanim bookkeeping for labelling + effect dedupe.
-	private int lastAttributionNpcId = -1;
-	private Integer lastAttributionNpcLevel;
-	private boolean lastAttributionNormalContext;
-	private int lastAttributionProjectileId = -1;
-	private DamageMap.AttackRule lastAttributionAttackRule;
-	private String lastAttributionMapRef;
-	private boolean projectileMatchAmbiguous;
-	private String lastAttributionAttackName;
-	private NPC pickpocketTarget;
-	private int pickpocketTargetTick;
-	private final List<String> failedPickpockets = new ArrayList<>();
-	// RuneLite's CrowdsourcingThieving uses this server-message format too.
-	private static final java.util.regex.Pattern PICKPOCKET_FAILURE = java.util.regex.Pattern
-		.compile("You fail to pick (.+)'s pocket\\.");
-	private final java.util.Set<Integer> activeEffectSpotanims = new java.util.HashSet<>();
+	private final Set<Integer> activeEffectSpotanims = new HashSet<>();
 	private Integer lastEffectGraphicSampleTick;
 	private long lastEffectGraphicSampleEpoch = Long.MIN_VALUE;
 	private final List<ProjectileState> projectilesThisTick = new ArrayList<>();
-	private final java.util.IdentityHashMap<Projectile, Long> projectileIds = new java.util.IdentityHashMap<>();
-	private final java.util.IdentityHashMap<Projectile, Integer> projectileSpawnTicks = new java.util.IdentityHashMap<>();
-	private final java.util.IdentityHashMap<Projectile, LocalPoint> projectileTargets = new java.util.IdentityHashMap<>();
-	private final java.util.IdentityHashMap<Projectile, ProjectileState> projectileCallbackStates = new java.util.IdentityHashMap<>();
-	private final com.tickreplaylogger.capture.ProjectileSourceTracker projectileSourceTracker = new com.tickreplaylogger.capture.ProjectileSourceTracker();
-	private com.tickreplaylogger.capture.SourceAssociationNpcIndex sourceAssociationNpcs =
-		new com.tickreplaylogger.capture.SourceAssociationNpcIndex(null);
-	private final Map<Long, PendingProjectile> projectileSourceLinks = new java.util.HashMap<>();
+	private final IdentityHashMap<Projectile, Long> projectileIds = new IdentityHashMap<>();
+	private final IdentityHashMap<Projectile, Integer> projectileSpawnTicks = new IdentityHashMap<>();
+	private final IdentityHashMap<Projectile, LocalPoint> projectileTargets = new IdentityHashMap<>();
+	private final IdentityHashMap<Projectile, ProjectileState> projectileCallbackStates = new IdentityHashMap<>();
+	private final IdentityHashMap<Projectile, Map<String, Object>> projectileLaunchObservations = new IdentityHashMap<>();
+	private final ProjectileSourceTracker projectileSourceTracker = new ProjectileSourceTracker();
+	private SourceAssociationNpcIndex sourceAssociationNpcs = new SourceAssociationNpcIndex(null);
+	private final Map<Long, PendingProjectile> projectileSourceLinks = new HashMap<>();
 	private List<ProjectileState> settledProjectileSamples;
 	private long nextProjectileId;
 	private long observationSequence;
 	private boolean gameTickInProgress;
 	private boolean captureSessionObserved;
-	private String lastAttributionActorRef;
-	private String lastAttributionEvidence;
 	// Correlates a matched projectile's spawn tick to a hitsplat's impact tick (launchâ†”impact Â§3).
 	private int sceneLoadSeq = 0;
 	private String currentSceneKey = null;
@@ -183,13 +137,11 @@ public class TickReplayLoggerPlugin extends Plugin
 	// --- Damage source attribution system ---
 
 	// Tracks recent NPCs that have targeted the player, keyed by NPC index
-	private final Map<Integer, AttackerRecord> recentAttackers = new LinkedHashMap<>();
-	private static final int ATTACKER_EXPIRY_TICKS = 15; // ~9 seconds
 
 	// Tracks incoming projectiles for correlating with hitsplats
 	private final List<PendingProjectile> pendingProjectiles = new ArrayList<>();
 	private final List<String> projectileCaptureIssues = new ArrayList<>();
-	private final java.util.Set<Projectile> processedProjectiles = new java.util.HashSet<>();
+	private final Set<Projectile> processedProjectiles = new HashSet<>();
 
 	// Game tick counter for recency calculations
 	private int currentGameTick = 0;
@@ -200,17 +152,18 @@ public class TickReplayLoggerPlugin extends Plugin
 	private int resourceImpactQueueCount;
 	/** Scoped to one callback lookup or deferred batch, restored even if an optional read fails. */
 	private NativeHitScope activeHitScope;
+	private CallbackContext activeHitCallbackContext;
 
 	private static final class NativeHitScope
 	{
 		final Player localPlayer;
-		final net.runelite.api.WorldView view;
-		final net.runelite.api.Scene scene;
+		final WorldView view;
+		final Scene scene;
 		final Integer viewId, baseX, baseY, plane, width, height;
 		final boolean known;
 
-		NativeHitScope(Player localPlayer, net.runelite.api.WorldView view, net.runelite.api.Scene scene,
-			Integer viewId, Integer baseX, Integer baseY, Integer plane, Integer width, Integer height)
+		NativeHitScope(Player localPlayer, WorldView view, Scene scene, Integer viewId, Integer baseX, Integer baseY,
+			Integer plane, Integer width, Integer height)
 		{
 			this.localPlayer = localPlayer;
 			this.view = view;
@@ -226,13 +179,16 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
-	private NativeHitScope readNativeHitScope(Player localPlayer, net.runelite.api.WorldView view, Integer originalId,
+	private NativeHitScope readNativeHitScope(Player localPlayer, WorldView view, Integer originalId,
 		boolean idAlreadyObserved, List<String> issues, String prefix)
 	{
 		if (view == null)
+		{
 			return new NativeHitScope(localPlayer, null, null, null, null, null, null, null, null);
+		}
 		Integer id = originalId;
 		if (!idAlreadyObserved)
+		{
 			try
 			{
 				id = view.getId();
@@ -240,6 +196,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			catch (RuntimeException unavailable)
 			{
 				/* Raw ID availability does not choose a damage source. */}
+		}
 		return new NativeHitScope(localPlayer, view, readHitContext(prefix + "Scene", view::getScene, issues), id,
 			readHitContext(prefix + "BaseX", view::getBaseX, issues),
 			readHitContext(prefix + "BaseY", view::getBaseY, issues),
@@ -248,7 +205,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			readHitContext(prefix + "Height", view::getSizeY, issues));
 	}
 
-	private <T> T inNativeHitScope(NativeHitScope scope, java.util.function.Supplier<T> read)
+	private <T> T inNativeHitScope(NativeHitScope scope, Supplier<T> read)
 	{
 		NativeHitScope previous = activeHitScope;
 		activeHitScope = scope;
@@ -259,6 +216,20 @@ public class TickReplayLoggerPlugin extends Plugin
 		finally
 		{
 			activeHitScope = previous;
+		}
+	}
+
+	private <T> T inNativeHitScope(NativeHitScope scope, CallbackContext callback, Supplier<T> read)
+	{
+		CallbackContext previous = activeHitCallbackContext;
+		activeHitCallbackContext = callback;
+		try
+		{
+			return inNativeHitScope(scope, read);
+		}
+		finally
+		{
+			activeHitCallbackContext = previous;
 		}
 	}
 
@@ -276,50 +247,38 @@ public class TickReplayLoggerPlugin extends Plugin
 		final DamageEvent.DamageType damageType;
 		final List<String> prayers;
 		final WorldPoint position;
-		final LocalPoint localPosition;
-		final List<String> observedHazards;
-		final List<java.util.Map<String, Object>> hazardWitnesses;
-		final int baseX;
-		final int baseY;
-		final net.runelite.api.WorldView worldView;
-		final net.runelite.api.Scene scene;
+		final List<Map<String, Object>> hazardWitnesses;
 		final long epoch;
-		final int plane;
 		final Integer observedCycle;
 		final long sequence;
 		final PrayerObservation prayerObservation;
-		final com.tickreplaylogger.model.world.ActorGraphicsState graphicsObservation;
-		NativeHitScope nativeScope;
+		final ActorGraphicsState graphicsObservation;
+		final NativeHitScope nativeScope;
 		String impactSceneKey;
 		final List<String> captureIssues = new ArrayList<>();
 		String defenderIdentityEvidence = "CALLBACK_LOCAL_REFERENCE_MATCH";
 		boolean hpOutcomeKnown = true;
-		List<String> possibleOutcomeSurfaces = java.util.Collections.emptyList();
 		Map<String, Object> inventorySourceObservation;
+		String defenderName;
+		final List<Map<String, Object>> sourceWitnesses = new ArrayList<>();
 
 		PendingHit(int amount, int hitsplatType, DamageEvent.DamageType damageType, List<String> prayers,
-			WorldPoint position, LocalPoint localPosition, List<String> observedHazards, int baseX, int baseY,
-			Integer observedCycle, long sequence, PrayerObservation prayerObservation,
-			net.runelite.api.WorldView worldView, net.runelite.api.Scene scene,
-			List<java.util.Map<String, Object>> hazardWitnesses, long epoch, int plane,
-			com.tickreplaylogger.model.world.ActorGraphicsState graphicsObservation)
+			WorldPoint position, NativeHitScope nativeScope, Integer observedCycle, long sequence,
+			PrayerObservation prayerObservation, List<Map<String, Object>> hazardWitnesses, long epoch,
+			ActorGraphicsState graphicsObservation)
 		{
 			this.amount = amount;
 			this.hitsplatType = hitsplatType;
 			this.damageType = damageType;
 			this.prayers = new ArrayList<>(prayers);
 			this.position = position;
-			this.localPosition = localPosition;
-			this.observedHazards = new ArrayList<>(observedHazards);
+			this.nativeScope = nativeScope;
 			this.hazardWitnesses = new ArrayList<>();
-			for (java.util.Map<String, Object> witness : hazardWitnesses)
-				this.hazardWitnesses.add(new java.util.LinkedHashMap<>(witness));
-			this.baseX = baseX;
-			this.baseY = baseY;
-			this.worldView = worldView;
-			this.scene = scene;
+			for (Map<String, Object> witness : hazardWitnesses)
+			{
+				this.hazardWitnesses.add(new LinkedHashMap<>(witness));
+			}
 			this.epoch = epoch;
-			this.plane = plane;
 			this.observedCycle = observedCycle;
 			this.sequence = sequence;
 			this.prayerObservation = prayerObservation;
@@ -330,39 +289,53 @@ public class TickReplayLoggerPlugin extends Plugin
 	/** Primitive callback facts survive independently of optional enrichment reads. */
 	private static class CallbackContext
 	{
+		final long epoch;
 		GameState state;
 		Player localPlayer;
 		Integer cycle;
 		boolean allowed, ready;
 		final List<String> issues = new ArrayList<>();
-		final java.util.IdentityHashMap<Actor, com.tickreplaylogger.capture.ActorCallbackObservation.Sample> actorSamples = new java.util.IdentityHashMap<>();
-		final java.util.IdentityHashMap<Actor, String> actorReferences = new java.util.IdentityHashMap<>();
+		final IdentityHashMap<Actor, ActorCallbackObservation.Sample> actorSamples = new IdentityHashMap<>();
+		final IdentityHashMap<Actor, String> actorReferences = new IdentityHashMap<>();
 		boolean primaryAttempted, primaryKnown, localViewSampled;
-		net.runelite.api.WorldView primaryView, localView;
+		WorldView primaryView, localView;
 		Integer primaryPlane, primaryViewId;
 		String primarySceneKey;
+
+		CallbackContext(long epoch)
+		{
+			this.epoch = epoch;
+		}
 	}
 
 	private CallbackContext callbackContext()
 	{
-		CallbackContext c = new CallbackContext();
+		CallbackContext c = new CallbackContext(causalSceneEpoch);
 		c.state = readHitContext("callbackGameState", client::getGameState, c.issues);
 		if (c.state == GameState.LOGGED_IN)
+		{
 			captureSessionObserved = true;
+		}
 		c.ready = c.state == GameState.LOGGED_IN;
-		c.allowed = c.ready || captureSessionObserved && (c.state == null || java.util.Arrays
-			.asList(GameState.LOADING, GameState.CONNECTION_LOST, GameState.HOPPING, GameState.UNKNOWN)
-			.contains(c.state));
+		c.allowed = c.ready || captureSessionObserved && (c.state == null
+			|| Arrays.asList(GameState.LOADING, GameState.CONNECTION_LOST, GameState.HOPPING, GameState.UNKNOWN)
+				.contains(c.state));
 		if (!c.allowed)
+		{
 			return c;
+		}
 		if (c.ready)
 		{
 			c.localPlayer = readHitContext("callbackLocalPlayer", client::getLocalPlayer, c.issues);
 			if (c.localPlayer == null)
+			{
 				c.issues.add("callbackLocalPlayer: unavailable");
+			}
 		}
 		else
+		{
 			c.issues.add("callbackWorldContext: unavailable");
+		}
 		c.cycle = readHitContext("callbackGameCycle", client::getGameCycle, c.issues);
 		return c;
 	}
@@ -395,7 +368,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		Integer hp;
 		long sequence;
 		CallbackContext context;
-		com.tickreplaylogger.model.world.ActorGraphicsState graphicsObservation;
+		ActorGraphicsState graphicsObservation;
 	}
 
 	private static class UnassignedDeath
@@ -415,108 +388,35 @@ public class TickReplayLoggerPlugin extends Plugin
 	// we distinguish a fresh session (preceded by LOGGING_IN / LOGIN_SCREEN) from a map load.
 	private boolean loginPending = false;
 
-	// Bias constant for projectile proximity fallback (in world tiles)
-	private static final int WORLD_DISTANCE_BIAS_TILES = 1;
-
-	/**
-	 * Record of an NPC that has recently targeted or attacked the player.
-	 */
-	private static class AttackerRecord
-	{
-		final String name;
-		final int npcIndex;
-		final int tickRecorded;
-		final NPC actor;
-		final net.runelite.api.WorldView view;
-		final net.runelite.api.Scene scene;
-		final long epoch;
-		final int plane;
-
-		AttackerRecord(String name, int npcIndex, int tickRecorded, NPC actor, net.runelite.api.WorldView view,
-			net.runelite.api.Scene scene, long epoch, int plane)
-		{
-			this.name = name;
-			this.npcIndex = npcIndex;
-			this.tickRecorded = tickRecorded;
-			this.actor = actor;
-			this.view = view;
-			this.scene = scene;
-			this.epoch = epoch;
-			this.plane = plane;
-		}
-	}
-
 	/**
 	 * A projectile in flight targeting (or near) the player, awaiting hitsplat correlation.
 	 */
 	private static class PendingProjectile
 	{
-		final String sourceName;
-		final int projectileId;
-		final int spawnTick;
-		final int estimatedArrivalTick;
-		final int travelTicks;
-		final boolean hadSourceActor;
-		final boolean sourceIsPlayer;
-		final int sourceNpcId;
-		final Integer sourceNpcLevel;
-		final boolean normalContext;
-		final boolean timingKnown;
 		final Projectile observedObject;
+		final Long projectileObservationId;
+		final Integer estimatedArrivalTick;
 		Integer removedObservedTick;
 		ProjectileState latestObservation;
-		boolean sourceSamplingUnavailable;
-		final String sourceRef;
-		final Long projectileObservationId;
-		final int endCycle;
-		final net.runelite.api.WorldView worldView;
-		final net.runelite.api.Scene scene;
-		final long epoch;
-		final int plane;
+		Map<String, Object> launchObservation = Collections.emptyMap();
 
-		final java.util.Set<Long> ambiguousForSequences = new java.util.LinkedHashSet<>();
-
-		PendingProjectile(String sourceName, int projectileId, int spawnTick, int estimatedArrivalTick, int travelTicks,
-			boolean hadSourceActor, boolean sourceIsPlayer, int sourceNpcId, String sourceRef, Integer sourceNpcLevel,
-			int endCycle, net.runelite.api.WorldView worldView, net.runelite.api.Scene scene, boolean normalContext,
-			long epoch, int plane, boolean timingKnown, Projectile observedObject, Long projectileObservationId)
+		PendingProjectile(Projectile projectile, ProjectileState original)
 		{
-			this.sourceName = sourceName;
-			this.projectileId = projectileId;
-			this.spawnTick = spawnTick;
-			this.estimatedArrivalTick = estimatedArrivalTick;
-			this.travelTicks = travelTicks;
-			this.hadSourceActor = hadSourceActor;
-			this.sourceIsPlayer = sourceIsPlayer;
-			this.sourceNpcId = sourceNpcId;
-			this.sourceNpcLevel = sourceNpcLevel;
-			this.normalContext = normalContext;
-			this.timingKnown = timingKnown;
-			this.observedObject = observedObject;
-			this.projectileObservationId = projectileObservationId;
-			this.sourceRef = sourceRef;
-			this.endCycle = endCycle;
-			this.worldView = worldView;
-			this.scene = scene;
-			this.epoch = epoch;
-			this.plane = plane;
+			observedObject = projectile;
+			projectileObservationId = original.getObservationId();
+			estimatedArrivalTick = original.getEstimatedImpactTick();
+			latestObservation = original;
 		}
 	}
-
-	// Attribution result of the most recent determineDamageSource() call (for the rich DamageRecord).
-	private String lastAttributionConfidence = "UNKNOWN";
-	private java.util.List<java.util.Map<String, Object>> lastAttributionCandidates = new ArrayList<>();
-	private int lastAttributionLaunchTick = 0;
-	private boolean lastAttributionSourceIsPlayer = false;
 
 	// --- Telemetry: tick duration and ping ---
 	private long lastTickTimeMs = 0;
 	private volatile int currentPingMs = -1;
-	private java.util.concurrent.ScheduledFuture<?> pingFuture;
+	private ScheduledFuture<?> pingFuture;
 
 	// Packet loss tracking â€” rolling window of recent ping results (true = success, false = timeout)
 	private static final int PACKET_LOSS_WINDOW = 10;
-	private final java.util.LinkedList<Boolean> pingResults = new java.util.LinkedList<>();
+	private final LinkedList<Boolean> pingResults = new LinkedList<>();
 
 	// Track player position for movement detection
 	private WorldPoint lastPlayerPosition = null;
@@ -527,36 +427,34 @@ public class TickReplayLoggerPlugin extends Plugin
 	private boolean lastTickPrayerStateKnown;
 	private int lastTickPrayerPoints = 0;
 	private boolean lastTickPrayerPointsKnown;
-	private final java.util.Set<String> manuallyDeactivatedPrayers = new java.util.HashSet<>();
+	private final Set<String> manuallyDeactivatedPrayers = new HashSet<>();
 
 	// Mutually exclusive prayer groups (only one can be active at a time)
 	// All overhead prayers are mutually exclusive (protection, Retribution, Redemption, Smite)
-	private static final java.util.Set<String> OVERHEAD_PRAYERS = java.util.Set.of("Protect From Melee",
-		"Protect From Missiles", "Protect From Magic", "Retribution", "Redemption", "Smite");
+	private static final Set<String> OVERHEAD_PRAYERS = Set.of("Protect From Melee", "Protect From Missiles",
+		"Protect From Magic", "Retribution", "Redemption", "Smite");
 
 	// Defence boosting prayers (conflict with each other)
-	private static final java.util.Set<String> DEFENCE_PRAYERS = java.util.Set.of("Thick Skin", "Rock Skin",
-		"Steel Skin", "Chivalry", "Piety", "Rigour", "Augury");
+	private static final Set<String> DEFENCE_PRAYERS = Set.of("Thick Skin", "Rock Skin", "Steel Skin", "Chivalry",
+		"Piety", "Rigour", "Augury");
 
 	// Attack boosting prayers (conflict with Chivalry/Piety)
-	private static final java.util.Set<String> ATTACK_PRAYERS = java.util.Set.of("Clarity of Thought",
-		"Improved Reflexes", "Incredible Reflexes", "Chivalry", "Piety");
+	private static final Set<String> ATTACK_PRAYERS = Set.of("Clarity of Thought", "Improved Reflexes",
+		"Incredible Reflexes", "Chivalry", "Piety");
 
 	// Strength boosting prayers (conflict with Chivalry/Piety)
-	private static final java.util.Set<String> STRENGTH_PRAYERS = java.util.Set.of("Burst of Strength",
-		"Superhuman Strength", "Ultimate Strength", "Chivalry", "Piety");
+	private static final Set<String> STRENGTH_PRAYERS = Set.of("Burst of Strength", "Superhuman Strength",
+		"Ultimate Strength", "Chivalry", "Piety");
 
 	// Ranged boosting prayers (conflict with Rigour)
-	private static final java.util.Set<String> RANGED_PRAYERS = java.util.Set.of("Sharp Eye", "Hawk Eye", "Eagle Eye",
-		"Rigour");
+	private static final Set<String> RANGED_PRAYERS = Set.of("Sharp Eye", "Hawk Eye", "Eagle Eye", "Rigour");
 
 	// Magic boosting prayers (conflict with Augury)
-	private static final java.util.Set<String> MAGIC_PRAYERS = java.util.Set.of("Mystic Will", "Mystic Lore",
-		"Mystic Might", "Augury");
+	private static final Set<String> MAGIC_PRAYERS = Set.of("Mystic Will", "Mystic Lore", "Mystic Might", "Augury");
 
 	// All conflict groups for checking switches
-	private static final java.util.List<java.util.Set<String>> PRAYER_CONFLICT_GROUPS = java.util.List
-		.of(OVERHEAD_PRAYERS, DEFENCE_PRAYERS, ATTACK_PRAYERS, STRENGTH_PRAYERS, RANGED_PRAYERS, MAGIC_PRAYERS);
+	private static final List<Set<String>> PRAYER_CONFLICT_GROUPS = List.of(OVERHEAD_PRAYERS, DEFENCE_PRAYERS,
+		ATTACK_PRAYERS, STRENGTH_PRAYERS, RANGED_PRAYERS, MAGIC_PRAYERS);
 
 	// Track special attack energy for detecting spec usage
 	private int lastSpecialAttackPercent = -1;
@@ -564,9 +462,9 @@ public class TickReplayLoggerPlugin extends Plugin
 	// Track pending self-damage from potions (divine, overload, etc.)
 	// This prevents double-counting when the hitsplat fires on the next tick
 	private String pendingSelfDamageSource;
-	private final com.tickreplaylogger.capture.SelfDamageInputs selfDamageInputs = new com.tickreplaylogger.capture.SelfDamageInputs();
-	private net.runelite.api.Scene selfDamageScopeScene;
-	private net.runelite.api.WorldView selfDamageScopeView;
+	private final SelfDamageInputs selfDamageInputs = new SelfDamageInputs();
+	private Scene selfDamageScopeScene;
+	private WorldView selfDamageScopeView;
 	private boolean selfDamageScopeKnown;
 	private int selfDamageScopeBaseX, selfDamageScopeBaseY, selfDamageScopePlane;
 	private long selfDamageScopeEpoch;
@@ -574,6 +472,8 @@ public class TickReplayLoggerPlugin extends Plugin
 	private int pendingSelfDamageItemId;
 	private int pendingSelfDamageSlot;
 	private Integer pendingSelfDamageQuantity;
+	private long pendingSelfDamageInputSequence;
+	private String pendingSelfDamageSourceRef, pendingSelfDamagePageHash;
 
 	// Previous-tick boosted combat levels [att,str,def,range,mage] for stat-drain effect detection.
 	private int[] lastBoostedCombat = null;
@@ -592,12 +492,13 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		boolean replacingCapture = worldRecorder != null;
 		// Freeze this process's provenance before a later development rebuild replaces resources.
-		com.tickreplaylogger.capture.CaptureBuild.sourceTreeHash();
+		CaptureBuild.sourceTreeHash();
 		tickRecorder = new TickRecorder(config.ticksToRecord());
 		recordingStorage = new RecordingStorage(config.maxDeathsToStore(), gson, getPluginDirectory());
 		captureService = new WorldCaptureService(surfaceObservationIds);
 		damageMap = DamageMap.load(gson);
-		sourceAssociationNpcs = com.tickreplaylogger.capture.SourceAssociationNpcIndex.load(gson);
+		sourceWorker = new SourceResolutionWorker(executorService, task -> clientThread.invokeLater(task), gson);
+		sourceAssociationNpcs = SourceAssociationNpcIndex.load(gson);
 		captureService.setDamageMap(damageMap);
 		worldRecorder = new WorldSnapshotRecorder(config.ticksToRecord(), gson);
 		if (replacingCapture && clientThread != null)
@@ -630,8 +531,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		clientToolbar.addNavigation(navButton);
 
 		// Start background ping polling (every 2 seconds)
-		pingFuture = executorService.scheduleWithFixedDelay(this::pingCurrentWorld, 1000, 2000,
-			java.util.concurrent.TimeUnit.MILLISECONDS);
+		pingFuture = executorService.scheduleWithFixedDelay(this::pingCurrentWorld, 1000, 2000, TimeUnit.MILLISECONDS);
 
 		log.debug("Tick Replay Logger plugin started! Recording last {} ticks, storing {} deaths.",
 			config.ticksToRecord(), config.maxDeathsToStore());
@@ -662,11 +562,17 @@ public class TickReplayLoggerPlugin extends Plugin
 		Runnable releaseCapture = () ->
 		{
 			if (closingRecorder != null)
+			{
 				closingRecorder.clear();
+			}
 			if (closingJournal != null)
+			{
 				closingJournal.clear();
+			}
 			if (closingCapture != null)
+			{
 				closingCapture.resetActors();
+			}
 			// An immediate re-enable has its own new models. Never clear those from an old callback.
 			if (worldRecorder == closingRecorder && panel == closingPanel)
 			{
@@ -678,9 +584,13 @@ public class TickReplayLoggerPlugin extends Plugin
 			}
 		};
 		if (clientThread == null)
+		{
 			releaseCapture.run();
+		}
 		else
+		{
 			clientThread.invokeLater(releaseCapture);
+		}
 		log.debug("Tick Replay Logger plugin stopped!");
 	}
 
@@ -703,19 +613,19 @@ public class TickReplayLoggerPlugin extends Plugin
 				return;
 			}
 
-			net.runelite.http.api.worlds.WorldResult worldResult = worldService.getWorlds();
+			WorldResult worldResult = worldService.getWorlds();
 			if (worldResult == null)
 			{
 				return;
 			}
 
-			net.runelite.http.api.worlds.World currentWorld = worldResult.findWorld(client.getWorld());
+			World currentWorld = worldResult.findWorld(client.getWorld());
 			if (currentWorld == null)
 			{
 				return;
 			}
 
-			int ping = net.runelite.client.plugins.worldhopper.ping.Ping.ping(currentWorld, true);
+			int ping = Ping.ping(currentWorld, true);
 			if (ping >= 0)
 			{
 				currentPingMs = ping;
@@ -779,10 +689,14 @@ public class TickReplayLoggerPlugin extends Plugin
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		if (event.getGameState() != GameState.LOGGED_IN && captureService != null)
+		{
 			captureService.resetEncounterWaveCues();
-		if (java.util.Arrays.asList(GameState.STARTING, GameState.LOGIN_SCREEN, GameState.LOGIN_SCREEN_AUTHENTICATOR,
+		}
+		if (Arrays.asList(GameState.STARTING, GameState.LOGIN_SCREEN, GameState.LOGIN_SCREEN_AUTHENTICATOR,
 			GameState.LOGGING_IN).contains(event.getGameState()))
+		{
 			captureSessionObserved = false;
+		}
 		switch (event.getGameState())
 		{
 		case LOGGING_IN:
@@ -792,10 +706,10 @@ public class TickReplayLoggerPlugin extends Plugin
 
 		case LOADING:
 			causalSceneEpoch++;
-			pickpocketTarget = null;
-			failedPickpockets.clear();
 			if (captureService != null)
+			{
 				captureService.sceneLoading();
+			}
 			needSceneCapture = true;
 			primarySceneReserved = false;
 			break;
@@ -806,7 +720,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			lastMovementScope = null;
 			lastCaptureWorld = null;
 			if (captureService != null)
+			{
 				captureService.invalidateActorTiming();
+			}
 			needSceneCapture = true;
 			primarySceneReserved = false;
 			break;
@@ -861,32 +777,38 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onWorldViewLoaded(net.runelite.api.events.WorldViewLoaded event)
+	public void onWorldViewLoaded(WorldViewLoaded event)
 	{
 		worldViewLifecycle("WORLD_VIEW_LOADED", event.getWorldView());
 	}
 
 	@Subscribe
-	public void onWorldViewUnloaded(net.runelite.api.events.WorldViewUnloaded event)
+	public void onWorldViewUnloaded(WorldViewUnloaded event)
 	{
 		worldViewLifecycle("WORLD_VIEW_UNLOADED", event.getWorldView());
 	}
 
-	private void worldViewLifecycle(String type, net.runelite.api.WorldView view)
+	private void worldViewLifecycle(String type, WorldView view)
 	{
 		// A view can reload without a top-level LOADING transition. Earlier causal hypotheses
 		// remain observations but cannot establish a hit across this lifetime boundary.
 		causalSceneEpoch++;
 		CallbackFieldObservation fields = new CallbackFieldObservation();
 		if (view == null)
+		{
 			fields.value("worldViewId", () -> null);
+		}
 		else
+		{
 			fields.value("worldViewId", view::getId);
+		}
 		String status = "available";
 		try
 		{
 			if (captureService != null)
+			{
 				captureService.worldViewLifecycle(client, view);
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -905,6 +827,11 @@ public class TickReplayLoggerPlugin extends Plugin
 	 */
 	private void resetTransientTracking()
 	{
+		if (sourceWorker != null)
+		{
+			sourceWorker.reset();
+		}
+		sourceEvidenceRevision++;
 		captureSessionObserved = false;
 		unassignedHits.clear();
 		unassignedDeaths.clear();
@@ -917,14 +844,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		projectileSpawnTicks.clear();
 		projectileTargets.clear();
 		projectileCallbackStates.clear();
+		projectileLaunchObservations.clear();
 		projectileSourceTracker.reset();
 		projectileSourceLinks.clear();
 		settledProjectileSamples = null;
 		nextProjectileId = 0;
 		observationSequence = 0;
-		pickpocketTarget = null;
-		failedPickpockets.clear();
-		recentAttackers.clear();
 		pendingProjectiles.clear();
 		processedProjectiles.clear();
 		pendingHits.clear();
@@ -951,20 +876,14 @@ public class TickReplayLoggerPlugin extends Plugin
 		sceneScopeSignature = null;
 		primarySceneReserved = false;
 		if (captureService != null)
+		{
 			captureService.resetActors();
+		}
 		lastBoostedCombat = null;
-		lastAttributionNpcId = -1;
-		lastAttributionNpcLevel = null;
-		lastAttributionActorRef = null;
-		lastAttributionEvidence = "UNMATCHED";
-		lastAttributionCandidates = new ArrayList<>();
 
 		activeEffectSpotanims.clear();
 		lastPoisonVarp = -1;
 		poisonBaselineObserved = false;
-		lastAttributionConfidence = "UNKNOWN";
-		lastAttributionLaunchTick = 0;
-		lastAttributionSourceIsPlayer = false;
 	}
 
 	@Subscribe
@@ -979,7 +898,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			clientThread.invokeLater(() ->
 			{
 				if (panel != null)
+				{
 					applyConfigChanged(event);
+				}
 			});
 			return;
 		}
@@ -989,7 +910,9 @@ public class TickReplayLoggerPlugin extends Plugin
 	private void applyConfigChanged(ConfigChanged event)
 	{
 		if (event.getKey().equals("captureWorldSnapshots") && captureService != null)
+		{
 			captureService.resetEncounterWaveCues();
+		}
 
 		if (event.getKey().equals("ticksToRecord"))
 		{
@@ -1012,7 +935,9 @@ public class TickReplayLoggerPlugin extends Plugin
 				recordingStorage.setMaxDeaths(newMax).whenComplete((ignored, error) ->
 				{
 					if (currentPanel != null)
+					{
 						currentPanel.storageCompleted(error);
+					}
 				});
 			}
 		}
@@ -1033,13 +958,17 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		CallbackContext c = callbackContext();
 		if (!c.allowed)
+		{
 			return;
+		}
 		Actor actor = event.getActor();
 		if (actor == null)
+		{
 			return;
+		}
 		boolean local = actor == c.localPlayer;
 		Map<String, Object> actorState = callbackActorData(actor, c);
-		com.tickreplaylogger.capture.ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
+		ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
 		String name = local && actorState.get("name") instanceof String ? (String) actorState.get("name") : null;
 		Integer world = local ? readHitContext("deathWorld", client::getWorld, c.issues) : null;
 		WorldPoint position = local && original != null ? original.world() : null;
@@ -1050,10 +979,14 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		PendingDeath death = new PendingDeath(name, world, position, c.issues);
 		if (local && pendingDeath == null)
+		{
 			pendingDeath = death;
+		}
 		long sequence = observe("ACTOR_DEATH", actor, null, actorState, c);
 		if (local)
+		{
 			addDeathMark("player", c.cycle, sequence, c.issues, "CALLBACK_LOCAL_REFERENCE_MATCH");
+		}
 		else if (c.localPlayer == null && actor instanceof Player)
 		{
 			UnassignedDeath deferred = new UnassignedDeath();
@@ -1072,8 +1005,10 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void addDeathMark(String ref, Integer cycle, long sequence, List<String> issues, String identityEvidence)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
+		{
 			return;
+		}
 		worldRecorder.addDeath(DeathRecordingV2.Events.DeathMark.builder().tick(eventTick()).actorRef(ref)
 			.gameCycle(cycle).sequence(sequence).captureIssues(issues.isEmpty() ? null : new ArrayList<>(issues))
 			.actorIdentityEvidence(identityEvidence).build());
@@ -1094,23 +1029,21 @@ public class TickReplayLoggerPlugin extends Plugin
 			recordRecipientLink("HITSPLAT", hit.sequence);
 			noteUnresolvedImpact(hit.amount, hit.type, hit.surface, hit.hp, hit.sequence, c.cycle, c.issues);
 			if (config.trackDamageReceived()
-				&& ("HP".equals(hit.surface) || "BLOCK".equals(hit.surface) && hit.amount == 0
-					|| damageMap == null || damageMap.catalog().possibleOutcomeSurfaces(hit.type).contains("HP")))
+				&& ("HP".equals(hit.surface) || "BLOCK".equals(hit.surface) && hit.amount == 0 || damageMap == null
+					|| damageMap.catalog().possibleOutcomeSurfaces(hit.type).contains("HP")))
 			{
 				PendingHit pending = new PendingHit(hit.amount, hit.type,
 					DamageEvent.DamageType
 						.fromReference(damageMap == null ? null : damageMap.catalog().hitsplatDamageType(hit.type)),
-					java.util.Collections.emptyList(), null, null, java.util.Collections.emptyList(), 0, 0, c.cycle,
-					hit.sequence, PrayerObservation.unavailable(), null, null, java.util.Collections.emptyList(),
-					causalSceneEpoch, -1, hit.graphicsObservation);
+					Collections.emptyList(), null, null, c.cycle, hit.sequence, PrayerObservation.unavailable(),
+					Collections.emptyList(), c.epoch, hit.graphicsObservation);
 				pending.captureIssues.addAll(c.issues);
 				pending.hpOutcomeKnown = "HP".equals(hit.surface) || "BLOCK".equals(hit.surface) && hit.amount == 0;
-				pending.possibleOutcomeSurfaces = damageMap == null ? java.util.Arrays.asList("HP", "UNKNOWN")
-					: damageMap.catalog().possibleOutcomeSurfaces(hit.type);
 				pending.defenderIdentityEvidence = "SETTLED_LOCAL_REFERENCE_MATCH";
 				if (!pending.hpOutcomeKnown && resourceImpactQueueCount++ >= MAX_RESOURCE_IMPACTS_PER_TICK)
 				{
-					tickRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callback retained");
+					tickRecorder
+						.addCaptureIssue("resourceImpacts: attribution queue limit; original callback retained");
 					continue;
 				}
 				pendingHits.add(pending);
@@ -1122,12 +1055,16 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				recordRecipientLink("ACTOR_DEATH", death.sequence);
 				if (pendingDeath == null)
+				{
 					pendingDeath = death.death;
+				}
 				addDeathMark("player", death.context.cycle, death.sequence, death.context.issues,
 					"SETTLED_LOCAL_REFERENCE_MATCH");
 			}
 			else
+			{
 				tickRecorder.markStateUnavailable("callbackIdentity");
+			}
 		}
 		unassignedHits.clear();
 		unassignedDeaths.clear();
@@ -1135,26 +1072,36 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void recordRecipientLink(String type, long sequence)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
+		{
 			return;
-		worldRecorder.addObservationLink(com.tickreplaylogger.model.world.ObservedEventLink.builder()
-			.tick(currentGameTick).observationSequence(sequence).observationType(type).actorRef("player")
-			.resolvedTick(currentGameTick).evidence("SETTLED_LOCAL_REFERENCE_MATCH").build());
+		}
+		worldRecorder.addObservationLink(
+			ObservedEventLink.builder().tick(currentGameTick).observationSequence(sequence).observationType(type)
+				.actorRef("player").resolvedTick(currentGameTick).evidence("SETTLED_LOCAL_REFERENCE_MATCH").build());
 	}
 
 	private static boolean distinctFatalSources(List<DamageRecord> candidates)
 	{
 		if (candidates.size() < 2)
+		{
 			return false;
-		java.util.Set<String> sources = new java.util.LinkedHashSet<>();
+		}
+		Set<String> sources = new LinkedHashSet<>();
 		for (DamageRecord hit : candidates)
 		{
 			if (hit.getAttackerRef() != null && !hit.getAttackerRef().trim().isEmpty())
+			{
 				sources.add("actor:" + hit.getAttackerRef());
+			}
 			else if ("STATUS_HITSPLAT".equals(hit.getAttributionEvidence()))
+			{
 				sources.add("status:" + hit.getDamageType() + ":" + hit.getAttackerName());
+			}
 			else
-				return true; // Equal display names do not identify a shared actor or causal hit.
+			{
+				return true;
+			} // Equal display names do not identify a shared actor or causal hit.
 		}
 		return sources.size() > 1;
 	}
@@ -1180,10 +1127,14 @@ public class TickReplayLoggerPlugin extends Plugin
 		for (int i = 0; i < tickHistory.size(); i++)
 		{
 			if (tickHistory.get(i).getTickNumber() != currentGameTick)
+			{
 				continue;
+			}
 			List<DamageEvent> evs = tickHistory.get(i).getDamageEvents();
 			if (evs == null)
+			{
 				continue;
+			}
 			for (int j = 0; j < evs.size(); j++)
 			{
 				DamageEvent de = evs.get(j);
@@ -1207,7 +1158,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			.allMatch(hit -> (hit.getDamageType() == DamageEvent.DamageType.POISON
 				|| hit.getDamageType() == DamageEvent.DamageType.VENOM)
 				&& hit.getDamageType() == journalCandidates.get(0).getDamageType()
-				&& java.util.Objects.equals(hit.getSource(), journalCandidates.get(0).getSource()));
+				&& Objects.equals(hit.getSource(), journalCandidates.get(0).getSource()));
 		String killerBasis = unresolvedCount > 0 ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
 			: mixedJournal ? "MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS"
 				: journalCandidates.isEmpty() ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
@@ -1233,32 +1184,15 @@ public class TickReplayLoggerPlugin extends Plugin
 		// single "Copy" action emits the complete data.
 		DeathRecordingV2 frozenExport = null;
 		WorldSnapshotRecorder exportingRecorder = worldRecorder;
-		if (worldRecorder != null && config.captureWorldSnapshots())
+		if (worldRecorder != null)
 		{
 			try
 			{
-				DeathRecordingV2.Meta meta = DeathRecordingV2.Meta.builder()
-					.recordingId(java.util.UUID.randomUUID().toString()).pluginVersion("1.0.0")
-					.captureBuildId(com.tickreplaylogger.capture.CaptureBuild.sourceTreeHash())
-					.runeLiteApiVersion(com.tickreplaylogger.capture.CaptureBuild.apiVersion())
-					.runeLiteArtifactIdentityScope(com.tickreplaylogger.capture.CaptureBuild.artifactIdentityScope())
-					.runeLiteRuntimeVersion(com.tickreplaylogger.capture.CaptureBuild.runtimeVersion())
-					.runeLiteRuntimeReferenceVerification(
-						com.tickreplaylogger.capture.CaptureBuild.runtimeReferenceVerification())
-					.runeLiteCompiledApiVersion(com.tickreplaylogger.capture.CaptureBuild.compiledApiVersion())
-					.runeLiteCompiledApiArtifactSha256(
-						com.tickreplaylogger.capture.CaptureBuild.compiledApiArtifactSha256())
-					.runeLiteCompiledClientArtifactSha256(
-						com.tickreplaylogger.capture.CaptureBuild.compiledClientArtifactSha256())
-					.runeLiteApiArtifactSha256(com.tickreplaylogger.capture.CaptureBuild.apiArtifactSha256())
-					.runeLiteClientArtifactSha256(com.tickreplaylogger.capture.CaptureBuild.clientArtifactSha256())
-					.dataMapVersion(damageMap != null ? damageMap.getVersion() : "unknown")
-					.referenceCatalogId(damageMap == null ? null : damageMap.catalog().id())
-					.exportedAtMs(System.currentTimeMillis()).rsn(deathContext.name).accountType(null)
-					.world(deathContext.world).worldKnown(deathContext.worldKnown)
+				DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis())
+					.rsn(deathContext.name).accountType(null).world(deathContext.world)
+					.worldKnown(deathContext.worldKnown)
 					.captureIssues(deathContext.issues.isEmpty() ? null : new ArrayList<>(deathContext.issues))
-					.deathTick(currentGameTick)
-					.bufferTicks(com.tickreplaylogger.util.RecordingLimits.ticks(config.ticksToRecord()))
+					.deathTick(currentGameTick).bufferTicks(RecordingLimits.ticks(config.ticksToRecord()))
 					.captureRadius(0).captureSettings(captureSettings()).build();
 				// Callback order selects a record for inspection, not a proven lethal server roll.
 				DamageRecord fatal = worldRecorder.lastDamagingHit();
@@ -1277,7 +1211,7 @@ public class TickReplayLoggerPlugin extends Plugin
 					killer = "Unknown (HP/resource impact unresolved)";
 				}
 				String killerName = killer;
-				killerConfidence = unresolvedFatal || missingFatal ? "UNKNOWN" : lastAttributionConfidence;
+				killerConfidence = "UNKNOWN";
 				if (fatal != null && fatal.getAttackerName() != null)
 				{
 					killerName = fatal.getAttackerName();
@@ -1338,19 +1272,29 @@ public class TickReplayLoggerPlugin extends Plugin
 			if (selectedExport != null)
 			{
 				DeathRecordingV2 completed = exportingRecorder.completeExport(selectedExport);
+				completed = completed.toBuilder()
+					.journalTicks(ResolverV1Recording.projectJournalTicks(death.getTicks(), completed)).build();
 				DeathRecordingV2.Summary resolved = completed.getSummary();
 				return death.toBuilder().richExportJson(gson.toJson(completed))
 					.ticks(completed.getJournalTicks() == null ? death.getTicks() : completed.getJournalTicks())
-					.fatalSourceResolution(resolved == null ? death.getFatalSourceResolution() : resolved.getSourceResolution())
+					.killerName(resolved == null ? death.getKillerName() : resolved.getKillerName())
+					.killerConfidence(resolved == null ? death.getKillerConfidence() : resolved.getKillerConfidence())
+					.killerBasis(resolved == null ? death.getKillerBasis() : resolved.getKillerBasis())
+					.fatalSourceResolution(
+						resolved == null ? death.getFatalSourceResolution() : resolved.getSourceResolution())
 					.build();
 			}
 			return death;
 		}).whenComplete((ignored, error) ->
 		{
 			if (currentPanel != null)
+			{
 				currentPanel.storageCompleted(error);
+			}
 			if (error != null)
+			{
 				log.error("Could not save the death recording", error);
+			}
 		});
 
 		log.debug("Death recorded: Killed by {} at {}. {} ticks captured, {} total damage received.", killer,
@@ -1358,41 +1302,25 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	@Subscribe
+
 	public void onInteractingChanged(InteractingChanged event)
 	{
-		CallbackContext c = callbackContext();
-		if (!c.allowed)
+		CallbackContext context = callbackContext();
+		if (!context.allowed)
+		{
 			return;
+		}
 		Actor source = event.getSource(), target = event.getTarget();
-		boolean record = source != null && worldRecorder != null && config.captureWorldSnapshots()
-			&& (!(source instanceof Player) || source == c.localPlayer || config.captureOtherPlayers());
-		Map<String, Object> fields = record ? actorDataSnapshot(source, c) : java.util.Collections.emptyMap();
-		// Targeting is a hint for history, never proof that this NPC caused an individual hit.
-		if (c.ready && c.localPlayer != null && source instanceof NPC && target == c.localPlayer)
-			try
-			{
-				NPC npc = (NPC) source;
-				if (isCombatNpc(npc))
-				{
-					String name = fields.containsKey("name") ? (String) fields.get("name") : npc.getName();
-					Integer index = fields.containsKey("sceneId") ? (Integer) fields.get("sceneId")
-						: Integer.valueOf(npc.getIndex());
-					if (name != null && index != null)
-						recentAttackers.put(index, new AttackerRecord(stripColorTags(name), index, currentGameTick, npc,
-							nativeView(), nativeScene(), causalSceneEpoch, nativePlane()));
-				}
-			}
-			catch (RuntimeException unavailable)
-			{
-				c.issues.add("interactionHistory: " + unavailable.getClass().getSimpleName());
-			}
-		if (record)
+		if (source != null && worldRecorder != null
+			&& (!(source instanceof Player) || source == context.localPlayer || config.captureOtherPlayers()))
+		{
 			observe("INTERACTING_CHANGED", source, target,
-				data(
-					"interaction", com.tickreplaylogger.capture.ActorInteractions.captureEventTarget(target,
-						c.localPlayer, config.captureOtherPlayers(), actor -> callbackActorRef(actor, c)),
-					"actorState", fields),
-				c);
+				data("interaction",
+					ActorInteractions.captureEventTarget(target, context.localPlayer, config.captureOtherPlayers(),
+						actor -> callbackActorRef(actor, context)),
+					"actorState", actorDataSnapshot(source, context)),
+				context);
+		}
 	}
 
 	@Subscribe
@@ -1400,11 +1328,15 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
+		}
 		Actor actor = event.getActor();
 		Hitsplat hitsplat = event.getHitsplat();
 		if (actor == null || hitsplat == null)
+		{
 			return;
+		}
 		Player localPlayer = context.localPlayer;
 
 		int damage = hitsplat.getAmount();
@@ -1413,50 +1345,59 @@ public class TickReplayLoggerPlugin extends Plugin
 		Integer callbackHp = localPlayer == null ? null
 			: readHitContext("localHpAtCallback", () -> client.getBoostedSkillLevel(Skill.HITPOINTS), callbackIssues);
 		String surface = damageMap == null ? null : damageMap.catalog().hitsplatSurface(hitsplatType);
-		List<String> possibleSurfaces = damageMap == null ? java.util.Arrays.asList("HP", "UNKNOWN")
+		List<String> possibleSurfaces = damageMap == null ? Arrays.asList("HP", "UNKNOWN")
 			: damageMap.catalog().possibleOutcomeSurfaces(hitsplatType);
 		boolean possibleHp = possibleSurfaces.contains("HP");
 		boolean ambiguousOutcome = possibleHp && !("HP".equals(surface) || "BLOCK".equals(surface) && damage == 0);
 		Map<String, Object> actorState = callbackActorData(actor, context);
 		Object graphicValue = actorState.get("graphicsState");
-		com.tickreplaylogger.model.world.ActorGraphicsState graphicsAtImpact = graphicValue instanceof com.tickreplaylogger.model.world.ActorGraphicsState
-			? (com.tickreplaylogger.model.world.ActorGraphicsState) graphicValue
+		ActorGraphicsState graphicsAtImpact = graphicValue instanceof ActorGraphicsState
+			? (ActorGraphicsState) graphicValue
 			: null;
 		PrayerObservation callbackPrayer = context.ready && actor == localPlayer
 			? PrayerObservation.fromActorState(client, actorState)
 			: null;
 		if (callbackPrayer != null)
+		{
 			for (Map.Entry<String, String> issue : callbackPrayer.getObservationIssues().entrySet())
+			{
 				callbackIssues.add("impactPrayer." + issue.getKey() + ": " + issue.getValue());
+			}
+		}
 		Map<String, Object> inventorySourceObservation = context.ready && localPlayer != null && actor == localPlayer
 			&& config.trackDamageReceived() && config.captureWorldSnapshots() && damageMap != null
 			&& damageMap.catalog().inventorySourceHints().accepts(hitsplatType, damage)
-			? damageMap.catalog().inventorySourceHints().capture(client, eventTick(), context.cycle) : null;
+				? damageMap.catalog().inventorySourceHints().capture(client, eventTick(), context.cycle)
+				: null;
 		// Static mode qualification belongs to this actual HP callback, not the settled tick.
 		// Reuse the inventory capture's identical two scalar reads when it already needed them.
 		Object numericContext = null;
 		if (context.ready && localPlayer != null && actor == localPlayer && config.trackDamageReceived()
-			&& config.captureWorldSnapshots() && ("HP".equals(surface) || "BLOCK".equals(surface)))
-			numericContext = inventorySourceObservation != null && inventorySourceObservation.get("numericContext") instanceof Map
-				? inventorySourceObservation.get("numericContext")
-				: com.tickreplaylogger.capture.ObservedInventorySourceHints.captureNumericContext(client, eventTick(), context.cycle);
+			&& ("HP".equals(surface) || "BLOCK".equals(surface)))
+		{
+			numericContext = inventorySourceObservation != null
+				&& inventorySourceObservation.get("numericContext") instanceof Map
+					? inventorySourceObservation.get("numericContext")
+					: ObservedInventorySourceHints.captureNumericContext(client, eventTick(), context.cycle);
+		}
 		long sequence = observe("HITSPLAT", actor, null,
-			data("actorState", actorState, "inventorySourceObservation", inventorySourceObservation,
-				"numericContext", numericContext,
-				"localPrayerState", callbackPrayer == null ? null : callbackPrayer.toState(),
+			data("actorState", actorState, "inventorySourceObservation", inventorySourceObservation, "numericContext",
+				numericContext, "localPrayerState", callbackPrayer == null ? null : callbackPrayer.toState(),
 				"receiverKind", actor instanceof NPC ? "NPC" : actor instanceof Player ? "PLAYER" : "ACTOR",
-				"resourceSurface", surface == null ? "UNCLASSIFIED" : surface,
-				"possibleOutcomeSurfaces", possibleSurfaces,
-				"attributionCaptureStatus", actor != localPlayer ? "RECIPIENT_NOT_LOCAL_AT_CALLBACK"
+				"resourceSurface", surface == null ? "UNCLASSIFIED" : surface, "possibleOutcomeSurfaces",
+				possibleSurfaces, "attributionCaptureStatus",
+				actor != localPlayer ? "RECIPIENT_NOT_LOCAL_AT_CALLBACK"
 					: !possibleHp && !("BLOCK".equals(surface) && damage == 0) ? "NON_HP_OUTCOME_REFERENCE"
 						: !config.trackDamageReceived() ? "RECEIVED_TRACKING_DISABLED"
-						: ambiguousOutcome && resourceImpactQueueCount >= MAX_RESOURCE_IMPACTS_PER_TICK
-							? "RESOURCE_IMPACT_QUEUE_LIMIT" : "PENDING_SETTLED_CONTEXT",
-				"outcomeSurfaceEvidence", "UNCLASSIFIED".equals(surface) || surface == null ? "UNCLASSIFIED_API_HITSPLAT" : "REFERENCE_OUTCOME_ALTERNATIVES",
-				"localHpAtCallback", callbackHp, "captureIssues",
-				new ArrayList<>(callbackIssues), "amount", damage, "hitsplatType", hitsplatType, "isMine",
-				hitsplat.isMine(), "isOthers", hitsplat.isOthers(), "disappearsOnGameCycle",
-				hitsplat.getDisappearsOnGameCycle(), "renderingKnown", false),
+							: ambiguousOutcome && resourceImpactQueueCount >= MAX_RESOURCE_IMPACTS_PER_TICK
+								? "RESOURCE_IMPACT_QUEUE_LIMIT"
+								: "PENDING_SETTLED_CONTEXT",
+				"outcomeSurfaceEvidence",
+				"UNCLASSIFIED".equals(surface) || surface == null ? "UNCLASSIFIED_API_HITSPLAT"
+					: "REFERENCE_OUTCOME_ALTERNATIVES",
+				"localHpAtCallback", callbackHp, "captureIssues", new ArrayList<>(callbackIssues), "amount", damage,
+				"hitsplatType", hitsplatType, "isMine", hitsplat.isMine(), "isOthers", hitsplat.isOthers(),
+				"disappearsOnGameCycle", hitsplat.getDisappearsOnGameCycle(), "renderingKnown", false),
 			context);
 
 		// Zero HP observations still compete for a projectile; zero does not prove a miss.
@@ -1483,7 +1424,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		if (actor == localPlayer)
+		{
 			noteUnresolvedImpact(damage, hitsplatType, surface, callbackHp, sequence, context.cycle, callbackIssues);
+		}
 		boolean hpDamage = "HP".equals(surface);
 		boolean hpBlock = "BLOCK".equals(surface) && damage == 0;
 		boolean isPlayerDamageType = hpDamage || hpBlock;
@@ -1496,7 +1439,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			}
 
 			// Preserve impact state now; NPC animation/projectile updates may arrive later in this batch.
-			com.tickreplaylogger.capture.ActorCallbackObservation.Sample original = context.actorSamples.get(actor);
+			ActorCallbackObservation.Sample original = context.actorSamples.get(actor);
 			WorldPoint impactPosition = original == null ? null : original.world();
 			LocalPoint renderedPosition = original == null ? null : original.local();
 			retainActorSampleIssue(original, "worldPosition", "impactWorldPosition", callbackIssues);
@@ -1516,30 +1459,48 @@ public class TickReplayLoggerPlugin extends Plugin
 				callbackIssues.add("impactPositionScope: WORLD_POINT_PLANE_MISMATCH");
 				positionScopeKnown = false;
 			}
-			List<java.util.Map<String, Object>> contactWitnesses = new ArrayList<>();
-			List<String> impactHazards = nativeScope.known && positionScopeKnown
-				? readHitContext("impactHazards",
-					() -> inNativeHitScope(nativeScope,
-						() -> hazardsAtReportedPosition(impactPosition, renderedPosition, contactWitnesses)),
-					callbackIssues)
-				: java.util.Collections.emptyList();
+			List<Map<String, Object>> contactWitnesses = new ArrayList<>();
+			if (nativeScope.known && positionScopeKnown)
+			{
+				readHitContext("impactHazards", () -> inNativeHitScope(nativeScope, context, () ->
+				{
+					observeHazardsAtReportedPosition(impactPosition, renderedPosition, contactWitnesses);
+					return null;
+				}), callbackIssues);
+			}
 			PrayerObservation prayerObservation = callbackPrayer;
-			List<String> prayers = prayerObservation == null ? java.util.Collections.emptyList()
+			List<String> prayers = prayerObservation == null ? Collections.emptyList()
 				: getActivePrayers(prayerObservation);
-			Integer baseX = nativeScope.baseX, baseY = nativeScope.baseY;
-			net.runelite.api.WorldView view = nativeScope.view;
-			net.runelite.api.Scene scene = nativeScope.scene;
-			Integer plane = impactPosition == null ? nativeScope.plane : impactPosition.getPlane();
+			WorldView view = nativeScope.view;
 			PendingHit pending = new PendingHit(damage, hitsplatType, determineDamageType(hitsplat),
-				prayers == null ? java.util.Collections.emptyList() : prayers, impactPosition, renderedPosition,
-				impactHazards == null ? java.util.Collections.emptyList() : impactHazards, baseX == null ? 0 : baseX,
-				baseY == null ? 0 : baseY, context.cycle, sequence,
-				prayerObservation == null ? PrayerObservation.unavailable() : prayerObservation, view, scene,
-				contactWitnesses, causalSceneEpoch, plane == null ? -1 : plane, graphicsAtImpact);
-			pending.nativeScope = nativeScope;
+				prayers == null ? Collections.emptyList() : prayers, impactPosition, nativeScope, context.cycle,
+				sequence, prayerObservation == null ? PrayerObservation.unavailable() : prayerObservation,
+				contactWitnesses, context.epoch, graphicsAtImpact);
+			pending.defenderName = actorState.get("name") instanceof String ? (String) actorState.get("name") : null;
+			for (Map<String, Object> witness : contactWitnesses)
+			{
+				if ("NPC_ACTIVITY_OBSERVATION".equals(witness.get("kind")))
+				{
+					pending.sourceWitnesses.add(witness);
+				}
+			}
+			if (nativeScope.known && isPvpContext())
+			{
+				inNativeHitScope(nativeScope, () ->
+				{
+					for (Player other : nativePlayers())
+					{
+						if (other != null && other != localPlayer && other.getInteracting() == localPlayer
+							&& other.getAnimation() >= 0)
+						{
+							pending.sourceWitnesses.add(impactActivityWitness(other, context, sequence));
+						}
+					}
+					return null;
+				});
+			}
 			pending.inventorySourceObservation = inventorySourceObservation;
 			pending.hpOutcomeKnown = isPlayerDamageType;
-			pending.possibleOutcomeSurfaces = new ArrayList<>(possibleSurfaces);
 			pending.impactSceneKey = context.primaryKnown && context.localView == view ? context.primarySceneKey : null;
 			pending.captureIssues.addAll(callbackIssues);
 			if (!pending.hpOutcomeKnown && resourceImpactQueueCount++ >= MAX_RESOURCE_IMPACTS_PER_TICK)
@@ -1584,12 +1545,14 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	private void recordNpcDamage(NPC npc, Hitsplat hitsplat, DamageEvent.DamageType type, long sequence, boolean mine,
-		CallbackContext context, com.tickreplaylogger.model.world.ActorGraphicsState graphicsAtImpact)
+		CallbackContext context, ActorGraphicsState graphicsAtImpact)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
+		{
 			return;
+		}
 		List<String> issues = new ArrayList<>(context.issues);
-		com.tickreplaylogger.capture.ActorCallbackObservation.Sample original = context.actorSamples.get(npc);
+		ActorCallbackObservation.Sample original = context.actorSamples.get(npc);
 		WorldPoint position = context.ready && original != null ? original.world() : null;
 		Object observedName = original == null ? null : original.data().get("name");
 		String defenderName = context.ready && observedName instanceof String ? (String) observedName : null;
@@ -1599,8 +1562,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			: null;
 		String ownership = mine ? "LOCAL_PLAYER" : hitsplat.isOthers() ? "OTHER" : "UNKNOWN";
 		worldRecorder.addDamage(DamageRecord.builder().direction(mine ? "DEALT" : "NPC_RECEIVED").ownership(ownership)
-			.impactTick(eventTick()).launchTick(eventTick()).launchTickEstimated(true)
-			.launchStateEvidence("UNAVAILABLE").attackerRef(null).attackerName(null).defenderRef(defenderRef)
+			.impactTick(eventTick()).launchTick(eventTick()).launchTickEstimated(true).impactContextEpoch(context.epoch)
+			.finalizationContextEpoch(causalSceneEpoch).launchStateEvidence("UNAVAILABLE").attackerRef(null)
+			.attackerName(null).defenderRef(defenderRef)
 			.defenderName(defenderName == null ? "Unknown" : stripColorTags(defenderName))
 			.defenderGraphicsAtImpact(graphicsAtImpact).captureIssues(issues.isEmpty() ? null : new ArrayList<>(issues))
 			.impactPositionKnown(position != null).launchPositionKnown(false).attribution("UNKNOWN")
@@ -1628,10 +1592,12 @@ public class TickReplayLoggerPlugin extends Plugin
 	private void noteUnresolvedImpact(int amount, int type, String surface, Integer hp, long sequence, Integer cycle,
 		List<String> issues)
 	{
-		if (amount <= 0 || !(surface == null || java.util.Arrays
+		if (amount <= 0 || !(surface == null || Arrays
 			.asList("SKILL_OR_HP", "HP_OR_COMBAT_RESOURCE", "UNCLASSIFIED", "SANITY", "STACKS", "CONTEXTUAL_RESOURCE")
 			.contains(surface) || "HP".equals(surface) && !config.trackDamageReceived()))
+		{
 			return;
+		}
 		int tick = eventTick();
 		if (unresolvedImpactTick != tick)
 		{
@@ -1640,15 +1606,19 @@ public class TickReplayLoggerPlugin extends Plugin
 			unresolvedImpactObservations.clear();
 		}
 		if (unresolvedImpactCount < Integer.MAX_VALUE)
+		{
 			unresolvedImpactCount++;
+		}
 		if (unresolvedImpactObservations.size() < 256)
+		{
 			unresolvedImpactObservations
 				.add(data("sequence", sequence, "tick", tick, "gameCycle", cycle, "hitsplatType", type, "amount",
 					amount, "resourceSurface", surface, "localHpAtCallback", hp, "causalSceneEpoch", causalSceneEpoch,
 					"captureIssues", issues.isEmpty() ? null : new ArrayList<>(issues)));
+		}
 	}
 
-	private static <T> T readHitContext(String field, java.util.function.Supplier<T> read, List<String> issues)
+	private static <T> T readHitContext(String field, Supplier<T> read, List<String> issues)
 	{
 		try
 		{
@@ -1676,7 +1646,9 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
+		}
 		Projectile projectile = event.getProjectile();
 		LocalPoint target = event.getPosition();
 		if (projectile == null)
@@ -1689,40 +1661,57 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		boolean first = !projectileIds.containsKey(projectile);
 		registerProjectile(projectile);
+		if (first && context.ready)
+		{
+			// Reserve original native identity once; this does not capture scene tiles.
+			if (context.localPlayer != null)
+			{
+				callbackActorData(context.localPlayer, context);
+			}
+			prepareCallbackCaptureScope(context);
+		}
 		LocalPoint previous = projectileTargets.get(projectile);
 		if (target == null)
+		{
 			projectileTargets.remove(projectile);
+		}
 		else
+		{
 			projectileTargets.put(projectile, target);
-		com.tickreplaylogger.capture.ProjectileObservation sample = sampleProjectile(projectile, eventTick(),
-			"MOVED_CALLBACK", context.localPlayer, context.cycle, target);
+		}
+		ProjectileObservation sample = sampleProjectile(projectile, eventTick(), "MOVED_CALLBACK", context.localPlayer,
+			context.cycle, target);
 		ProjectileState state = sample.getState();
+		if (first)
+		{
+			projectileLaunchObservations.put(projectile, observeProjectileLaunch(state, context));
+		}
 		ProjectileState priorState = projectileCallbackStates.put(projectile, state);
 		boolean relationshipChanged = priorState != null
-			&& (!java.util.Objects.equals(priorState.getSourceRef(), state.getSourceRef())
-				|| !java.util.Objects.equals(priorState.getTargetRef(), state.getTargetRef())
-				|| !java.util.Objects.equals(priorState.getSourceActorKnown(), state.getSourceActorKnown())
-				|| !java.util.Objects.equals(priorState.getTargetActorKnown(), state.getTargetActorKnown())
-				|| !java.util.Objects.equals(priorState.getTargetsPlayer(), state.getTargetsPlayer())
-				|| !java.util.Objects.equals(priorState.getSourceNpcId(), state.getSourceNpcId())
-				|| !java.util.Objects.equals(priorState.getSourceObservedName(), state.getSourceObservedName()));
+			&& (!Objects.equals(priorState.getSourceRef(), state.getSourceRef())
+				|| !Objects.equals(priorState.getTargetRef(), state.getTargetRef())
+				|| !Objects.equals(priorState.getSourceActorKnown(), state.getSourceActorKnown())
+				|| !Objects.equals(priorState.getTargetActorKnown(), state.getTargetActorKnown())
+				|| !Objects.equals(priorState.getTargetsPlayer(), state.getTargetsPlayer())
+				|| !Objects.equals(priorState.getSourceNpcId(), state.getSourceNpcId())
+				|| !Objects.equals(priorState.getSourceObservedName(), state.getSourceObservedName()));
 		boolean detailsChanged = priorState != null
-			&& (!java.util.Objects.equals(priorState.getSourceWorldViewId(), state.getSourceWorldViewId())
-				|| !java.util.Objects.equals(priorState.getSourcePlane(), state.getSourcePlane())
-				|| !java.util.Objects.equals(priorState.getTargetWorldViewId(), state.getTargetWorldViewId())
-				|| !java.util.Objects.equals(priorState.getTargetActorWorldViewId(), state.getTargetActorWorldViewId())
-				|| !java.util.Objects.equals(priorState.getTargetLocalWorldViewId(), state.getTargetLocalWorldViewId())
-				|| !java.util.Objects.equals(priorState.getTargetPlane(), state.getTargetPlane())
-				|| !java.util.Objects.equals(priorState.getDestinationPlane(), state.getDestinationPlane())
-				|| !java.util.Objects.equals(priorState.getDestinationKnown(), state.getDestinationKnown())
-				|| !java.util.Objects.equals(priorState.getDestinationEvidence(), state.getDestinationEvidence())
-				|| !java.util.Objects.equals(priorState.getEndWorldX(), state.getEndWorldX())
-				|| !java.util.Objects.equals(priorState.getEndWorldY(), state.getEndWorldY())
-				|| !java.util.Objects.equals(priorState.getEndCycle(), state.getEndCycle()));
-		boolean destinationChanged = !java.util.Objects.equals(previous, target) || priorState != null
-			&& (!java.util.Objects.equals(priorState.getEndWorldX(), state.getEndWorldX())
-				|| !java.util.Objects.equals(priorState.getEndWorldY(), state.getEndWorldY())
-				|| !java.util.Objects.equals(priorState.getDestinationPlane(), state.getDestinationPlane()));
+			&& (!Objects.equals(priorState.getSourceWorldViewId(), state.getSourceWorldViewId())
+				|| !Objects.equals(priorState.getSourcePlane(), state.getSourcePlane())
+				|| !Objects.equals(priorState.getTargetWorldViewId(), state.getTargetWorldViewId())
+				|| !Objects.equals(priorState.getTargetActorWorldViewId(), state.getTargetActorWorldViewId())
+				|| !Objects.equals(priorState.getTargetLocalWorldViewId(), state.getTargetLocalWorldViewId())
+				|| !Objects.equals(priorState.getTargetPlane(), state.getTargetPlane())
+				|| !Objects.equals(priorState.getDestinationPlane(), state.getDestinationPlane())
+				|| !Objects.equals(priorState.getDestinationKnown(), state.getDestinationKnown())
+				|| !Objects.equals(priorState.getDestinationEvidence(), state.getDestinationEvidence())
+				|| !Objects.equals(priorState.getEndWorldX(), state.getEndWorldX())
+				|| !Objects.equals(priorState.getEndWorldY(), state.getEndWorldY())
+				|| !Objects.equals(priorState.getEndCycle(), state.getEndCycle()));
+		boolean destinationChanged = !Objects.equals(previous, target)
+			|| priorState != null && (!Objects.equals(priorState.getEndWorldX(), state.getEndWorldX())
+				|| !Objects.equals(priorState.getEndWorldY(), state.getEndWorldY())
+				|| !Objects.equals(priorState.getDestinationPlane(), state.getDestinationPlane()));
 		if (first || destinationChanged || relationshipChanged || detailsChanged)
 		{
 			projectilesThisTick.add(state);
@@ -1731,51 +1720,50 @@ public class TickReplayLoggerPlugin extends Plugin
 					: relationshipChanged ? "PROJECTILE_RELATIONSHIP_CHANGED"
 						: destinationChanged ? "PROJECTILE_TARGET_CHANGED" : "PROJECTILE_RELATIONSHIP_CHANGED",
 				sample.getSourceActor(), sample.getTargetActor(),
-				data("projectile", state, "targetZ", event.getZ(), "callbackTargetLocalX",
-					target == null ? null : target.getX(), "callbackTargetLocalY",
-					target == null ? null : target.getY()),
-				context);
+				projectileCallbackData(projectile, state, target, event.getZ()), context);
 		}
 		// A late target binding may first identify the local player after the initial visual callback.
 		if (!context.ready || !Boolean.TRUE.equals(state.getTargetsPlayer()) || !processedProjectiles.add(projectile))
+		{
 			return;
-		try
-		{
-			WorldPoint playerPoint = context.localPlayer.getWorldLocation();
-			if (playerPoint == null)
-				throw new IllegalStateException("Player plane unavailable");
-			Integer remaining = sample.getRemainingCycles();
-			boolean timingKnown = remaining != null;
-			int travel = remaining == null ? 1 : Math.max(1, (int) Math.ceil(remaining / 30.0));
-			com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation source = state
-				.getSourceHistory() == null ? null : state.getSourceHistory().firstActor();
-			boolean reference = source == null ? sample.isReferenceContext()
-				: Boolean.TRUE.equals(source.getSourceNormalWorldContextObserved()) && source.getSourceNpcId() != null
-					&& damageMap != null && damageMap.catalog() != null
-					&& damageMap.catalog().observedNameCompatible(source.getSourceNpcId(),
-						source.getSourceObservedName(), Boolean.TRUE.equals(source.getSourceNameKnown()));
-			PendingProjectile pending = new PendingProjectile(
-				source == null ? state.getSourceName() : source.getSourceName(),
-				state.getProjectileId() == null ? -1 : state.getProjectileId(), state.getSpawnTick(),
-				state.getEstimatedImpactTick() == null ? eventTick() : state.getEstimatedImpactTick(), travel,
-				source != null || sample.getSourceActor() != null,
-				source == null ? sample.getSourceActor() instanceof Player : source.getActorKind().endsWith("_PLAYER"),
-				source == null ? (state.getSourceNpcId() == null ? -1 : state.getSourceNpcId())
-					: (source.getSourceNpcId() == null ? -1 : source.getSourceNpcId()),
-				source == null ? state.getSourceRef() : source.getSourceRef(),
-				source == null ? state.getSourceCombatLevel() : source.getSourceCombatLevel(),
-				state.getEndCycle() == null ? 0 : state.getEndCycle(), nativeView(), nativeScene(), reference,
-				causalSceneEpoch, playerPoint.getPlane(), timingKnown, projectile, state.getObservationId());
-			pending.latestObservation = state;
-			pendingProjectiles.add(pending);
-			projectileSourceLinks.put(state.getObservationId(), pending);
 		}
-		catch (RuntimeException unavailable)
-		{
-			context.issues.add("projectileAttributionContext: " + unavailable.getClass().getSimpleName());
-			observe("PROJECTILE_ATTRIBUTION_UNAVAILABLE", null, null, data("observationId", state.getObservationId()),
-				context);
-		}
+		PendingProjectile pending = new PendingProjectile(projectile, state);
+		pending.launchObservation = projectileLaunchObservations.getOrDefault(projectile, Collections.emptyMap());
+		pendingProjectiles.add(pending);
+		projectileSourceLinks.put(state.getObservationId(), pending);
+	}
+
+	private Map<String, Object> projectileCallbackData(Projectile projectile, ProjectileState state, LocalPoint target,
+		int targetZ)
+	{
+		Map<String, Object> fields = new LinkedHashMap<>(
+			projectileLaunchObservations.getOrDefault(projectile, Collections.emptyMap()));
+		fields.putAll(data("projectile", state, "projectileObservationId", state.getObservationId(), "targetZ", targetZ,
+			"callbackTargetLocalX", target == null ? null : target.getX(), "callbackTargetLocalY",
+			target == null ? null : target.getY()));
+		return fields;
+	}
+
+	private Map<String, Object> observeProjectileLaunch(ProjectileState original, CallbackContext context)
+	{
+		Map<String, Object> local = context.ready && context.localPlayer != null
+			? callbackActorData(context.localPlayer, context)
+			: Collections.emptyMap();
+		PrayerObservation prayer = context.ready ? PrayerObservation.fromActorState(client, local)
+			: PrayerObservation.unavailable();
+		ActorCallbackObservation.Sample sample = context.actorSamples.get(context.localPlayer);
+		WorldPoint position = sample == null ? null : sample.world();
+		prepareCallbackCaptureScope(context);
+		return data("originalProjectileObservation", original, "projectileObservationId", original.getObservationId(),
+			"firstSeenTick", original.getObservedTick(), "spawnTick", original.getSpawnTick(), "launchTickBasis",
+			"FIRST_OBSERVED", "observedCycle", original.getObservedCycle(), "startCycle", original.getStartCycle(),
+			"endCycle", original.getEndCycle(), "prayersAtLaunch",
+			prayer.isAvailable() ? getActivePrayers(prayer) : null, "overheadAtLaunch", prayer.getOverhead(),
+			"launchPrayerStateKnown", prayer.isFlagsComplete() && prayer.isOverheadResolved(), "launchPositionKnown",
+			position != null, "launchX", position == null ? null : position.getX(), "launchY",
+			position == null ? null : position.getY(), "launchPlane", position == null ? null : position.getPlane(),
+			"launchSceneKey", context.primaryKnown ? context.primarySceneKey : null, "launchWorldViewId",
+			sample == null ? null : integerField(sample.data(), "worldViewId"));
 	}
 
 	private boolean projectileExpiryObserved(Projectile projectile, String stage)
@@ -1792,6 +1780,24 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
+	private void forgetProjectile(Projectile projectile)
+	{
+		projectileIds.remove(projectile);
+		projectileSpawnTicks.remove(projectile);
+		projectileTargets.remove(projectile);
+		projectileCallbackStates.remove(projectile);
+		projectileLaunchObservations.remove(projectile);
+		processedProjectiles.remove(projectile);
+		projectileSourceTracker.forget(projectile);
+		for (PendingProjectile pending : pendingProjectiles)
+		{
+			if (pending.observedObject == projectile && pending.removedObservedTick == null)
+			{
+				pending.removedObservedTick = currentGameTick;
+			}
+		}
+	}
+
 	private void registerProjectile(Projectile projectile)
 	{
 		if (!projectileIds.containsKey(projectile))
@@ -1801,13 +1807,13 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
-	private com.tickreplaylogger.capture.ProjectileObservation sampleProjectile(Projectile projectile, int tick,
-		String evidence, Player local, Integer cycle, LocalPoint callbackTarget)
+	private ProjectileObservation sampleProjectile(Projectile projectile, int tick, String evidence, Player local,
+		Integer cycle, LocalPoint callbackTarget)
 	{
 		boolean includeOthers = config.captureOtherPlayers();
-		final com.tickreplaylogger.model.world.ProjectileSourceCandidate[] proximity = new com.tickreplaylogger.model.world.ProjectileSourceCandidate[1];
-		com.tickreplaylogger.capture.ProjectileObservation sample = new com.tickreplaylogger.capture.ProjectileObservation(
-			projectile, client, local, includeOthers, damageMap == null ? null : damageMap.catalog(),
+		final ProjectileSourceCandidate[] proximity = new ProjectileSourceCandidate[1];
+		ProjectileObservation sample = new ProjectileObservation(projectile, client, local, includeOthers,
+			damageMap == null ? null : damageMap.catalog(),
 			actor -> actor instanceof Player && actor != local && !includeOthers ? null
 				: captureService == null ? null : captureService.actorRef(actor, local),
 			(point, excluded) ->
@@ -1816,20 +1822,18 @@ public class TickReplayLoggerPlugin extends Plugin
 				proximity[0] = nearest == null ? null : captureProximitySource(nearest, local);
 				return proximity[0] == null ? null : proximity[0].getName();
 			}, projectileIds.get(projectile), projectileSpawnTicks.get(projectile), tick, cycle, evidence,
-			callbackTarget,
-			(state, source) ->
+			callbackTarget, (state, source) ->
 			{
-				com.tickreplaylogger.model.world.ProjectileState.ProjectileStateBuilder original = state.toBuilder()
+				ProjectileState.ProjectileStateBuilder original = state.toBuilder()
 					.proximitySourceCandidate(proximity[0]);
 				if (projectileSourceTracker.needsOriginalActorMetadata(projectile, state.getObservationId(), source))
 				{
 					try
 					{
-						net.runelite.api.WorldView view = source.getWorldView();
+						WorldView view = source.getWorldView();
 						if (view != null && state.getSourceWorldViewId() != null && state.getSourcePlane() != null)
 						{
-							String scope = com.tickreplaylogger.capture.WorldViews.scope(view, state.getSourcePlane(),
-								state.getSourceWorldViewId());
+							String scope = WorldViews.scope(view, state.getSourcePlane(), state.getSourceWorldViewId());
 							String key = scope != null && scope.equals(sceneScopeSignature) ? currentSceneKey
 								: captureService == null ? null
 									: captureService.cachedAdditionalSceneKey(view, state.getSourcePlane(), scope);
@@ -1846,73 +1850,82 @@ public class TickReplayLoggerPlugin extends Plugin
 			});
 		PendingProjectile pending = projectileSourceLinks.get(sample.getState().getObservationId());
 		if (pending != null && pending.observedObject == projectile)
+		{
 			pending.latestObservation = sample.getState();
+		}
 		return sample;
 	}
 
-	private com.tickreplaylogger.model.world.ProjectileSourceCandidate captureProximitySource(NPC npc, Player local)
+	private ProjectileSourceCandidate captureProximitySource(NPC npc, Player local)
 	{
 		List<String> issues = new ArrayList<>();
 		String name = readHitContext("proximity.name", npc::getName, issues);
 		Integer index = readHitContext("proximity.index", npc::getIndex, issues);
-		net.runelite.api.WorldView view = readHitContext("proximity.view", npc::getWorldView, issues);
+		WorldView view = readHitContext("proximity.view", npc::getWorldView, issues);
 		Integer viewId = view == null ? null : readHitContext("proximity.viewId", view::getId, issues);
 		WorldPoint position = readHitContext("proximity.position", npc::getWorldLocation, issues);
 		Integer level = readHitContext("proximity.level", npc::getCombatLevel, issues);
 		Integer animation = readHitContext("proximity.animation", npc::getAnimation, issues);
 		Map<String, String> definitionIssues = new LinkedHashMap<>();
-		com.tickreplaylogger.capture.NpcDefinitionObservation definition = com.tickreplaylogger.capture.NpcDefinitionObservation
-			.capture(npc, definitionIssues, "proximity.");
+		NpcDefinitionObservation definition = NpcDefinitionObservation.capture(npc, definitionIssues, "proximity.");
 		issues.addAll(definitionIssues.keySet());
-		net.runelite.api.NpcOverrides overrides = readHitContext("proximity.overrides", npc::getModelOverrides, issues);
+		NpcOverrides overrides = readHitContext("proximity.overrides", npc::getModelOverrides, issues);
 		Boolean normal = issues.stream().anyMatch(issue -> issue.startsWith("proximity.overrides")) ? null
-			: readHitContext("proximity.context", () -> com.tickreplaylogger.capture.NpcIdentityContext
-				.normalWorldObservedWithoutOverrides(client, overrides == null), issues);
+			: readHitContext("proximity.context",
+				() -> NpcIdentityContext.normalWorldObservedWithoutOverrides(client, overrides == null), issues);
 		String ref = captureService == null ? null
 			: readHitContext("proximity.actorRef", () -> captureService.observedActorRef(npc, local, viewId, index),
 				issues);
 		String sceneKey = null;
 		if (view != null && position != null && captureService != null)
+		{
 			sceneKey = readHitContext("proximity.scene",
 				() -> captureService.additionalSceneKey(client, view, position.getPlane()), issues);
+		}
 		if (sceneKey == null && view != null && position != null && viewId != null)
 		{
 			String originalScope = readHitContext("proximity.primaryScope",
-				() -> com.tickreplaylogger.capture.WorldViews.scope(view, position.getPlane(), viewId), issues);
+				() -> WorldViews.scope(view, position.getPlane(), viewId), issues);
 			if (originalScope != null && originalScope.equals(sceneScopeSignature))
+			{
 				sceneKey = currentSceneKey;
+			}
 		}
 		Integer id = definition.getId();
 		String family = id == null || damageMap == null ? null
 			: damageMap.catalog().attributionFamily(id, name, level, Boolean.TRUE.equals(normal));
-		return com.tickreplaylogger.model.world.ProjectileSourceCandidate.builder().name(name).actorRef(ref).npcId(id)
-			.baseNpcId(definition.getBaseId()).combatLevel(level).animationId(animation)
+		return ProjectileSourceCandidate.builder().name(name).actorRef(ref).npcId(id).baseNpcId(definition.getBaseId())
+			.combatLevel(level).animationId(animation)
 			.modelOverridesPresent(
 				issues.stream().anyMatch(issue -> issue.startsWith("proximity.overrides")) ? null : overrides != null)
 			.familyKey(family).normalWorldContextObserved(normal).worldViewId(viewId)
 			.plane(position == null ? null : position.getPlane()).sceneKey(sceneKey)
 			.evidence("ORIGINAL_PROJECTILE_ORIGIN_PROXIMITY; not API source actor")
-			.unavailableFields(issues.isEmpty() ? null : java.util.Collections.unmodifiableList(issues)).build();
+			.unavailableFields(issues.isEmpty() ? null : Collections.unmodifiableList(issues)).build();
 	}
 
 	private List<ProjectileState> captureProjectiles()
 	{
 		projectileCaptureIssues.clear();
-		java.util.Set<Projectile> listed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+		Set<Projectile> listed = Collections.newSetFromMap(new IdentityHashMap<>());
 		boolean complete = false;
 		try
 		{
 			Iterable<? extends Projectile> collection = client.getProjectiles();
 			if (collection == null)
+			{
 				projectileCaptureIssues.add("projectiles: global collection unavailable");
+			}
 			else
 			{
 				for (Projectile projectile : collection)
+				{
 					if (projectile != null)
 					{
 						listed.add(projectile);
 						registerProjectile(projectile);
 					}
+				}
 				complete = true;
 			}
 		}
@@ -1922,10 +1935,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		Map<Long, ProjectileState> states = new LinkedHashMap<>();
 		for (ProjectileState state : projectilesThisTick)
+		{
 			states.put(state.getObservationId(), state);
+		}
 		Player local = readHitContext("projectiles.localPlayer", client::getLocalPlayer, projectileCaptureIssues);
 		Integer cycle = readHitContext("projectiles.gameCycle", client::getGameCycle, projectileCaptureIssues);
-		java.util.Set<Projectile> removed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+		Set<Projectile> removed = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Projectile projectile : new ArrayList<>(projectileIds.keySet()))
 		{
 			if (complete && !listed.contains(projectile))
@@ -1933,12 +1948,16 @@ public class TickReplayLoggerPlugin extends Plugin
 				removed.add(projectile);
 				continue;
 			}
-			com.tickreplaylogger.capture.ProjectileObservation sample = sampleProjectile(projectile, currentGameTick,
-				"TICK_SAMPLE", local, cycle, null);
+			ProjectileObservation sample = sampleProjectile(projectile, currentGameTick, "TICK_SAMPLE", local, cycle,
+				null);
 			ProjectileState state = sample.getState();
 			if (state.getObservationIssues() != null)
+			{
 				for (Map.Entry<String, String> issue : state.getObservationIssues().entrySet())
+				{
 					projectileCaptureIssues.add("projectiles: " + issue.getKey() + ": " + issue.getValue());
+				}
+			}
 			Integer remaining = sample.getRemainingCycles();
 			if (remaining != null && remaining <= 0)
 			{
@@ -1951,16 +1970,8 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		for (Projectile projectile : removed)
 		{
-			projectileIds.remove(projectile);
-			projectileSpawnTicks.remove(projectile);
-			projectileTargets.remove(projectile);
-			projectileCallbackStates.remove(projectile);
-			processedProjectiles.remove(projectile);
-			projectileSourceTracker.forget(projectile);
+			forgetProjectile(projectile);
 		}
-		for (PendingProjectile value : pendingProjectiles)
-			if (!value.timingKnown && value.removedObservedTick == null && removed.contains(value.observedObject))
-				value.removedObservedTick = currentGameTick;
 		return new ArrayList<>(states.values());
 	}
 
@@ -1987,18 +1998,7 @@ public class TickReplayLoggerPlugin extends Plugin
 
 			// Check for "Attack" in right-click menu options
 			String[] actions = composition.getActions();
-			boolean hasAttackOption = false;
-			if (actions != null)
-			{
-				for (String action : actions)
-				{
-					if ("Attack".equals(action))
-					{
-						hasAttackOption = true;
-						break;
-					}
-				}
-			}
+			boolean hasAttackOption = actions != null && Arrays.asList(actions).contains("Attack");
 
 			// Combat level 0 + no Attack option = non-combat NPC (banks, shops, scenery)
 			if (npc.getCombatLevel() == 0 && !hasAttackOption)
@@ -2014,43 +2014,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 
 		return true;
-	}
-
-	/**
-	 * Resolve the source name for a projectile.
-	 * Priority: direct source actor â†’ closest combat NPC to spawn point â†’ Unknown.
-	 */
-	private String resolveProjectileSource(Projectile projectile)
-	{
-		// Priority 1: Direct source actor from API
-		Actor sourceActor = projectile.getSourceActor();
-		if (sourceActor != null)
-		{
-			String name = getActorName(sourceActor);
-			if (name != null)
-			{
-				return name;
-			}
-		}
-
-		// Priority 2: Find closest combat NPC to projectile spawn point
-		Actor targetActor = projectile.getTargetActor();
-		WorldPoint sourcePoint = projectile.getSourcePoint();
-
-		if (sourcePoint != null)
-		{
-			NPC closest = findClosestCombatNpcToPoint(sourcePoint, targetActor);
-			if (closest != null)
-			{
-				String name = closest.getName();
-				if (name != null)
-				{
-					return stripColorTags(name);
-				}
-			}
-		}
-
-		return "Unknown";
 	}
 
 	/**
@@ -2077,7 +2040,7 @@ public class TickReplayLoggerPlugin extends Plugin
 
 			// A large actor's projectile can start inside its footprint, several tiles
 			// from the southwest anchor. This remains a proximity hypothesis only.
-			net.runelite.api.coords.WorldArea area = null;
+			WorldArea area = null;
 			try
 			{
 				area = npc.getWorldArea();
@@ -2086,7 +2049,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				/* retain the known anchor fallback */ }
 			if (area != null && area.getPlane() != sourcePoint.getPlane())
+			{
 				continue;
+			}
 			int distance = area == null ? npcPoint.distanceTo2D(sourcePoint) : area.distanceTo2D(sourcePoint);
 			if (distance < closestDistance)
 			{
@@ -2095,513 +2060,86 @@ public class TickReplayLoggerPlugin extends Plugin
 				tied = false;
 			}
 			else if (distance == closestDistance)
+			{
 				tied = true;
+			}
 		}
 
 		return tied ? null : closest;
 	}
 
-	/**
-	 * Find the closest combat NPC to a local point, excluding the target actor.
-	 */
-	private NPC findClosestCombatNpcToLocalPoint(LocalPoint sourceLocal, Actor excludeActor)
-	{
-		NPC closest = null;
-		int closestDistance = Integer.MAX_VALUE;
-
-		for (NPC npc : nativeNpcs())
-		{
-			if (npc == excludeActor || !isCombatNpc(npc))
-			{
-				continue;
-			}
-
-			LocalPoint npcPoint = npc.getLocalLocation();
-			if (npcPoint == null)
-			{
-				continue;
-			}
-
-			int distance = npcPoint.distanceTo(sourceLocal);
-			if (distance < closestDistance)
-			{
-				closestDistance = distance;
-				closest = npc;
-				if (distance == 0)
-				{
-					return closest;
-				}
-			}
-		}
-
-		return closest;
-	}
-
-	/**
-	 * NPC scene index of an actor if it is an NPC, else null (used as a per-tick actor ref).
-	 */
-	private Integer sourceActorNpcIndex(Actor actor)
-	{
-		return actor instanceof NPC ? ((NPC) actor).getIndex() : null;
-	}
-
-	/**
-	 * Get a sanitized display name for an actor.
-	 */
-	private String getActorName(Actor actor)
-	{
-		if (actor == null)
-		{
-			return null;
-		}
-
-		String name = null;
-		if (actor instanceof NPC)
-		{
-			name = ((NPC) actor).getName();
-		}
-		else if (actor instanceof Player)
-		{
-			name = actor != nativeLocalPlayer() && !config.captureOtherPlayers() ? "Other player"
-				: ((Player) actor).getName();
-		}
-
-		if (name == null)
-		{
-			return null;
-		}
-
-		String cleaned = name.replaceAll("<[^>]*>", "").trim();
-		return cleaned.isEmpty() ? null : cleaned;
-	}
-
-	/**
-	 * Correlate an observed HP hit with source hypotheses. Self actions, pickpocket failures,
-	 * projectiles, damaging surfaces and actor animations compete. Multiple viable causes are
-	 * retained as alternatives; priority, list order and attacker history do not establish a cause.
-	 */
-	private void resetAttribution()
-	{
-		// Reset attribution metadata for this resolution (overwritten by the branch that resolves).
-		lastAttributionAttackRule = null;
-		lastAttributionAttackName = null;
-		lastAttributionProjectileId = -1;
-		lastAttributionMapRef = null;
-		lastAttributionConfidence = "UNKNOWN";
-		lastAttributionLaunchTick = currentGameTick;
-		lastAttributionSourceIsPlayer = false;
-		lastAttributionNpcId = -1;
-		lastAttributionNpcLevel = null;
-
-		lastAttributionActorRef = null;
-		lastAttributionEvidence = "UNMATCHED";
-		lastAttributionCandidates = new ArrayList<>();
-		lastAttributionNormalContext = false;
-	}
-
-	private String determineDamageSource(PendingHit hit)
-	{
-		resetAttribution();
-		Player localPlayer = nativeLocalPlayer();
-		if (localPlayer == null)
-			return "Unknown";
-		if (hit.nativeScope == null || !hit.nativeScope.known)
-		{
-			lastAttributionEvidence = "IMPACT_NATIVE_SCOPE_UNAVAILABLE";
-			return "Unknown";
-		}
-		if (activeHitScope == null || !activeHitScope.known)
-		{
-			lastAttributionEvidence = "SETTLED_NATIVE_SCOPE_UNAVAILABLE";
-			return "Unknown";
-		}
-		// Packet processing may cross a scene/view boundary before deferred resolution.
-		// Keep the observed damage, but do not search a different coordinate frame for its cause.
-		if (hit.epoch != causalSceneEpoch || hit.plane != nativePlane() || hit.worldView != nativeView()
-			|| hit.scene != nativeScene() || hit.baseX != nativeBaseX() || hit.baseY != nativeBaseY())
-		{
-			lastAttributionEvidence = "SCENE_CHANGED_BEFORE_ATTRIBUTION";
-			return "Unknown";
-		}
-		ensureSelfDamageScope();
-		boolean ambiguousBatch = !hit.hpOutcomeKnown || unlinkedHpObservationCount(hit) > 1;
-		if (ambiguousBatch)
-		{
-			lastAttributionCandidates.addAll(selfDamageInputs.candidates(currentGameTick));
-			for (String failure : failedPickpockets)
-				lastAttributionCandidates.add(data("kind", "PICKPOCKET_FAILURE_CORRELATION", "name", failure));
-		}
-		if (!ambiguousBatch && selfConsumptionObserved(hit))
-		{
-			String candidate = selfDamageInputSource(hit, pendingSelfDamageSource);
-			if ("Unknown".equals(candidate))
-				return candidate;
-			lastAttributionConfidence = "TIMED";
-			lastAttributionEvidence = "ITEM_CONSUMPTION_CORRELATION";
-			String source = pendingSelfDamageSource;
-			pendingSelfDamageSource = null;
-			return source;
-		}
-		String selfInputSource = ambiguousBatch ? null : selfDamageInputSource(hit);
-		if (selfInputSource != null)
-			return selfInputSource;
-
-		// A failure message and an actual ordinary hit supply a pickpocket hypothesis.
-		// Competing damage evidence must survive rather than losing to this branch's priority.
-		if (!ambiguousBatch && damageMap != null && damageMap.pickpocketRule() != null && failedPickpockets.size() == 1
-			&& hit.amount > 0 && hit.damageType == DamageEvent.DamageType.UNKNOWN && pendingHits.stream()
-				.filter(h -> h.amount > 0 && h.damageType == DamageEvent.DamageType.UNKNOWN).count() == 1)
-		{
-			lastAttributionCandidates
-				.add(data("kind", "PICKPOCKET_FAILURE_CORRELATION", "name", failedPickpockets.get(0)));
-			for (NPC npc : nativeNpcs())
-				if (npc != null && npc != pickpocketTarget && npc.getInteracting() == localPlayer && isCombatNpc(npc))
-					lastAttributionCandidates.add(npcCandidate(npc));
-			for (Player other : playerDamageCandidates(localPlayer))
-				lastAttributionCandidates.add(playerCandidate(other));
-			for (PendingProjectile projectile : pendingProjectiles)
-				if (projectile.epoch == hit.epoch && projectile.plane == hit.plane
-					&& projectile.worldView == hit.worldView && projectile.scene == hit.scene
-					&& (!projectile.timingKnown || Math.abs(projectile.estimatedArrivalTick - currentGameTick) <= 2))
-					lastAttributionCandidates.add(data("kind", "PROJECTILE_CORRELATION", "name", projectile.sourceName,
-						"projectileId", projectile.projectileId, "projectileObservationId",
-						projectile.projectileObservationId, "sourceHistory",
-						projectile.latestObservation == null ? null : projectile.latestObservation.getSourceHistory(),
-						"latestSourceObservation", projectileLatestSource(projectile), "sourceSamplingUnavailable",
-						projectile.sourceSamplingUnavailable, "matchBasis",
-						projectile.timingKnown ? "ARRIVAL_WINDOW" : "TIMING_UNAVAILABLE"));
-			for (String hazard : hazardsForHit(hit))
-				lastAttributionCandidates.add(hazardCandidate(hit, hazard));
-			if (lastAttributionCandidates.size() > 1)
-			{
-				lastAttributionEvidence = "MULTIPLE_POSSIBLE_DAMAGE_SOURCES";
-				return "Unknown";
-			}
-			lastAttributionConfidence = "TIMED";
-			lastAttributionAttackName = damageMap.pickpocketRule().getName();
-			lastAttributionMapRef = damageMap.pickpocketRule().getMapRef();
-			lastAttributionEvidence = "PICKPOCKET_FAILURE_CORRELATION";
-			return failedPickpockets.remove(0);
-		}
-
-		// All current hypotheses compete; history and list ordering cannot choose a cause.
-		List<NPC> npcCandidates = npcDamageCandidates(localPlayer);
-		List<Player> playerCandidates = playerDamageCandidates(localPlayer);
-		List<String> hazards = hazardsForHit(hit);
-		String projectileSource = matchPendingProjectile(hit, hazards, npcCandidates, playerCandidates);
-		if (projectileSource != null)
-			return projectileSource;
-		if (projectileMatchAmbiguous)
-			return "Unknown";
-		for (NPC npc : npcCandidates)
-			lastAttributionCandidates.add(npcCandidate(npc));
-		for (Player player : playerCandidates)
-			lastAttributionCandidates.add(playerCandidate(player));
-		int count = npcCandidates.size() + playerCandidates.size() + hazards.size();
-		if (count > 1)
-		{
-			lastAttributionEvidence = "MULTIPLE_POSSIBLE_DAMAGE_SOURCES";
-			return "Unknown";
-		}
-		if (hazards.size() == 1)
-		{
-			if (!npcContactStagesAgree(hit, hazards.get(0)))
-			{
-				lastAttributionEvidence = "CONTACT_OBSERVATION_PHASE_CONFLICT";
-				return "Unknown";
-			}
-			if (!objectSurfaceEligibilityKnown(hit, hazards.get(0)))
-			{
-				lastAttributionEvidence = "SURFACE_ELIGIBILITY_UNESTABLISHED";
-				return "Unknown";
-			}
-			if (!objectSurfaceStagesAgree(hit, hazards.get(0)))
-			{
-				lastAttributionEvidence = "HAZARD_OBSERVATION_PHASE_CONFLICT";
-				return "Unknown";
-			}
-			lastAttributionEvidence = "HAZARD_ON_IMPACT_TILE";
-			lastAttributionConfidence = "ENVIRONMENTAL";
-			return hazards.get(0);
-		}
-		if (npcCandidates.size() == 1)
-		{
-			NPC npc = npcCandidates.get(0);
-			String name = getActorName(npc);
-			if (requiresProjectile(npc))
-			{
-				lastAttributionEvidence = "NPC_PROJECTILE_ATTACK_WITHOUT_CAPTURED_PROJECTILE";
-				return "Unknown";
-			}
-			recentAttackers.put(npc.getIndex(), new AttackerRecord(name, npc.getIndex(), currentGameTick, npc,
-				nativeView(), nativeScene(), causalSceneEpoch, nativePlane()));
-			lastAttributionConfidence = "TIMED";
-			lastAttributionNpcId = observedNpcId(npc);
-			lastAttributionNpcLevel = npc.getCombatLevel();
-			lastAttributionNormalContext = referenceContextObserved(npc);
-			lastAttributionActorRef = actorRef(npc);
-			lastAttributionEvidence = "NPC_ANIMATION_CORRELATION";
-			lastAttributionAttackRule = damageMap == null ? null
-				: damageMap.attackRuleForNpc(observedNpcId(npc), npc.getAnimation(), npc.getCombatLevel(),
-					lastAttributionNormalContext);
-			lastAttributionMapRef = lastAttributionAttackRule == null ? null : lastAttributionAttackRule.getMapRef();
-			return name;
-		}
-		if (playerCandidates.size() == 1)
-		{
-			Player other = playerCandidates.get(0);
-			if (damageMap == null || damageMap.styleForPlayerAnimation(other.getAnimation()) == null)
-			{
-				lastAttributionEvidence = "PLAYER_UNCLASSIFIED_ACTIVITY_WITHOUT_ATTACK_LINK";
-				return "Unknown";
-			}
-			lastAttributionConfidence = "PROXIMITY";
-			lastAttributionSourceIsPlayer = true;
-			lastAttributionActorRef = actorRef(other);
-			lastAttributionEvidence = "PLAYER_ANIMATION_CORRELATION";
-			return getActorName(other);
-		}
-		for (AttackerRecord record : recentAttackers.values())
-			if (record.epoch == causalSceneEpoch && record.plane == nativePlane() && record.view == nativeView()
-				&& record.scene == nativeScene())
-				lastAttributionCandidates.add(data("kind", "RECENT_ATTACKER_NOT_CURRENT_HIT_EVIDENCE", "name",
-					record.name, "lastCorrelatedTick", record.tickRecorded));
-		lastAttributionEvidence = lastAttributionCandidates.isEmpty() ? "UNRESOLVED_HP_DAMAGE"
-			: "HISTORY_WITHOUT_CURRENT_HIT_EVIDENCE";
-		return "Unknown";
-	}
-
-	private int unlinkedHpObservationCount(PendingHit hit)
-	{
-		// A coloured hit can be one-off damage. Type alone does not exclude it from
-		// the observations competing for an attack/projectile association.
-		return (int) pendingHits.stream()
-			.filter(other -> other.epoch == hit.epoch && other.plane == hit.plane && other.worldView == hit.worldView
-				&& other.scene == hit.scene && other.baseX == hit.baseX && other.baseY == hit.baseY)
-			.count();
-	}
-
-	private boolean requiresProjectile(NPC npc)
-	{
-		boolean normal = referenceContextObserved(npc);
-		DamageMap.AttackRule rule = damageMap == null ? null
-			: damageMap.attackRuleForNpc(observedNpcId(npc), npc.getAnimation(), npc.getCombatLevel(), normal);
-		return rule != null && rule.isRequiresProjectile();
-	}
-
-	private List<NPC> npcDamageCandidates(Player local)
-	{
-		List<NPC> out = new ArrayList<>();
-		for (NPC npc : nativeNpcs())
-		{
-			if (npc == null || npc.getInteracting() != local || !isCombatNpc(npc) || npc.getAnimation() == -1)
-				continue;
-			// Display labels such as spawn/transition/death are not proof that this activity cannot deal damage.
-			out.add(npc);
-		}
-		return out;
-	}
-
-	private List<Player> playerDamageCandidates(Player local)
-	{
-		List<Player> out = new ArrayList<>();
-		if (!isPvpContext())
-			return out;
-		for (Player other : nativePlayers())
-			if (other != null && other != local && other.getInteracting() == local && other.getAnimation() != -1)
-				out.add(other);
-		return out;
-	}
-
-	private Map<String, Object> playerCandidate(Player player)
-	{
-		boolean recognized = damageMap != null && damageMap.styleForPlayerAnimation(player.getAnimation()) != null;
-		return data("kind", recognized ? "PLAYER_ANIMATION_CORRELATION" : "PLAYER_UNCLASSIFIED_ANIMATION", "name",
-			getActorName(player), "actorRef", actorRef(player), "animationId",
-			config.captureOtherPlayers() ? player.getAnimation() : null, "evidence",
-			"Engagement and active animation in observed PvP context; neither a recognized style nor missing style establishes this hit's source");
-	}
-
-	private Map<String, Object> npcCandidate(NPC npc)
-	{
-		return data("kind", requiresProjectile(npc) ? "NPC_PROJECTILE_ATTACK_ANIMATION" : "NPC_ANIMATION_CORRELATION",
-			"name", getActorName(npc), "actorRef", actorRef(npc), "npcId", observedNpcId(npc), "combatLevel",
-			npc.getCombatLevel(), "animationId", npc.getAnimation(), "requiresProjectile", requiresProjectile(npc),
-			"evidence",
-			"Animation and engagement are not proof that this hit came from this actor; a missing projectile does not exclude the actor");
-	}
-
-	/**
-	 * The name of a known damaging hazard the player is standing ON this tick â€” a spot-anim
-	 * (graphicsObject), ground object, or game object on the player's exact tile whose id maps to a
-	 * hazard. Co-location is evidence for a possible source, not a unique causal link to a hit.
-	 * Returns null if the player is not on a mapped damaging surface.
-	 */
-	private List<String> hazardsForHit(PendingHit hit)
-	{
-		java.util.Set<String> names = new java.util.LinkedHashSet<>(hit.observedHazards);
-		names.addAll(hazardsAtReportedPosition(hit.position, hit.localPosition, hit.hazardWitnesses));
-		return new ArrayList<>(names);
-	}
-
-	private java.util.Map<String, Object> hazardCandidate(PendingHit hit, String name)
-	{
-		java.util.Map<String, Object> candidate = new java.util.LinkedHashMap<>(
-			data("kind", "HAZARD_ON_IMPACT_TILE", "name", name));
-		List<java.util.Map<String, Object>> observations = new ArrayList<>();
-		for (java.util.Map<String, Object> witness : hit.hazardWitnesses)
-			if (name.equals(witness.get("name")))
-				observations.add(new java.util.LinkedHashMap<>(witness));
-		if (!observations.isEmpty())
-			candidate.put("observations", observations);
-		if (observations.stream().anyMatch(witness -> "NPC_CONTACT".equals(witness.get("kind"))))
-			candidate.put("observationPhaseAgreement",
-				npcContactStagesAgree(hit, name) ? "CONSISTENT_AT_BOTH_STAGES" : "UNESTABLISHED");
-		if (observations.stream().anyMatch(witness -> "OBJECT_SURFACE".equals(witness.get("kind"))))
-		{
-			candidate.put("observationPhaseAgreement",
-				objectSurfaceStagesAgree(hit, name) ? "CONSISTENT_AT_BOTH_STAGES" : "UNESTABLISHED");
-			candidate.put("surfaceEligibility",
-				objectSurfaceEligibilityKnown(hit, name) ? "REFERENCE_CANDIDATE" : "UNESTABLISHED");
-		}
-		return java.util.Collections.unmodifiableMap(candidate);
-	}
-
-	private boolean npcContactStagesAgree(PendingHit hit, String name)
-	{
-		java.util.Set<List<Object>> callback = new java.util.HashSet<>(), settled = new java.util.HashSet<>();
-		boolean contact = false;
-		for (Map<String, Object> witness : hit.hazardWitnesses)
-		{
-			if (!name.equals(witness.get("name")) || !"NPC_CONTACT".equals(witness.get("kind")))
-				continue;
-			contact = true;
-			if (witness.get("actorRef") == null)
-				continue;
-			List<Object> identity = java.util.Arrays.asList(witness.get("actorRef"), witness.get("npcId"),
-				witness.get("worldViewId"), witness.get("plane"), witness.get("worldX"), witness.get("worldY"),
-				witness.get("footprintWidth"), witness.get("footprintHeight"), witness.get("contactPredicate"),
-				witness.get("defenderPositionEvidence"));
-			if ("HITSPLAT_CALLBACK".equals(witness.get("observationStage")))
-				callback.add(identity);
-			else if ("DEFERRED_RESOLUTION".equals(witness.get("observationStage")))
-				settled.add(identity);
-		}
-		// Agreement is a stronger spatial correlation, not proof of packet ordering or causality.
-		return !contact || callback.stream().anyMatch(settled::contains);
-	}
-
-	private boolean objectSurfaceEligibilityKnown(PendingHit hit, String name)
-	{
-		for (Map<String, Object> witness : hit.hazardWitnesses)
-			if (name.equals(witness.get("name")) && "OBJECT_SURFACE".equals(witness.get("kind")))
-			{
-				String eligibility = (String) witness.get("sourceEligibility");
-				if (!"ELIGIBLE_REFERENCE_SURFACE".equals(eligibility) && !"NOT_DAMAGE_SURFACE".equals(eligibility))
-					return false;
-			}
-		return true;
-	}
-
-	private boolean objectSurfaceStagesAgree(PendingHit hit, String name)
-	{
-		java.util.Set<List<Object>> callback = new java.util.HashSet<>(), settled = new java.util.HashSet<>();
-		boolean observed = false;
-		for (Map<String, Object> witness : hit.hazardWitnesses)
-		{
-			if (!name.equals(witness.get("name")) || !"OBJECT_SURFACE".equals(witness.get("kind")))
-				continue;
-			observed = true;
-			if (!"ELIGIBLE_REFERENCE_SURFACE".equals(witness.get("sourceEligibility")))
-				continue;
-			List<Object> identity = java.util.Arrays.asList(witness.get("objectObservationId"), witness.get("objectId"),
-				witness.get("baseObjectId"), witness.get("objectKind"), witness.get("worldViewId"),
-				witness.get("plane"), witness.get("contactWorldX"), witness.get("contactWorldY"), witness.get("state"),
-				witness.get("defenderPositionEvidence"));
-			if ("HITSPLAT_CALLBACK".equals(witness.get("observationStage")))
-				callback.add(identity);
-			else if ("DEFERRED_RESOLUTION".equals(witness.get("observationStage")))
-				settled.add(identity);
-		}
-		return !observed || callback.stream().anyMatch(settled::contains);
-	}
-
-	private void observeObjectSurface(java.util.Set<String> names, List<Map<String, Object>> witnesses,
-		net.runelite.api.TileObject object, String kind, ObjectHazards.Resolved hazard, LocalPoint contact, int plane,
-		boolean serverTargetKnown)
+	private void observeObjectSurface(List<Map<String, Object>> witnesses, TileObject object, String kind,
+		ObjectHazards.Resolved hazard, LocalPoint contact, int plane, boolean serverTargetKnown)
 	{
 		if (hazard == null)
+		{
 			return;
-		if (hazard.isPotentialSource())
-			names.add(hazard.getName());
+		}
 		if (witnesses != null && damageMap.objectHazardRule(hazard.getBaseId()) != null)
 		{
-			Map<String, Object> witness = new LinkedHashMap<>(data("kind", "OBJECT_SURFACE", "name", hazard.getName(), "objectId",
-				hazard.getId(), "baseObjectId", hazard.getBaseId(), "objectKind", kind, "objectObservationId",
-				surfaceObservationIds.id(object), "worldViewId", nativeViewId(), "plane", plane,
-				"sceneKey", nativeView() != null && nativeScene() != null ? currentSceneKey : null,
-				"scopeEvidence", "NATIVE_SCENE_TILE_MEMBERSHIP", "contactWorldX",
-				nativeBaseX() + contact.getSceneX(), "contactWorldY", nativeBaseY() + contact.getSceneY(), "state",
-				hazard.getState(), "damaging", hazard.getDamaging(), "sourceEligibility", hazard.getSourceEligibility(),
-				"surfaceRuleKey", hazard.getRuleKey(), "stateEvidence", hazard.getEvidence(), "mapRef",
-				hazard.getMapRef(), "observedCycle", client.getGameCycle(), "observationStage",
+			Map<String, Object> witness = new LinkedHashMap<>(data("kind", "OBJECT_SURFACE", "name", hazard.getName(),
+				"objectId", hazard.getId(), "baseObjectId", hazard.getBaseId(), "objectKind", kind,
+				"objectObservationId", surfaceObservationIds.id(object), "worldViewId", nativeViewId(), "plane", plane,
+				"sceneKey", nativeView() != null && nativeScene() != null ? currentSceneKey : null, "scopeEvidence",
+				"NATIVE_SCENE_TILE_MEMBERSHIP", "contactWorldX", nativeBaseX() + contact.getSceneX(), "contactWorldY",
+				nativeBaseY() + contact.getSceneY(), "state", hazard.getState(), "damaging", hazard.getDamaging(),
+				"sourceEligibility", hazard.getSourceEligibility(), "surfaceRuleKey", hazard.getRuleKey(),
+				"stateEvidence", hazard.getEvidence(), "mapRef", hazard.getMapRef(), "observedCycle",
+				client.getGameCycle(), "observationStage",
 				gameTickInProgress ? "DEFERRED_RESOLUTION" : "HITSPLAT_CALLBACK", "defenderPositionEvidence",
 				serverTargetKnown ? "SERVER_REPORTED_TILE" : "CLIENT_RENDER_FALLBACK"));
 			DamageMap.ObjectHazardRule surfaceRule = damageMap.objectHazardRule(hazard.getBaseId());
 			if (surfaceRule != null && ("CONDITIONAL_HP_OBJECT_FOOTPRINT".equals(surfaceRule.getSurfaceOperator())
 				|| "CONDITIONAL_HP_TILE".equals(surfaceRule.getSurfaceOperator())))
 			{
-				com.tickreplaylogger.capture.CallbackFieldObservation scope = new com.tickreplaylogger.capture.CallbackFieldObservation();
-				net.runelite.api.WorldView own = scope.sample("worldView", object::getWorldView);
+				CallbackFieldObservation scope = new CallbackFieldObservation();
+				WorldView own = scope.sample("worldView", object::getWorldView);
 				Integer ownId = own == null ? null : scope.value("worldViewId", own::getId);
 				Integer ownPlane = scope.value("plane", object::getPlane);
-				witness.put("objectNativeScopeKnown", ownId != null && ownId >= 0 && ownPlane != null && ownPlane >= 0 && ownPlane <= 3);
+				witness.put("objectNativeScopeKnown",
+					ownId != null && ownId >= 0 && ownPlane != null && ownPlane >= 0 && ownPlane <= 3);
 				witness.put("objectWorldViewId", ownId);
 				witness.put("objectPlane", ownPlane);
 				witness.put("objectNativeScopeObservation", scope.data());
 			}
 			if (!witnesses.contains(witness))
-					witnesses.add(java.util.Collections.unmodifiableMap(witness));
+			{
+				witnesses.add(Collections.unmodifiableMap(witness));
+			}
 		}
 	}
 
 	/** Server tile may lead the rendered actor during movement; surfaces use tile occupancy. */
-	private List<String> hazardsAtReportedPosition(WorldPoint reported, LocalPoint rendered)
-	{
-		return hazardsAtReportedPosition(reported, rendered, null);
-	}
-
-	private List<String> hazardsAtReportedPosition(WorldPoint reported, LocalPoint rendered,
-		List<java.util.Map<String, Object>> witnesses)
+	private void observeHazardsAtReportedPosition(WorldPoint reported, LocalPoint rendered,
+		List<Map<String, Object>> witnesses)
 	{
 		if (reported == null)
-			return hazardsOnTile(rendered, nativePlane(), witnesses, false);
+		{
+			observeHazardsOnTile(rendered, nativePlane(), witnesses, false);
+			return;
+		}
 		int x = reported.getX() - nativeBaseX(), y = reported.getY() - nativeBaseY();
-		net.runelite.api.WorldView view = nativeView();
+		WorldView view = nativeView();
 		int width = activeHitScope != null ? activeHitScope.width : view == null ? 104 : view.getSizeX(),
 			height = activeHitScope != null ? activeHitScope.height : view == null ? 104 : view.getSizeY();
 		// A known tile outside this view cannot be replaced by a different rendered tile.
 		if (x < 0 || y < 0 || x >= width || y >= height)
-			return java.util.Collections.emptyList();
-		return hazardsOnTile(new LocalPoint(x * 128 + 64, y * 128 + 64), reported.getPlane(), witnesses, true);
+		{
+			return;
+		}
+		observeHazardsOnTile(new LocalPoint(x * 128 + 64, y * 128 + 64), reported.getPlane(), witnesses, true);
 	}
 
-	private List<String> hazardsOnTile(LocalPoint pl, int plane)
-	{
-		return hazardsOnTile(pl, plane, null, false);
-	}
-
-	private List<String> hazardsOnTile(LocalPoint pl, int plane, List<java.util.Map<String, Object>> witnesses,
+	private void observeHazardsOnTile(LocalPoint pl, int plane, List<Map<String, Object>> witnesses,
 		boolean serverTargetKnown)
 	{
-		java.util.Set<String> names = new java.util.LinkedHashSet<>();
 		if (damageMap == null)
 		{
-			return new ArrayList<>(names);
+			return;
 		}
 		if (pl == null)
 		{
-			return new ArrayList<>(names);
+			return;
 		}
 
 		// 1) Spot-anim graphics objects on the player's exact scene tile.
@@ -2617,34 +2155,38 @@ public class TickReplayLoggerPlugin extends Plugin
 				continue;
 			}
 			if (go.getLevel() != plane || go.finished() || go.getStartCycle() > client.getGameCycle())
+			{
 				continue;
-			net.runelite.api.WorldView graphicView = go.getWorldView();
+			}
+			WorldView graphicView = go.getWorldView();
 			if (graphicView != null && nativeView() != null && graphicView != nativeView())
+			{
 				continue;
+			}
 			Integer graphicViewId = graphicView == null ? null : graphicView.getId();
 			int graphicId = go.getId();
-			com.tickreplaylogger.capture.CombatCatalog.GraphicSurface surface = damageMap.catalog().graphicSurface(graphicId);
+			CombatCatalog.GraphicSurface surface = damageMap.catalog().graphicSurface(graphicId);
 			String name = damageMap.catalog().damagingGraphicName(graphicId);
-			if (name != null)
-			{
-				names.add(name);
-			}
 			if (witnesses != null)
 			{
 				Map<String, Object> witness = data("kind", "GRAPHIC_SURFACE", "name", name, "graphicId", graphicId,
 					"graphicObservationId", surfaceObservationIds.id(go), "worldViewId", graphicViewId, "plane", plane,
 					"sceneKey", graphicView != null && graphicView == nativeView() ? currentSceneKey : null,
 					"contactWorldX", nativeBaseX() + pl.getSceneX(), "contactWorldY", nativeBaseY() + pl.getSceneY(),
-					"worldX", nativeBaseX() + loc.getSceneX(), "worldY", nativeBaseY() + loc.getSceneY(),
-					"startCycle", go.getStartCycle(), "finished", false, "observedCycle", client.getGameCycle(),
-					"state", surface == null ? null : surface.getState(), "damaging", surface == null ? null : surface.getDamaging(),
-					"sourceEligibility", surface == null || surface.getDamaging() == null ? "UNCLASSIFIED_GRAPHIC_SURFACE"
+					"worldX", nativeBaseX() + loc.getSceneX(), "worldY", nativeBaseY() + loc.getSceneY(), "startCycle",
+					go.getStartCycle(), "finished", false, "observedCycle", client.getGameCycle(), "state",
+					surface == null ? null : surface.getState(), "damaging",
+					surface == null ? null : surface.getDamaging(), "sourceEligibility",
+					surface == null || surface.getDamaging() == null ? "UNCLASSIFIED_GRAPHIC_SURFACE"
 						: surface.getDamaging() ? "ELIGIBLE_REFERENCE_SURFACE" : "NOT_DAMAGE_SURFACE",
-					"surfaceRuleKey", surface == null ? null : surface.getRuleKey(), "mapRef", surface == null ? null : surface.getMapRef(),
-					"observationStage", gameTickInProgress ? "DEFERRED_RESOLUTION" : "HITSPLAT_CALLBACK",
-					"defenderPositionEvidence", serverTargetKnown ? "SERVER_REPORTED_TILE" : "CLIENT_RENDER_FALLBACK");
+					"surfaceRuleKey", surface == null ? null : surface.getRuleKey(), "mapRef",
+					surface == null ? null : surface.getMapRef(), "observationStage",
+					gameTickInProgress ? "DEFERRED_RESOLUTION" : "HITSPLAT_CALLBACK", "defenderPositionEvidence",
+					serverTargetKnown ? "SERVER_REPORTED_TILE" : "CLIENT_RENDER_FALLBACK");
 				if (!witnesses.contains(witness))
+				{
 					witnesses.add(witness);
+				}
 			}
 		}
 
@@ -2652,31 +2194,45 @@ public class TickReplayLoggerPlugin extends Plugin
 		for (NPC npc : nativeNpcs())
 		{
 			if (npc == null)
+			{
 				continue;
-			net.runelite.api.WorldView contactView = npc.getWorldView();
+			}
+			WorldView contactView = npc.getWorldView();
 			if (contactView != null && contactView != nativeView())
+			{
 				continue;
+			}
 			WorldPoint position = npc.getWorldLocation();
 			if (position == null || position.getPlane() != plane)
+			{
 				continue;
-			net.runelite.api.NPCComposition definition = npc.getTransformedComposition();
+			}
+			if (witnesses != null && activeHitCallbackContext != null && !gameTickInProgress
+				&& npc.getInteracting() == nativeLocalPlayer() && npc.getAnimation() >= 0)
+			{
+				witnesses.add(impactActivityWitness(npc, activeHitCallbackContext, observationSequence));
+			}
+			NPCComposition definition = npc.getTransformedComposition();
 			if (definition == null)
+			{
 				definition = npc.getComposition();
+			}
 			if (definition == null || definition.getSize() < 1 || definition.getSize() > 64)
+			{
 				continue;
+			}
 			int size = definition.getSize(), targetX = nativeBaseX() + pl.getSceneX(),
 				targetY = nativeBaseY() + pl.getSceneY();
 			// Presence is a recorded source alternative, not contact, activation or an observed attack.
 			if (witnesses != null && !gameTickInProgress && sourceAssociationNpcs.contains(definition.getId())
 				&& contactView != null && nativeScene() != null)
 			{
-				Map<String, Object> witness = data("kind", "NPC_EMITTER", "npcId", definition.getId(),
-					"baseNpcId", npc.getId(), "actorRef", actorRef(npc), "observedName", npc.getName(),
-					"combatLevel", npc.getCombatLevel(), "worldX", position.getX(), "worldY", position.getY(),
-					"plane", position.getPlane(), "observedSize", size, "worldViewId", contactView.getId(),
-					"sceneKey", currentSceneKey, "scopeEvidence", "NPC_WORLD_VIEW_READ", "observedCycle",
-					client.getGameCycle(), "observationStage", "HITSPLAT_CALLBACK", "sourceEligibility",
-					"DECLARED_SOURCE_ASSOCIATION");
+				Map<String, Object> witness = data("kind", "NPC_EMITTER", "npcId", definition.getId(), "baseNpcId",
+					npc.getId(), "actorRef", actorRef(npc), "observedName", npc.getName(), "combatLevel",
+					npc.getCombatLevel(), "worldX", position.getX(), "worldY", position.getY(), "plane",
+					position.getPlane(), "observedSize", size, "worldViewId", contactView.getId(), "sceneKey",
+					currentSceneKey, "scopeEvidence", "NPC_WORLD_VIEW_READ", "observedCycle", client.getGameCycle(),
+					"observationStage", "HITSPLAT_CALLBACK", "sourceEligibility", "DECLARED_SOURCE_ASSOCIATION");
 				if (!witnesses.contains(witness))
 				{
 					witnesses.add(witness);
@@ -2686,19 +2242,25 @@ public class TickReplayLoggerPlugin extends Plugin
 			if (size == 1)
 			{
 				if (position.getX() != targetX || position.getY() != targetY)
+				{
 					continue;
+				}
 			}
 			else
 			{
 				// Require the API area, server anchor and transformed definition to agree; never
 				// substitute a rendered footprint lagging behind a known server position.
-				net.runelite.api.coords.WorldArea area = npc.getWorldArea();
+				WorldArea area = npc.getWorldArea();
 				if (area == null || area.getPlane() != plane || area.getX() != position.getX()
 					|| area.getY() != position.getY() || area.getWidth() != size || area.getHeight() != size)
+				{
 					continue;
+				}
 				if (targetX < area.getX() || targetY < area.getY() || (long) targetX >= ((long) area.getX() + size)
 					|| (long) targetY >= ((long) area.getY() + size))
+				{
 					continue;
+				}
 				coherentFootprint = true;
 			}
 			int contactNpcId = observedNpcId(npc), contactCombatLevel = npc.getCombatLevel();
@@ -2707,58 +2269,76 @@ public class TickReplayLoggerPlugin extends Plugin
 				contactNormalContext, size, coherentFootprint);
 			if (name != null)
 			{
-				names.add(name);
 				if (witnesses != null)
 				{
-					java.util.Map<String, Object> witness = data("name", name, "kind", "NPC_CONTACT", "npcId",
-						contactNpcId, "combatLevel", contactCombatLevel, "normalWorldContextObserved", contactNormalContext,
-						"baseNpcId", npc.getId(), "actorRef", actorRef(npc), "observedName",
-						npc.getName(), "worldX", position.getX(), "worldY", position.getY(), "plane",
+					int baseNpcId = npc.getId();
+					String sourceRef = actorRef(npc), observedName = npc.getName();
+					Integer sourceViewId = contactView == null ? null : contactView.getId();
+					// This is the source state already read for this exact contact, not a later actor sample.
+					Map<String, Object> originalActorState = data("actorKind", "NPC", "npcId", contactNpcId,
+						"baseNpcId", baseNpcId, "name", observedName, "combatLevel", contactCombatLevel,
+						"normalWorldContextObserved", contactNormalContext, "modelOverridesPresent",
+						contactNormalContext ? Boolean.FALSE : null, "worldViewId", sourceViewId, "worldPositionKnown",
+						true, "planeKnown", true, "worldX", position.getX(), "worldY", position.getY(), "plane",
+						position.getPlane(), "size", size, "worldAreaKnown", coherentFootprint,
+						"worldAreaWorldViewKnown", coherentFootprint && sourceViewId != null, "worldAreaWorldViewId",
+						coherentFootprint ? sourceViewId : null, "worldAreaEvidence",
+						coherentFootprint ? "ACTOR_GET_WORLD_AREA" : null, "worldArea",
+						coherentFootprint
+							? data("minX", position.getX(), "minY", position.getY(), "maxX",
+								(long) position.getX() + size - 1, "maxY", (long) position.getY() + size - 1, "plane",
+								position.getPlane())
+							: null);
+					Map<String, Object> witness = data("name", name, "kind", "NPC_CONTACT", "npcId", contactNpcId,
+						"combatLevel", contactCombatLevel, "normalWorldContextObserved", contactNormalContext,
+						"originalActorState", originalActorState, "baseNpcId", baseNpcId, "actorRef", sourceRef,
+						"observedName", observedName, "worldX", position.getX(), "worldY", position.getY(), "plane",
 						position.getPlane(), "observedSize", size, "contactPredicate",
 						coherentFootprint ? "COHERENT_SERVER_FOOTPRINT" : "SAME_SERVER_TILE", "footprintWidth", size,
-						"footprintHeight", size, "worldViewId",
-						contactView == null ? null : contactView.getId(),
-						"sceneKey", contactView != null && contactView == nativeView() && nativeScene() != null ? currentSceneKey : null,
-						"scopeEvidence", "NPC_WORLD_VIEW_READ", "observedCycle",
-						client.getGameCycle(), "observationStage",
-						gameTickInProgress ? "DEFERRED_RESOLUTION" : "HITSPLAT_CALLBACK", "defenderPositionEvidence",
-						serverTargetKnown ? "SERVER_REPORTED_TILE" : "CLIENT_RENDER_FALLBACK",
-						"sourceEligibility", "ELIGIBLE_REFERENCE_SURFACE", "damaging", true);
+						"footprintHeight", size, "worldViewId", sourceViewId, "sceneKey",
+						contactView != null && contactView == nativeView() && nativeScene() != null ? currentSceneKey
+							: null,
+						"scopeEvidence", "NPC_WORLD_VIEW_READ", "observedCycle", client.getGameCycle(),
+						"observationStage", gameTickInProgress ? "DEFERRED_RESOLUTION" : "HITSPLAT_CALLBACK",
+						"defenderPositionEvidence",
+						serverTargetKnown ? "SERVER_REPORTED_TILE" : "CLIENT_RENDER_FALLBACK", "sourceEligibility",
+						"ELIGIBLE_REFERENCE_SURFACE", "damaging", true);
 					if (!witnesses.contains(witness))
+					{
 						witnesses.add(witness);
+					}
 				}
 			}
 		}
 
 		// 2) Ground / game objects on the player's exact scene tile.
 		{
-			net.runelite.api.Scene scene = nativeScene();
+			Scene scene = nativeScene();
 			if (scene != null && scene.getTiles() != null && plane >= 0 && plane < scene.getTiles().length)
 			{
 				int sx = pl.getSceneX();
 				int sy = pl.getSceneY();
-				net.runelite.api.Tile[][] planeTiles = scene.getTiles()[plane];
+				Tile[][] planeTiles = scene.getTiles()[plane];
 				if (sx >= 0 && sx < planeTiles.length && sy >= 0 && sy < planeTiles[sx].length)
 				{
-					net.runelite.api.Tile tile = planeTiles[sx][sy];
+					Tile tile = planeTiles[sx][sy];
 					if (tile != null)
 					{
-						net.runelite.api.GroundObject gnd = tile.getGroundObject();
+						GroundObject gnd = tile.getGroundObject();
 						if (gnd != null)
 						{
 							ObjectHazards.Resolved hazard = ObjectHazards.resolve(client, gnd, damageMap);
-							observeObjectSurface(names, witnesses, gnd, "groundObject", hazard, pl, plane,
-								serverTargetKnown);
+							observeObjectSurface(witnesses, gnd, "groundObject", hazard, pl, plane, serverTargetKnown);
 						}
-						net.runelite.api.GameObject[] gos = tile.getGameObjects();
+						GameObject[] gos = tile.getGameObjects();
 						if (gos != null)
 						{
-							for (net.runelite.api.GameObject g : gos)
+							for (GameObject g : gos)
 							{
 								if (g != null)
 								{
 									ObjectHazards.Resolved hazard = ObjectHazards.resolve(client, g, damageMap);
-									observeObjectSurface(names, witnesses, g, "gameObject", hazard, pl, plane,
+									observeObjectSurface(witnesses, g, "gameObject", hazard, pl, plane,
 										serverTargetKnown);
 								}
 							}
@@ -2768,29 +2348,26 @@ public class TickReplayLoggerPlugin extends Plugin
 			}
 		}
 		// Read failures propagate to the per-hit guard. Missing evidence must not select a rival source.
-		return new ArrayList<>(names);
 	}
 
-	/**
-	 * Try to match a pending projectile to the current hitsplat.
-	 * Consumes the matched projectile so it isn't matched again.
-	 * Uses adaptive matching window: Â±1 tick for fast, Â±2 for slow projectiles.
-	 */
+	/** Local actor from the original hit scope, when one is bound. */
 	private Player nativeLocalPlayer()
 	{
 		return activeHitScope == null ? client.getLocalPlayer() : activeHitScope.localPlayer;
 	}
 
-	private net.runelite.api.WorldView nativeView()
+	private WorldView nativeView()
 	{
-		return activeHitScope == null ? com.tickreplaylogger.capture.WorldViews.active(client) : activeHitScope.view;
+		return activeHitScope == null ? WorldViews.active(client) : activeHitScope.view;
 	}
 
 	private Integer nativeViewId()
 	{
 		if (activeHitScope != null)
+		{
 			return activeHitScope.viewId;
-		net.runelite.api.WorldView view = nativeView();
+		}
+		WorldView view = nativeView();
 		return view == null ? null : view.getId();
 	}
 
@@ -2812,7 +2389,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			: nativeView() == null ? client.getBaseY() : nativeView().getBaseY();
 	}
 
-	private net.runelite.api.Scene nativeScene()
+	private Scene nativeScene()
 	{
 		return activeHitScope != null ? activeHitScope.scene
 			: nativeView() == null ? client.getScene() : nativeView().getScene();
@@ -2822,11 +2399,17 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		List<NPC> out = new ArrayList<>();
 		if (activeHitScope != null && activeHitScope.view == null)
+		{
 			return out;
+		}
 		Iterable<? extends NPC> actors = nativeView() == null ? client.getNpcs() : nativeView().npcs();
 		if (actors != null)
+		{
 			for (NPC actor : actors)
+			{
 				out.add(actor);
+			}
+		}
 		return out;
 	}
 
@@ -2834,234 +2417,41 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		List<Player> out = new ArrayList<>();
 		if (activeHitScope != null && activeHitScope.view == null)
+		{
 			return out;
+		}
 		Iterable<? extends Player> actors = nativeView() == null ? client.getPlayers() : nativeView().players();
 		if (actors != null)
+		{
 			for (Player actor : actors)
+			{
 				out.add(actor);
+			}
+		}
 		return out;
 	}
 
 	private Iterable<? extends GraphicsObject> nativeGraphics()
 	{
 		if (activeHitScope != null && activeHitScope.view == null)
-			return java.util.Collections.emptyList();
+		{
+			return Collections.emptyList();
+		}
 		Iterable<? extends GraphicsObject> graphics = nativeView() == null ? client.getGraphicsObjects()
 			: nativeView().getGraphicsObjects();
-		return graphics == null ? java.util.Collections.emptyList() : graphics;
+		return graphics == null ? Collections.emptyList() : graphics;
 	}
 
 	private boolean isPvpContext()
 	{
 		try
 		{
-			return client.getVarbitValue(net.runelite.api.Varbits.PVP_SPEC_ORB) == 1;
+			return client.getVarbitValue(Varbits.PVP_SPEC_ORB) == 1;
 		}
 		catch (RuntimeException unavailable)
 		{
 			return false;
 		}
-	}
-
-	private boolean projectileCouldMatch(PendingProjectile candidate, PendingHit hit)
-	{
-		if (candidate.epoch != hit.epoch || candidate.plane != hit.plane || candidate.worldView != hit.worldView
-			|| candidate.scene != hit.scene)
-			return false;
-		if (candidate.sourceIsPlayer && !isPvpContext() && !projectileSourceUnestablished(candidate))
-			return false;
-		if (!candidate.timingKnown)
-			return candidate.removedObservedTick == null || currentGameTick <= candidate.removedObservedTick + 2;
-		int tolerance = candidate.travelTicks >= 3 ? 2 : 1;
-		// Callback ticks and rounded arrival estimates have different boundary
-		// conventions. When both client cycles were read, compare those directly.
-		if (candidate.endCycle > 0 && hit.observedCycle != null)
-			return Math.abs((long) hit.observedCycle - candidate.endCycle) <= 30L * tolerance;
-		return Math.abs(currentGameTick - candidate.estimatedArrivalTick) <= tolerance;
-	}
-
-	private boolean projectileSourceUnestablished(PendingProjectile candidate)
-	{
-		return candidate.sourceSamplingUnavailable
-			|| candidate.latestObservation != null && candidate.latestObservation.getSourceHistory() != null
-				&& candidate.latestObservation.getSourceHistory().isAttributionUnestablished();
-	}
-
-	private Map<String, Object> projectileLatestSource(PendingProjectile candidate)
-	{
-		ProjectileState state = candidate.latestObservation;
-		return state == null ? null
-			: data("observationId", state.getObservationId(), "observedTick", state.getObservedTick(), "observedCycle",
-				state.getObservedCycle(), "sourceRef", state.getSourceRef(), "sourceNpcId", state.getSourceNpcId(),
-				"sourceName", state.getSourceName(), "sourceActorKnown", state.getSourceActorKnown(), "sourceNameKnown",
-				state.getSourceNameKnown());
-	}
-
-	private void retainTypedHitProjectileAlternatives(PendingHit hit)
-	{
-		// Missing optional context cannot establish that a compatible projectile was unused.
-		for (PendingProjectile candidate : pendingProjectiles)
-			if (projectileCouldMatch(candidate, hit))
-			{
-				candidate.ambiguousForSequences.add(hit.sequence);
-				lastAttributionCandidates
-					.add(data("kind", "PROJECTILE_MAY_HAVE_CAUSED_TYPED_DAMAGE", "name", candidate.sourceName,
-						"actorRef", candidate.sourceRef, "projectileId", candidate.projectileId, "observationSequence",
-						hit.sequence, "projectileObservationId", candidate.projectileObservationId, "sourceHistory",
-						candidate.latestObservation == null ? null : candidate.latestObservation.getSourceHistory(),
-						"latestSourceObservation", projectileLatestSource(candidate), "sourceSamplingUnavailable",
-						candidate.sourceSamplingUnavailable, "matchBasis",
-						candidate.timingKnown ? "ARRIVAL_WINDOW" : "TIMING_UNAVAILABLE", "evidence",
-						"Damage type does not establish a recurring tick or identify its inflictor"));
-			}
-	}
-
-	private String matchPendingProjectile(PendingHit hit, List<String> hazards, List<NPC> npcCandidates,
-		List<Player> playerCandidates)
-	{
-		projectileMatchAmbiguous = false;
-		List<PendingProjectile> matches = new ArrayList<>();
-		for (PendingProjectile candidate : pendingProjectiles)
-		{
-			if (projectileCouldMatch(candidate, hit))
-				matches.add(candidate);
-		}
-		for (PendingProjectile candidate : matches)
-			lastAttributionCandidates.add(data("kind", "PROJECTILE_CORRELATION", "name", candidate.sourceName,
-				"actorRef", candidate.sourceRef, "projectileId", candidate.projectileId, "npcId",
-				candidate.sourceNpcId < 0 ? null : candidate.sourceNpcId, "combatLevel", candidate.sourceNpcLevel,
-				"firstObservedTick", candidate.spawnTick, "estimatedArrivalTick",
-				candidate.timingKnown ? candidate.estimatedArrivalTick : null, "arrivalGapTicks",
-				candidate.timingKnown ? currentGameTick - candidate.estimatedArrivalTick : null, "matchBasis",
-				!candidate.timingKnown ? "TIMING_UNAVAILABLE"
-					: candidate.endCycle > 0 && hit.observedCycle != null ? "OBSERVED_CLIENT_CYCLE_WINDOW"
-						: "ARRIVAL_WINDOW",
-				"hitObservedCycle", hit.observedCycle, "projectileEndCycle",
-				candidate.endCycle > 0 ? candidate.endCycle : null, "arrivalGapCycles",
-				candidate.endCycle > 0 && hit.observedCycle != null ? (long) hit.observedCycle - candidate.endCycle
-					: null,
-				"removedObservedTick", candidate.removedObservedTick, "previouslyCandidateForObservationSequences",
-				new ArrayList<>(candidate.ambiguousForSequences), "sourceHistory",
-				candidate.latestObservation == null ? null : candidate.latestObservation.getSourceHistory(),
-				"latestSourceObservation", projectileLatestSource(candidate), "sourceSamplingUnavailable",
-				candidate.sourceSamplingUnavailable, "projectileObservationId", candidate.projectileObservationId));
-		for (String hazard : hazards)
-			lastAttributionCandidates.add(hazardCandidate(hit, hazard));
-		int competing = 0;
-		if (!matches.isEmpty())
-		{
-			for (NPC npc : npcCandidates)
-			{
-				lastAttributionCandidates.add(npcCandidate(npc));
-				// A reviewed projectile wind-up supports this same actor's projectile
-				// hypothesis. Other actions remain independent competing possibilities.
-				String ref = actorRef(npc);
-				if (!requiresProjectile(npc) || ref == null
-					|| matches.stream().noneMatch(candidate -> ref.equals(candidate.sourceRef)))
-					competing++;
-			}
-			// A current action can differ from this actor's older projectile. A shared
-			// identity supports a qualified actor name, not a unique attack or impact.
-			for (Player other : playerCandidates)
-			{
-				lastAttributionCandidates.add(playerCandidate(other));
-				competing++;
-			}
-		}
-		boolean reusedAmbiguous = matches.stream().anyMatch(candidate -> !candidate.ambiguousForSequences.isEmpty());
-		boolean timingUnavailable = matches.stream().anyMatch(candidate -> !candidate.timingKnown);
-		if (matches.stream().anyMatch(this::projectileSourceUnestablished))
-		{
-			for (PendingProjectile candidate : matches)
-				candidate.ambiguousForSequences.add(hit.sequence);
-			boolean changed = matches.stream()
-				.anyMatch(candidate -> candidate.latestObservation != null
-					&& candidate.latestObservation.getSourceHistory() != null
-					&& candidate.latestObservation.getSourceHistory().isActorChanged());
-			projectileMatchAmbiguous = true;
-			lastAttributionEvidence = changed ? "PROJECTILE_SOURCE_OBSERVATIONS_CONFLICT"
-				: "PROJECTILE_SOURCE_HISTORY_UNESTABLISHED";
-			return null;
-		}
-		if (!hit.hpOutcomeKnown || unlinkedHpObservationCount(hit) > 1 || reusedAmbiguous || timingUnavailable)
-		{
-			if (matches.isEmpty())
-			{
-				for (NPC npc : npcCandidates)
-					lastAttributionCandidates.add(npcCandidate(npc));
-				for (Player other : playerCandidates)
-					lastAttributionCandidates.add(playerCandidate(other));
-			}
-			lastAttributionCandidates.add(data("kind",
-				timingUnavailable ? "PROJECTILE_TIMING_UNAVAILABLE"
-					: reusedAmbiguous ? "PROJECTILE_MAY_HAVE_ALREADY_IMPACTED"
-					: !hit.hpOutcomeKnown ? "OUTCOME_SURFACE_UNRESOLVED" : "OBSERVATION_BATCH_WITHOUT_UNIQUE_ATTACK_LINK",
-				"observationCount", unlinkedHpObservationCount(hit), "evidence",
-				timingUnavailable ? "Unavailable projectile timing cannot select or exclude a possible damage source"
-					: "No unique observation-to-attack association is exposed"));
-			for (PendingProjectile candidate : matches)
-				candidate.ambiguousForSequences.add(hit.sequence);
-			projectileMatchAmbiguous = true;
-			lastAttributionEvidence = timingUnavailable ? "PROJECTILE_TIMING_UNAVAILABLE"
-				: "MULTIPLE_POSSIBLE_DAMAGE_SOURCES";
-			return null;
-		}
-		if (matches.size() > 1 || (!matches.isEmpty() && (!hazards.isEmpty() || competing > 0)))
-		{
-			for (PendingProjectile candidate : matches)
-				candidate.ambiguousForSequences.add(hit.sequence);
-			projectileMatchAmbiguous = true;
-			lastAttributionEvidence = "MULTIPLE_POSSIBLE_DAMAGE_SOURCES";
-			// Several attacks can remain ambiguous while all observed hypotheses identify
-			// the same actor. Preserve that qualified identity without choosing an attack,
-			// consuming a projectile or borrowing its style/launch/prayer timing.
-			String commonRef = null, commonName = null;
-			boolean common = !lastAttributionCandidates.isEmpty();
-			for (Map<String, Object> candidate : lastAttributionCandidates)
-			{
-				Object ref = candidate.get("actorRef"), name = candidate.get("name");
-				if (!(ref instanceof String) || !(name instanceof String) || ((String) ref).isEmpty())
-				{
-					common = false;
-					break;
-				}
-				if (commonRef == null)
-				{
-					commonRef = (String) ref;
-					commonName = (String) name;
-				}
-				else if (!commonRef.equals(ref) || !commonName.equals(name))
-				{
-					common = false;
-					break;
-				}
-			}
-			if (common)
-			{
-				lastAttributionActorRef = commonRef;
-				lastAttributionConfidence = "TIMED";
-				lastAttributionSourceIsPlayer = matches.stream().allMatch(candidate -> candidate.sourceIsPlayer);
-				lastAttributionEvidence = "SAME_ACTOR_MULTIPLE_ATTACK_CANDIDATES";
-				return commonName;
-			}
-			return null;
-		}
-		if (matches.isEmpty())
-			return null;
-		PendingProjectile match = matches.get(0);
-		pendingProjectiles.remove(match);
-		projectileSourceLinks.remove(match.projectileObservationId);
-		// Observing a projectile source does not prove that this hitsplat came from it.
-		lastAttributionConfidence = match.hadSourceActor ? "TIMED" : "PROXIMITY";
-		lastAttributionLaunchTick = match.spawnTick;
-		lastAttributionSourceIsPlayer = match.sourceIsPlayer;
-		lastAttributionProjectileId = match.projectileId;
-		lastAttributionNpcId = match.sourceNpcId;
-		lastAttributionNpcLevel = match.sourceNpcLevel;
-		lastAttributionActorRef = match.sourceRef;
-		lastAttributionNormalContext = match.normalContext;
-		lastAttributionEvidence = "PROJECTILE_TIMING_CORRELATION";
-		return match.sourceName;
 	}
 
 	@Subscribe
@@ -3086,26 +2476,36 @@ public class TickReplayLoggerPlugin extends Plugin
 		List<String> settledIssues = new ArrayList<>();
 		GameState state = readHitContext("settledGameState", client::getGameState, settledIssues);
 		if (state == GameState.LOGGED_IN)
+		{
 			captureSessionObserved = true;
-		else if (state != null && !java.util.Arrays
+		}
+		else if (state != null && !Arrays
 			.asList(GameState.LOADING, GameState.CONNECTION_LOST, GameState.HOPPING, GameState.UNKNOWN).contains(state))
 		{
 			captureSessionObserved = false;
 			return;
 		}
 		if (!captureSessionObserved)
+		{
 			return;
+		}
 		if (state == null && settledIssues.isEmpty())
+		{
 			settledIssues.add("settledGameState: unavailable");
+		}
 		Player localPlayer = state == GameState.LOGGED_IN
 			? readHitContext("settledLocalPlayer", client::getLocalPlayer, settledIssues)
 			: null;
 		if (state == GameState.LOGGED_IN && localPlayer == null && settledIssues.isEmpty())
+		{
 			settledIssues.add("settledLocalPlayer: unavailable");
+		}
 		currentGameTick++;
 		tickRecorder.startNewTick();
 		if (worldRecorder != null)
+		{
 			worldRecorder.advanceTick(currentGameTick);
+		}
 		Integer apiTick = readHitContext("boundaryApiTickCount", client::getTickCount, settledIssues);
 		Integer cycle = readHitContext("boundaryGameCycle", client::getGameCycle, settledIssues);
 		tickRecorder.setBoundaryContext(state == null ? null : state.name(), apiTick, cycle);
@@ -3114,23 +2514,31 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			tickRecorder.markStateUnavailable("localPlayer");
 			for (PendingHit hit : pendingHits)
+			{
 				hit.captureIssues.addAll(settledIssues);
+			}
 		}
 		try
 		{
 			runSettledStage("boundaryTelemetry", this::recordBoundaryTelemetry);
 			if (state == GameState.LOGGED_IN)
+			{
 				captureReadyGameTick(localPlayer, settledIssues);
+			}
 			else
+			{
 				captureUnreadyGameTick(
 					state == null ? "game state unavailable" : "world state not ready: " + state.name());
+			}
 		}
 		finally
 		{
-			runSettledStage("resourceImpactContext", () -> flushResourceImpactContexts(java.util.Collections.emptyMap()));
+			runSettledStage("resourceImpactContext", this::flushResourceImpactContexts);
 			projectilesThisTick.clear();
 			for (String issue : settledIssues)
+			{
 				tickRecorder.addCaptureIssue(issue);
+			}
 			tickRecorder.finalizeTick();
 		}
 
@@ -3183,11 +2591,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		tickRecorder.addCaptureIssue(issue);
 		tickRecorder.markStateUnavailable("movement");
 		tickRecorder.markStateUnavailable("callbackCoverage");
-		tickRecorder.updateObservedState(null, null, null, null, java.util.Collections.emptyList(), false);
+		tickRecorder.updateObservedState(null, null, null, null, Collections.emptyList(), false);
 		for (PendingHit hit : pendingHits)
+		{
 			hit.captureIssues.add(issue);
+		}
 		resolvePendingHits(null);
-		failedPickpockets.clear();
 		lastPlayerPosition = null;
 		lastMovementScope = null;
 		lastCaptureWorld = null;
@@ -3205,39 +2614,48 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void captureReadyGameTick(Player localPlayer, List<String> settledIssues)
 	{
-		// Expire old attacker records
-		runSettledStage("attackerExpiry",
-			() -> recentAttackers.values()
-				.removeIf(record -> currentGameTick - record.tickRecorded > ATTACKER_EXPIRY_TICKS
-					|| record.epoch != causalSceneEpoch || record.plane != nativePlane() || record.view != nativeView()
-					|| record.scene != nativeScene()));
-
 		// Expire old pending projectiles (arrival tick + grace window passed)
-		pendingProjectiles.removeIf(pp -> pp.timingKnown ? currentGameTick > pp.estimatedArrivalTick + 2
-			: pp.removedObservedTick != null && currentGameTick > pp.removedObservedTick + 2);
-		java.util.Set<Long> activePendingIds = new java.util.HashSet<>();
+		pendingProjectiles
+			.removeIf(pp -> pp.estimatedArrivalTick != null ? currentGameTick > pp.estimatedArrivalTick + 2
+				: pp.removedObservedTick != null && currentGameTick > pp.removedObservedTick + 2);
+		Set<Long> activePendingIds = new HashSet<>();
 		for (PendingProjectile candidate : pendingProjectiles)
+		{
 			activePendingIds.add(candidate.projectileObservationId);
+		}
 		projectileSourceLinks.keySet().retainAll(activePendingIds);
 
-		// Clean up processed projectile references for expired projectiles
-		runSettledStage("projectileExpiry",
-			() -> processedProjectiles.removeIf(p -> projectileExpiryObserved(p, "projectileExpiry")));
+		// Cleanup is also required when rich world snapshots are disabled.
+		runSettledStage("projectileExpiry", () ->
+		{
+			for (Projectile projectile : new ArrayList<>(projectileIds.keySet()))
+			{
+				if (projectileExpiryObserved(projectile, "projectileExpiry"))
+				{
+					forgetProjectile(projectile);
+				}
+			}
+		});
 
 		// Movement failure must not prevent already observed hits from settling.
 		try
 		{
 			WorldPoint currentPosition = localPlayer.getWorldLocation();
 			if (currentPosition == null)
+			{
 				throw new IllegalStateException("position unavailable");
-			String movementScope = com.tickreplaylogger.capture.WorldViews
-				.scope(com.tickreplaylogger.capture.WorldViews.active(client));
+			}
+			String movementScope = WorldViews.scope(WorldViews.active(client));
 			if (movementScope == null)
+			{
 				movementScope = "legacy:" + nativeBaseX() + ":" + nativeBaseY() + ":" + nativePlane();
-			Integer distance = com.tickreplaylogger.capture.WorldViews.settledDistance(lastPlayerPosition,
-				currentPosition, lastMovementScope, movementScope);
-			if (!java.util.Objects.equals(lastMovementScope, movementScope))
+			}
+			Integer distance = WorldViews.settledDistance(lastPlayerPosition, currentPosition, lastMovementScope,
+				movementScope);
+			if (!Objects.equals(lastMovementScope, movementScope))
+			{
 				lastCaptureWorld = null;
+			}
 			if (distance != null)
 			{
 				if (config.trackMovement() && distance > 0)
@@ -3271,7 +2689,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		List<String> activePrayers = readHitContext("settledPrayers", this::getActivePrayers, settledIssues);
 		boolean prayerStateKnown = activePrayers != null;
 		if (activePrayers == null)
-			activePrayers = java.util.Collections.emptyList();
+		{
+			activePrayers = Collections.emptyList();
+		}
 
 		// Detect forced prayer deactivation (drained by NPC or ran out of prayer points)
 		if (config.trackPrayers() && prayerStateKnown && lastTickPrayerStateKnown)
@@ -3344,19 +2764,14 @@ public class TickReplayLoggerPlugin extends Plugin
 
 		if (worldRecorder != null && config.captureWorldSnapshots())
 		{
-			for (PendingProjectile candidate : pendingProjectiles)
-				candidate.sourceSamplingUnavailable = false;
 			settledProjectileSamples = new ArrayList<>(projectilesThisTick);
 			if (!runSettledStage("projectileSampling", () -> settledProjectileSamples = captureProjectiles()))
 			{
 				projectileCaptureIssues
 					.add("projectiles: settled sampling unavailable; callback observations retained");
-				for (PendingProjectile candidate : pendingProjectiles)
-					candidate.sourceSamplingUnavailable = true;
 			}
 		}
 		resolvePendingHits(localPlayer);
-		failedPickpockets.clear();
 
 		// Detect combat effects from UNAMBIGUOUS observed signals only (freeze/bind/teleblock graphics,
 		// poison/venom varp, stat-level drops). Knockback and disarm were removed: neither can be told
@@ -3365,9 +2780,13 @@ public class TickReplayLoggerPlugin extends Plugin
 		if (config.captureEffects())
 		{
 			if (!runSettledStage("statEffects", this::detectStatDrains))
+			{
 				lastBoostedCombat = null;
+			}
 			if (!runSettledStage("spotEffects", () -> detectEffectSpotanims(localPlayer)))
+			{
 				activeEffectSpotanims.clear();
+			}
 			if (!runSettledStage("statusEffects", this::detectDotOnset))
 			{
 				poisonBaselineObserved = false;
@@ -3391,60 +2810,70 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void resolveRecordedSources()
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null || sourceWorker == null)
+		{
 			return;
+		}
+		flushResourceImpactContexts();
 		List<DamageRecord> hits = new ArrayList<>(worldRecorder.receivedAtTick(currentGameTick));
 		hits.addAll(resourceImpactContexts.values());
+		resourceImpactContexts.clear();
 		if (hits.isEmpty())
+		{
 			return;
-		boolean needsActorCues = damageMap != null && damageMap.catalog().mechanismRules().hasOrderedActorRules();
-		List<com.tickreplaylogger.model.world.ObservedEvent> sourceObservations = needsActorCues
-			? worldRecorder.observationsForSourceResolution() : worldRecorder.observationsAtTickForSourceResolution(currentGameTick);
-		int retainedDelay = damageMap == null ? 0 : damageMap.catalog().mechanismRules().maximumRetainedLifecycleDelay();
-		com.tickreplaylogger.capture.WorldSnapshotRecorder.LifecycleObservationBatch lifecycleBatch = !needsActorCues && retainedDelay > 0
-			? worldRecorder.retainedLifecycleObservationsForSourceResolution(currentGameTick, retainedDelay, sourceObservations) : null;
-		if (lifecycleBatch != null) sourceObservations = lifecycleBatch.getEvents();
-		com.tickreplaylogger.capture.WorldSnapshotRecorder.ProjectileObservationBatch projectileBatch = needsActorCues || damageMap == null ? null
-			: worldRecorder.projectileObservationsForSourceResolution(damageMap.catalog().projectileEndpointHints().projectileIds(), currentGameTick, sourceObservations);
-		com.tickreplaylogger.capture.RecordedSourceResolver resolver = new com.tickreplaylogger.capture.RecordedSourceResolver(
-			worldRecorder.snapshotsForSourceResolution(), worldRecorder.scenesForSourceResolution(), damageMap,
-			projectileBatch == null ? sourceObservations : projectileBatch.getEvents(),
-			needsActorCues ? worldRecorder.captureGapsForSourceResolution() : retainedDelay > 0
-				? worldRecorder.retainedLifecycleGapsForSourceResolution(currentGameTick, retainedDelay)
-				: worldRecorder.captureGapsAtTickForSourceResolution(currentGameTick),
-			projectileBatch == null || projectileBatch.isComplete(), lifecycleBatch == null || lifecycleBatch.isComplete());
-		Map<Long, com.tickreplaylogger.model.world.SourceResolution> resolutions = new LinkedHashMap<>();
-		for (DamageRecord hit : hits)
-			if (hit.getObservationSequence() != null)
-				resolutions.put(hit.getObservationSequence(), resolver.resolve(hit));
-		worldRecorder.applySourceResolutions(currentGameTick, resolutions);
-		tickRecorder.applyReceivedSourceResolutions(currentGameTick, resolutions);
-		flushResourceImpactContexts(resolutions);
+		}
+		WorldSnapshotRecorder recorder = worldRecorder;
+		TickRecorder journal = tickRecorder;
+		ResolverV1Recording.EvidenceWindow window = recorder.freezeSourceEvidence(currentGameTick, observationSequence,
+			++sourceEvidenceRevision, hits);
+		sourceWorker.submit(window, hits, (resolved, failure) ->
+		{
+			if (worldRecorder != recorder || tickRecorder != journal)
+			{
+				return;
+			}
+			if (failure != null)
+			{
+				log.warn("Could not resolve recorded source observations", failure);
+				return;
+			}
+			Map<Integer, Map<Long, DamageRecord>> byTick = new LinkedHashMap<>();
+			for (Map.Entry<Long, DamageRecord> result : resolved.entrySet())
+			{
+				byTick.computeIfAbsent(result.getValue().getImpactTick(), ignored -> new LinkedHashMap<>())
+					.put(result.getKey(), result.getValue());
+			}
+			for (Map.Entry<Integer, Map<Long, DamageRecord>> tick : byTick.entrySet())
+			{
+				recorder.applyResolvedDamageRecords(tick.getKey(), tick.getValue());
+				journal.applyResolvedDamageRecords(tick.getKey(), tick.getValue());
+			}
+		});
 	}
 
-	private void flushResourceImpactContexts(Map<Long, com.tickreplaylogger.model.world.SourceResolution> resolutions)
+	private void flushResourceImpactContexts()
 	{
-		if (!resourceImpactContexts.isEmpty())
+		if (resourceImpactContexts.isEmpty())
 		{
-			Map<Long, Map<String, Object>> enrichments = new LinkedHashMap<>();
-			for (Map.Entry<Long, DamageRecord> entry : resourceImpactContexts.entrySet())
-			{
-				com.tickreplaylogger.model.world.SourceResolution resolution = resolutions.get(entry.getKey());
-				if (resolution == null) resolution = com.tickreplaylogger.capture.SourceEvidenceResolver.resolve(
-					java.util.Collections.emptyList(), entry.getValue().getAmount(), true, damageMap == null ? null : damageMap.catalog().id());
-				DamageRecord context = entry.getValue().toBuilder().sourceResolution(resolution).build();
-				List<String> possible = damageMap == null ? java.util.Arrays.asList("HP", "UNKNOWN")
-					: damageMap.catalog().possibleOutcomeSurfaces(context.getHitsplatType());
-				enrichments.put(entry.getKey(), data("attributionContext", context.toBuilder().sourceResolution(null)
-					.attributionCandidates(null).observedHazardContacts(null).build(), "attributionContextEvidence", "DERIVED_SOURCE_CONTEXT_ONLY",
-					"sourceResolution", context.getSourceResolution(), "attributionCandidates", context.getAttributionCandidates(),
-					"observedHazardContacts", context.getObservedHazardContacts(), "possibleOutcomeSurfaces", possible,
-					"attributionCaptureStatus", "SETTLED_DERIVED_SOURCE_CONTEXT", "resourceOutcomeStatus", "UNRESOLVED"));
-				String label = com.tickreplaylogger.util.SourceResolutionLabels.label(context.getSourceResolution());
-				tickRecorder.addEffectNote(resourceImpactNote(context.getAmount(), possible, label), context.getObservationSequence());
-			}
-			if (worldRecorder != null && config.captureWorldSnapshots()) worldRecorder.enrichHitsplatObservations(currentGameTick, enrichments);
-			resourceImpactContexts.clear();
+			return;
+		}
+		Map<Long, Map<String, Object>> enrichments = new LinkedHashMap<>();
+		for (DamageRecord context : resourceImpactContexts.values())
+		{
+			List<String> possible = damageMap == null ? Arrays.asList("HP", "UNKNOWN")
+				: damageMap.catalog().possibleOutcomeSurfaces(context.getHitsplatType());
+			enrichments.put(context.getObservationSequence(),
+				data("attributionContext",
+					context.toBuilder().attributionCandidates(null).observedHazardContacts(null).build(),
+					"attributionCandidates", context.getAttributionCandidates(), "observedHazardContacts",
+					context.getObservedHazardContacts(), "possibleOutcomeSurfaces", possible,
+					"attributionCaptureStatus", "RETAINED_IMPACT_CONTEXT", "resourceOutcomeStatus", "UNRESOLVED"));
+			tickRecorder.addEffectNote(resourceImpactNote(context.getAmount(), possible, "Unknown"),
+				context.getObservationSequence());
+		}
+		if (worldRecorder != null)
+		{
+			worldRecorder.enrichHitsplatObservations(currentGameTick, enrichments);
 		}
 	}
 
@@ -3469,7 +2898,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		causalSceneEpoch++;
 		lastCaptureWorld = null;
 		if (captureService != null)
+		{
 			runSettledStage("actorTimingReset", captureService::invalidateActorTiming);
+		}
 		tickRecorder.markStateUnavailable("worldSnapshot");
 		tickRecorder.addCaptureIssue("worldSnapshot: " + issue);
 	}
@@ -3484,6 +2915,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 
 		CallbackFieldObservation fields = new CallbackFieldObservation();
+		fields.put("actorState", callbackActorData(context.localPlayer, context));
 		String option = fields.value("option", event::getMenuOption);
 		String cleanTarget = fields.value("target", () ->
 		{
@@ -3494,18 +2926,27 @@ public class TickReplayLoggerPlugin extends Plugin
 		Integer param0 = fields.value("param0", event::getParam0);
 		fields.value("param1", event::getParam1);
 		Integer itemId = fields.value("itemId", event::getItemId);
-		fields.value("menuAction", () ->
-		{
-			net.runelite.api.MenuAction value = event.getMenuAction();
-			return value == null ? null : value.name();
-		});
-		net.runelite.api.MenuEntry entry = fields.sample("menuEntry", event::getMenuEntry);
+		MenuAction menuAction = fields.sample("menuAction", event::getMenuAction);
+		fields.put("menuAction", menuAction == null ? null : menuAction.name());
+		MenuEntry entry = fields.sample("menuEntry", event::getMenuEntry);
 		Actor related = null;
 		if (entry != null)
+		{
 			related = fields.sample("relatedActor", entry::getActor);
+		}
 		else
+		{
 			fields.unavailable("relatedActor", "MENU_ENTRY_UNAVAILABLE");
-		if (related instanceof NPC && config.captureWorldSnapshots())
+		}
+		if (!config.captureOtherPlayers() && (related instanceof Player || PLAYER_MENU_ACTIONS.contains(menuAction))
+			&& (related == null || related != context.localPlayer))
+		{
+			cleanTarget = cleanTarget == null ? null : "Other player";
+			fields.put("target", cleanTarget);
+			fields.put("identifier", null);
+			fields.put("otherPlayerRedacted", true);
+		}
+		if (related instanceof NPC)
 		{
 			// Preserve the input's first identity result, including null, before optional metadata reads.
 			callbackActorRef(related, context);
@@ -3516,26 +2957,30 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			ensureSelfDamageScope();
 			if (itemId != null)
+			{
 				selfDamageInputs.observe(damageMap == null ? null : damageMap.catalog(), itemId, option, eventTick(),
 					sequence);
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
 			tickRecorder.addCaptureIssue("menuSelfDamageContext: " + unavailable.getClass().getSimpleName());
 		}
 		if (option == null)
+		{
 			return;
+		}
 
-		if (option.toLowerCase(java.util.Locale.ROOT).contains("deactivate") && (option + " " + cleanTarget)
-			.toLowerCase(java.util.Locale.ROOT).replace("-", " ").contains("quick prayer"))
+		if (option.toLowerCase(Locale.ROOT).contains("deactivate")
+			&& (option + " " + cleanTarget).toLowerCase(Locale.ROOT).replace("-", " ").contains("quick prayer"))
+		{
 			manuallyDeactivatedPrayers.addAll(lastTickActivePrayers);
+		}
 		PlayerAction action = null;
 
 		// Eating food
 		if (option.equals("Pickpocket"))
 		{
-			pickpocketTarget = related instanceof NPC ? (NPC) related : null;
-			pickpocketTargetTick = currentGameTick;
 			action = PlayerAction.builder().type(PlayerAction.ActionType.PICKPOCKET).target(cleanTarget)
 				.description("Attempted pickpocket: " + cleanTarget).build();
 		}
@@ -3553,7 +2998,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			// A click is only an input. Label an actual later hit only with observed inventory evidence.
 			if (config.trackDamageReceived() && cleanTarget != null)
 			{
-				com.google.gson.JsonObject rule = itemId == null || damageMap == null ? null
+				JsonObject rule = itemId == null || damageMap == null ? null
 					: damageMap.catalog().selfDamageInput(itemId, option);
 				if (rule != null)
 				{
@@ -3562,14 +3007,18 @@ public class TickReplayLoggerPlugin extends Plugin
 					pendingSelfDamageItemId = itemId == null ? -1 : itemId;
 					pendingSelfDamageSlot = param0 == null ? -1 : param0;
 					pendingSelfDamageQuantity = null;
+					pendingSelfDamageInputSequence = sequence;
+					pendingSelfDamageSourceRef = rule.has("page") ? "wiki:" + rule.get("page").getAsString() : null;
+					pendingSelfDamagePageHash = rule.has("pageHash") ? rule.get("pageHash").getAsString() : null;
 					try
 					{
-						net.runelite.api.ItemContainer inventory = client
-							.getItemContainer(net.runelite.api.InventoryID.INVENTORY);
-						net.runelite.api.Item item = inventory == null || pendingSelfDamageSlot < 0 ? null
+						ItemContainer inventory = client.getItemContainer(InventoryID.INVENTORY);
+						Item item = inventory == null || pendingSelfDamageSlot < 0 ? null
 							: inventory.getItem(pendingSelfDamageSlot);
 						if (item != null && item.getId() == pendingSelfDamageItemId)
+						{
 							pendingSelfDamageQuantity = item.getQuantity();
+						}
 					}
 					catch (RuntimeException unavailable)
 					{
@@ -3634,7 +3083,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		ChatMessageType channel = event.getType();
 		// Reject player/private chat before reading client context or any message content.
 		if (channel != ChatMessageType.SPAM && channel != ChatMessageType.GAMEMESSAGE)
+		{
 			return;
+		}
 		String message = event.getMessage();
 		int timestamp = event.getTimestamp();
 		CallbackContext context = callbackContext();
@@ -3645,42 +3096,23 @@ public class TickReplayLoggerPlugin extends Plugin
 		if (captureService != null && config.captureWorldSnapshots())
 		{
 			if (!context.ready)
+			{
 				captureService.resetEncounterWaveCues();
+			}
 			else if (channel == ChatMessageType.GAMEMESSAGE)
 			{
 				if (preparePrimaryCaptureScope())
+				{
 					captureService.observeEncounterWaveCue(client, currentSceneKey, context.state, channel, message,
 						eventTick(), context.cycle, sequence);
+				}
 				else
+				{
 					captureService.resetEncounterWaveCues();
+				}
 			}
 		}
-		if (!context.ready || !config.trackDamageReceived() || message == null
-			|| !PICKPOCKET_FAILURE.matcher(stripColorTags(message)).matches())
-			return;
-		String name = null;
-		try
-		{
-			Player player = context.localPlayer;
-			boolean targetKnown = pickpocketTarget != null && !pickpocketTarget.isDead()
-				&& currentGameTick - pickpocketTargetTick <= 2 && player != null && player.getWorldLocation() != null
-				&& pickpocketTarget.getWorldLocation() != null
-				&& player.getWorldLocation().distanceTo(pickpocketTarget.getWorldLocation()) <= 2;
-			name = targetKnown ? pickpocketTarget.getName() : null;
-		}
-		catch (RuntimeException unavailable)
-		{
-			tickRecorder.addCaptureIssue("pickpocketContext: " + unavailable.getClass().getSimpleName());
-		}
-		failedPickpockets.add(name == null ? "Pickpocket failure" : stripColorTags(name) + " (pickpocket)");
-	}
 
-	/** Keep the NPC identity through projectile matching, including a unique proximity-resolved source. */
-	private int projectileNpcId(Projectile projectile, String source)
-	{
-		if (projectile.getSourceActor() instanceof NPC)
-			return observedNpcId((NPC) projectile.getSourceActor());
-		return -1; // A nearby/name-matched NPC does not establish the source actor's identity.
 	}
 
 	/** Reference applicability includes observed name compatibility; raw world context stays separate. */
@@ -3690,7 +3122,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			int id = observedNpcId(npc);
 			return id >= 0 && damageMap != null && damageMap.catalog() != null
-				&& com.tickreplaylogger.capture.NpcIdentityContext.normalWorldObserved(client, npc)
+				&& NpcIdentityContext.normalWorldObserved(client, npc)
 				&& damageMap.catalog().observedNameCompatible(id, npc.getName(), true);
 		}
 		catch (RuntimeException unavailable)
@@ -3701,8 +3133,7 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private int observedNpcId(NPC npc)
 	{
-		Integer id = com.tickreplaylogger.capture.NpcDefinitionObservation.capture(npc, new LinkedHashMap<>(), "")
-			.getId();
+		Integer id = NpcDefinitionObservation.capture(npc, new LinkedHashMap<>(), "").getId();
 		return id == null ? -1 : id;
 	}
 
@@ -3710,10 +3141,9 @@ public class TickReplayLoggerPlugin extends Plugin
 	public void onVarbitChanged(VarbitChanged event)
 	{
 		CallbackContext context = callbackContext();
-		com.tickreplaylogger.model.world.ObservedVarbitLayout layout = worldRecorder != null
-			&& config.captureWorldSnapshots() && context.allowed
-				? com.tickreplaylogger.capture.VarbitLayoutCapture.capture(client, event.getVarbitId())
-				: null;
+		ObservedVarbitLayout layout = worldRecorder != null && config.captureWorldSnapshots() && context.allowed
+			? VarbitLayoutCapture.capture(client, event.getVarbitId())
+			: null;
 		// Client-global primitive facts do not require a local actor identity or a map assignment.
 		observe("GAME_VARIABLE_CHANGED", null, null,
 			data("varpId", event.getVarpId(), "varbitId", event.getVarbitId(), "value", event.getValue(), "longValue",
@@ -3743,7 +3173,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		int previousSpecPercent = lastSpecialAttackPercent;
 		lastSpecialAttackPercent = currentSpecPercent;
 		if (context.localPlayer == null)
+		{
 			return;
+		}
 		// Global values/baselines survive failures of optional actor and scene enrichment.
 		try
 		{
@@ -3752,10 +3184,8 @@ public class TickReplayLoggerPlugin extends Plugin
 			if (previousSpecPercent >= 0 && currentSpecPercent < previousSpecPercent)
 			{
 				ensureSelfDamageScope();
-				net.runelite.api.ItemContainer equipment = client
-					.getItemContainer(net.runelite.api.InventoryID.EQUIPMENT);
-				net.runelite.api.Item weapon = equipment == null ? null
-					: equipment.getItem(net.runelite.api.EquipmentInventorySlot.WEAPON.getSlotIdx());
+				ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+				Item weapon = equipment == null ? null : equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
 				selfDamageInputs.observeResourceDecrease(damageMap == null ? null : damageMap.catalog(),
 					weapon == null ? -1 : weapon.getId(), eventTick(), sequence);
 			}
@@ -3805,13 +3235,13 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 
 		// Get weapon from equipment
-		net.runelite.api.ItemContainer equipment = client.getItemContainer(net.runelite.api.InventoryID.EQUIPMENT);
+		ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
 		if (equipment == null)
 		{
 			return "Unarmed";
 		}
 
-		net.runelite.api.Item weapon = equipment.getItem(net.runelite.api.EquipmentInventorySlot.WEAPON.getSlotIdx());
+		Item weapon = equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
 		if (weapon == null)
 		{
 			return "Unarmed";
@@ -3829,18 +3259,22 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		PrayerObservation sample = new PrayerObservation(client);
 		if (!sample.isFlagsComplete() || !sample.isOverheadResolved())
+		{
 			throw new IllegalStateException("Prayer sample unavailable or unresolved");
+		}
 		return getActivePrayers(sample);
 	}
 
 	private List<String> getActivePrayers(PrayerObservation observation)
 	{
 		List<String> active = new ArrayList<>();
-		java.util.Set<Prayer> activePrayerSet = java.util.EnumSet.noneOf(Prayer.class);
+		Set<Prayer> activePrayerSet = EnumSet.noneOf(Prayer.class);
 
 		// First pass: collect all active prayers
 		for (String prayer : observation.getActive())
+		{
 			activePrayerSet.add(Prayer.valueOf(prayer));
+		}
 
 		// Filter out base prayers when upgraded versions are active
 		// Check for Ruinous Powers / newer prayer variants by name
@@ -3862,38 +3296,30 @@ public class TickReplayLoggerPlugin extends Plugin
 		// Ranged: Eagle Eye < Rigour or Deadeye variant
 		if (activePrayerSet.contains(Prayer.RIGOUR) || hasDeadeye)
 		{
-			activePrayerSet.remove(Prayer.EAGLE_EYE);
-			activePrayerSet.remove(Prayer.HAWK_EYE);
-			activePrayerSet.remove(Prayer.SHARP_EYE);
+			activePrayerSet.removeAll(EnumSet.of(Prayer.EAGLE_EYE, Prayer.HAWK_EYE, Prayer.SHARP_EYE));
 		}
 
 		// Magic: Mystic Might < Augury or Mystic Vigour variant
 		if (activePrayerSet.contains(Prayer.AUGURY) || hasMysticVigour)
 		{
-			activePrayerSet.remove(Prayer.MYSTIC_MIGHT);
-			activePrayerSet.remove(Prayer.MYSTIC_LORE);
-			activePrayerSet.remove(Prayer.MYSTIC_WILL);
+			activePrayerSet.removeAll(EnumSet.of(Prayer.MYSTIC_MIGHT, Prayer.MYSTIC_LORE, Prayer.MYSTIC_WILL));
 		}
 
 		// Melee: Steel Skin/Ultimate Strength/Incredible Reflexes < Piety < Chivalry
 		if (activePrayerSet.contains(Prayer.PIETY))
 		{
 			activePrayerSet.remove(Prayer.CHIVALRY);
-			activePrayerSet.remove(Prayer.ULTIMATE_STRENGTH);
-			activePrayerSet.remove(Prayer.INCREDIBLE_REFLEXES);
-			activePrayerSet.remove(Prayer.STEEL_SKIN);
 		}
-		else if (activePrayerSet.contains(Prayer.CHIVALRY))
+		if (activePrayerSet.contains(Prayer.PIETY) || activePrayerSet.contains(Prayer.CHIVALRY))
 		{
-			activePrayerSet.remove(Prayer.ULTIMATE_STRENGTH);
-			activePrayerSet.remove(Prayer.INCREDIBLE_REFLEXES);
-			activePrayerSet.remove(Prayer.STEEL_SKIN);
+			activePrayerSet
+				.removeAll(EnumSet.of(Prayer.ULTIMATE_STRENGTH, Prayer.INCREDIBLE_REFLEXES, Prayer.STEEL_SKIN));
 		}
 
 		// Convert to formatted names
 		for (Prayer prayer : activePrayerSet)
 		{
-			active.add(formatPrayerName(prayer));
+			active.add(Text.titleCase(prayer));
 		}
 
 		return active;
@@ -3910,7 +3336,7 @@ public class TickReplayLoggerPlugin extends Plugin
 	private boolean isPrayerSwitch(String oldPrayer, List<String> activePrayers)
 	{
 		// Check each conflict group
-		for (java.util.Set<String> group : PRAYER_CONFLICT_GROUPS)
+		for (Set<String> group : PRAYER_CONFLICT_GROUPS)
 		{
 			if (group.contains(oldPrayer))
 			{
@@ -3928,36 +3354,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	/**
-	 * Format prayer enum name to readable string.
-	 * E.g., PROTECT_FROM_MELEE -> "Protect from Melee"
-	 */
-	private String formatPrayerName(Prayer prayer)
-	{
-		String name = prayer.name().replace("_", " ").toLowerCase();
-		// Capitalize first letter of each word
-		StringBuilder result = new StringBuilder();
-		boolean capitalizeNext = true;
-		for (char c : name.toCharArray())
-		{
-			if (c == ' ')
-			{
-				capitalizeNext = true;
-				result.append(c);
-			}
-			else if (capitalizeNext)
-			{
-				result.append(Character.toUpperCase(c));
-				capitalizeNext = false;
-			}
-			else
-			{
-				result.append(c);
-			}
-		}
-		return result.toString();
-	}
-
-	/**
 	 * Capture the rich per-tick {@link com.tickreplaylogger.model.world.WorldSnapshot} into the
 	 * death-reconstruction buffer. Captures the scene collision grid on load (Â§4b) and the full
 	 * world (all NPCs/players/projectiles/hazards) each tick. Local only â€” no network.
@@ -3966,51 +3362,63 @@ public class TickReplayLoggerPlugin extends Plugin
 	private boolean prepareCallbackCaptureScope(CallbackContext context)
 	{
 		if (context.primaryAttempted)
+		{
 			return context.primaryKnown;
+		}
 		context.primaryAttempted = true;
-		if (worldRecorder == null || captureService == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null || captureService == null)
+		{
 			return false;
+		}
 		try
 		{
-			com.tickreplaylogger.capture.ActorCallbackObservation.Sample local = context.actorSamples
-				.get(context.localPlayer);
+			ActorCallbackObservation.Sample local = context.actorSamples.get(context.localPlayer);
 			Object issues = local == null ? null : local.data().get("observationIssues");
 			if (issues instanceof Map && ((Map<?, ?>) issues).containsKey("worldView"))
+			{
 				return false;
+			}
 			context.localViewSampled = true;
 			context.localView = local != null ? local.view()
 				: context.localPlayer == null ? null : context.localPlayer.getWorldView();
-			net.runelite.api.WorldView active = context.localView;
+			WorldView active = context.localView;
 			if (active == null)
+			{
 				active = client.getTopLevelWorldView();
+			}
 			context.primaryView = active;
 			context.primaryPlane = active == null ? client.getPlane() : active.getPlane();
 			Integer viewId = null;
 			if (active != null)
 			{
 				boolean sampled = false;
-				for (com.tickreplaylogger.capture.ActorCallbackObservation.Sample sample : context.actorSamples
-					.values())
+				for (ActorCallbackObservation.Sample sample : context.actorSamples.values())
+				{
 					if (sample.view() == active)
 					{
 						viewId = integerField(sample.data(), "worldViewId");
 						sampled = true;
 						break;
 					}
+				}
 				if (!sampled)
+				{
 					viewId = active.getId();
+				}
 				if (viewId == null)
+				{
 					return false;
+				}
 			}
 			context.primaryViewId = viewId;
 			String scope = active == null ? client.getBaseX() + ":" + client.getBaseY() + ":" + context.primaryPlane
-				: com.tickreplaylogger.capture.WorldViews.scope(active, context.primaryPlane, viewId);
-			if (currentSceneKey == null || !java.util.Objects.equals(scope, sceneScopeSignature)
+				: WorldViews.scope(active, context.primaryPlane, viewId);
+			if (currentSceneKey == null || !Objects.equals(scope, sceneScopeSignature)
 				|| (needSceneCapture && !primarySceneReserved))
 			{
 				int[] regions = active == null ? client.getMapRegions() : active.getMapRegions();
 				boolean instance = active == null ? client.isInInstancedRegion() : active.isInstance();
-				currentSceneKey = Integer.toHexString(java.util.Arrays.hashCode(regions) ^ (instance ? 1 : 0)) + ":"
+				currentSceneKey = Integer.toHexString(Arrays.hashCode(regions) ^ (instance ? 1 : 0)) + ":"
 					+ (sceneLoadSeq++);
 				captureService.resetTiming();
 				lastCaptureWorld = null;
@@ -4031,19 +3439,21 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private boolean preparePrimaryCaptureScope()
 	{
-		if (worldRecorder == null || captureService == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null || captureService == null)
+		{
 			return false;
+		}
 		try
 		{
-			net.runelite.api.WorldView active = com.tickreplaylogger.capture.WorldViews.active(client);
+			WorldView active = WorldViews.active(client);
 			String scope = active == null ? nativeBaseX() + ":" + nativeBaseY() + ":" + nativePlane()
-				: com.tickreplaylogger.capture.WorldViews.scope(active);
-			if (currentSceneKey == null || !java.util.Objects.equals(scope, sceneScopeSignature)
+				: WorldViews.scope(active);
+			if (currentSceneKey == null || !Objects.equals(scope, sceneScopeSignature)
 				|| (needSceneCapture && !primarySceneReserved))
 			{
 				int[] regions = active == null ? client.getMapRegions() : active.getMapRegions();
 				boolean instance = active == null ? client.isInInstancedRegion() : active.isInstance();
-				int regionHash = java.util.Arrays.hashCode(regions) ^ (instance ? 1 : 0);
+				int regionHash = Arrays.hashCode(regions) ^ (instance ? 1 : 0);
 				currentSceneKey = Integer.toHexString(regionHash) + ":" + (sceneLoadSeq++);
 				captureService.resetTiming();
 				lastCaptureWorld = null;
@@ -4092,13 +3502,17 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				try
 				{
-					com.tickreplaylogger.model.world.SceneData metadata = captureService.captureScene(client,
-						currentSceneKey, sceneLoadSeq, config.captureSceneCollision());
+					SceneData metadata = captureService.captureScene(client, currentSceneKey, sceneLoadSeq,
+						config.captureSceneCollision());
 					worldRecorder.putScene(metadata);
 					if (metadata != null)
+					{
 						needSceneCapture = false;
+					}
 					else
+					{
 						snapshotIssues.add("sceneMetadata: unavailable");
+					}
 				}
 				catch (RuntimeException unavailable)
 				{
@@ -4108,13 +3522,15 @@ public class TickReplayLoggerPlugin extends Plugin
 				{
 					tickRecorder.markStateUnavailable("sceneMetadata");
 					for (String issue : snapshotIssues)
+					{
 						tickRecorder.addCaptureIssue(issue);
+					}
 				}
 			}
 
 			List<ProjectileState> observedProjectiles = settledProjectileSamples == null ? captureProjectiles()
 				: settledProjectileSamples;
-			com.tickreplaylogger.model.world.WorldSnapshot snapshot = scopeKnown
+			WorldSnapshot snapshot = scopeKnown
 				? captureService.captureTick(client, currentGameTick, currentSceneKey, observedProjectiles,
 					lastCaptureWorld, config.captureOtherPlayers(), config.captureSceneCollision(),
 					config.captureSceneTerrain())
@@ -4125,26 +3541,31 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				if (!projectileCaptureIssues.isEmpty() || !snapshotIssues.isEmpty())
 				{
-					java.util.Map<String, String> coverage = new java.util.LinkedHashMap<>(
-						snapshot.getCaptureCoverage());
+					Map<String, String> coverage = new LinkedHashMap<>(snapshot.getCaptureCoverage());
 					if (!projectileCaptureIssues.isEmpty())
+					{
 						coverage.put("projectiles", "partial");
+					}
 					if (!snapshotIssues.isEmpty())
+					{
 						coverage.put("sceneMetadata", "unavailable");
+					}
 					List<String> issues = new ArrayList<>(snapshot.getCaptureIssues());
 					issues.addAll(projectileCaptureIssues);
 					issues.addAll(snapshotIssues);
 					snapshot = snapshot.toBuilder().captureCoverage(coverage).captureIssues(issues).build();
 				}
 				worldRecorder.addSnapshot(snapshot);
-				com.tickreplaylogger.model.world.PlayerState player = snapshot.getPlayer();
+				PlayerState player = snapshot.getPlayer();
 				lastCaptureWorld = !Boolean.FALSE.equals(snapshot.getNativeContextKnown()) && player != null
 					&& Boolean.TRUE.equals(player.getWorldPositionKnown())
 						? new WorldPoint(player.getWorldX(), player.getWorldY(), player.getPlane())
 						: null;
 			}
 			else
+			{
 				unavailableWorldSnapshot("no snapshot returned");
+			}
 		}
 		catch (Exception e)
 		{
@@ -4156,11 +3577,13 @@ public class TickReplayLoggerPlugin extends Plugin
 			projectilesThisTick.clear();
 			runSettledStage("projectileCleanup", () ->
 			{
-				projectileIds.keySet().removeIf(p -> projectileExpiryObserved(p, "projectileCleanup"));
-				projectileSpawnTicks.keySet().retainAll(projectileIds.keySet());
-				projectileTargets.keySet().retainAll(projectileIds.keySet());
-				projectileCallbackStates.keySet().retainAll(projectileIds.keySet());
-				projectileSourceTracker.retain(projectileIds.keySet());
+				for (Projectile projectile : new ArrayList<>(projectileIds.keySet()))
+				{
+					if (projectileExpiryObserved(projectile, "projectileCleanup"))
+					{
+						forgetProjectile(projectile);
+					}
+				}
 			});
 			// Perf guard: capture must stay well within the 600ms tick budget. Warn (throttled) if a
 			// tick's capture is heavy so we can see it in logs and regress capture if needed.
@@ -4189,15 +3612,19 @@ public class TickReplayLoggerPlugin extends Plugin
 		if (pendingHits.isEmpty())
 		{
 			if (currentGameTick - pendingSelfDamageTick > 2)
+			{
 				pendingSelfDamageSource = null;
+			}
 			return;
 		}
 		List<String> issues = new ArrayList<>();
-		net.runelite.api.WorldView view = localPlayer == null ? null
+		WorldView view = localPlayer == null ? null
 			: readHitContext("settledImpactWorldView", localPlayer::getWorldView, issues);
 		NativeHitScope scope = readNativeHitScope(localPlayer, view, null, false, issues, "settledImpact");
 		for (PendingHit hit : pendingHits)
+		{
 			hit.captureIssues.addAll(issues);
+		}
 		inNativeHitScope(scope, () ->
 		{
 			resolvePendingHitsInScope();
@@ -4208,167 +3635,59 @@ public class TickReplayLoggerPlugin extends Plugin
 	private void resolvePendingHitsInScope()
 	{
 		if (resourceImpactQueueCount > MAX_RESOURCE_IMPACTS_PER_TICK)
+		{
 			tickRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callbacks retained");
-		pendingHits.sort(java.util.Comparator.comparing((PendingHit hit) -> hit.hpOutcomeKnown).thenComparingLong(hit -> hit.sequence));
+		}
+		pendingHits.sort(Comparator.comparingLong(hit -> hit.sequence));
 		for (PendingHit hit : pendingHits)
 		{
-			resetAttribution();
-			String source;
-			boolean status = typedStatusHit(hit.hitsplatType);
-			if (status)
-			{
-				// The observed type is known; recurrence and the inflicting attack remain unresolved.
-				source = hit.hitsplatType == HitsplatID.POISON ? "Poison"
-					: hit.hitsplatType == HitsplatID.VENOM ? "Venom"
-						: hit.hitsplatType == HitsplatID.BURN ? "Burn" : "Bleed";
-				lastAttributionConfidence = "ENVIRONMENTAL";
-				lastAttributionLaunchTick = currentGameTick;
-				lastAttributionSourceIsPlayer = false;
-				lastAttributionNpcId = -1;
-				lastAttributionNpcLevel = null;
-				lastAttributionProjectileId = -1;
-				lastAttributionAttackRule = null;
-				lastAttributionAttackName = null;
-				lastAttributionMapRef = null;
-				lastAttributionActorRef = null;
-				lastAttributionEvidence = "STATUS_HITSPLAT";
-				lastAttributionCandidates = new ArrayList<>();
-				lastAttributionNormalContext = false;
-				try
-				{
-					if (hit.captureIssues.isEmpty())
-						selfDamageInputSource(hit);
-				}
-				catch (RuntimeException unavailable)
-				{
-					hit.captureIssues.add("statusInflictor: " + unavailable.getClass().getSimpleName());
-				}
-				retainTypedHitProjectileAlternatives(hit);
-				lastAttributionConfidence = "ENVIRONMENTAL";
-				lastAttributionEvidence = "STATUS_HITSPLAT";
-			}
-			else
-			{
-				if (!hit.captureIssues.isEmpty())
-				{
-					source = "Unknown";
-					lastAttributionEvidence = "INCOMPLETE_HIT_CONTEXT";
-				}
-				else
-					try
-					{
-						source = determineDamageSource(hit);
-					}
-					catch (RuntimeException unavailable)
-					{
-						List<Map<String, Object>> partialCandidates = new ArrayList<>(lastAttributionCandidates);
-						resetAttribution();
-						lastAttributionCandidates = partialCandidates;
-						hit.captureIssues.add("sourceAttribution: " + unavailable.getClass().getSimpleName());
-						lastAttributionEvidence = "ATTRIBUTION_CONTEXT_UNAVAILABLE";
-						source = "Unknown";
-					}
-			}
-			DamageEvent.DamageType type = hit.damageType;
-			String typeEvidence = type == DamageEvent.DamageType.UNKNOWN ? "UNKNOWN" : "HITSPLAT_TYPE";
-			List<String> typeCandidates = new ArrayList<>();
-			String mappedType = null;
-			if (!status && lastAttributionAttackName != null)
-			{
-				mappedType = damageMap.pickpocketRule().getDamageType();
-			}
-			else if (!status && lastAttributionAttackRule != null)
-			{
-				mappedType = lastAttributionAttackRule.getDamageType();
-			}
-			else if (!status && "ENVIRONMENTAL".equals(lastAttributionConfidence) && damageMap != null)
-			{
-				mappedType = damageMap.catalog().hazardDamageType(source);
-				if (mappedType != null)
-					lastAttributionMapRef = "replay_bindings.json:hazard_damage_type";
-			}
-			if (type == DamageEvent.DamageType.UNKNOWN && mappedType != null && !mappedType.contains("|"))
-			{
-				type = DamageEvent.DamageType.fromReference(mappedType);
-				if (type != DamageEvent.DamageType.UNKNOWN)
-					typeEvidence = "ENVIRONMENTAL".equals(lastAttributionConfidence) ? "SCOPED_HAZARD_RULE"
-						: "REVIEWED_ATTACK_BINDING";
-			}
-			if (type == DamageEvent.DamageType.UNKNOWN && damageMap != null && lastAttributionProjectileId >= 0)
-			{
-				String projectileStyle = damageMap.styleForProjectile(lastAttributionProjectileId);
-				if (projectileStyle != null)
-				{
-					typeCandidates.add(projectileStyle);
-				}
-				String reviewed = damageMap.catalog().projectileDamageType(lastAttributionNpcId,
-					lastAttributionProjectileId, lastAttributionNpcLevel, lastAttributionNormalContext);
-				if (reviewed != null)
-				{
-					type = DamageEvent.DamageType.fromReference(reviewed);
-					typeEvidence = "REVIEWED_PROJECTILE_BINDING";
-				}
-			}
-			String damageTypeLabel = damageTypeString(type);
-			if (type == DamageEvent.DamageType.UNKNOWN && damageMap != null && lastAttributionNpcId >= 0)
-			{
-				String sole = damageMap.soleStyleForNpc(lastAttributionNpcId, lastAttributionNpcLevel,
-					lastAttributionNormalContext);
-				if (sole != null)
-				{
-					if (!typeCandidates.contains(sole))
-						typeCandidates.add(sole);
-				}
-			}
-			String reviewedType = !status && damageMap != null
-				? damageMap.catalog().entityDamageType(lastAttributionNpcId, lastAttributionNpcLevel,
-					lastAttributionNormalContext)
-				: null;
-			if (reviewedType != null && type == DamageEvent.DamageType.UNKNOWN)
-			{
-				damageTypeLabel = reviewedType;
-				type = DamageEvent.DamageType.fromReference(reviewedType);
-				typeEvidence = "SCOPED_DEFINITION_RULE";
-				lastAttributionMapRef = "replay_bindings.json:"
-					+ damageMap.catalog().entityRuleKey(lastAttributionNpcId);
-			}
-			String determination = type == DamageEvent.DamageType.TYPELESS || damageMap == null
-				|| "ENVIRONMENTAL".equals(lastAttributionConfidence) || "UNKNOWN".equals(lastAttributionConfidence)
-					? "UNKNOWN"
-					: damageMap.determinationForAttack(lastAttributionNpcId, lastAttributionProjectileId,
-						lastAttributionNpcLevel, lastAttributionNormalContext);
 			if (hit.hpOutcomeKnown)
-				tickRecorder.addDamageEvent(DamageEvent.received(hit.amount, type, source, lastAttributionConfidence, determination)
-					.toBuilder().observationSequence(hit.sequence).build());
-			else if (worldRecorder == null || !config.captureWorldSnapshots())
-				tickRecorder.addEffectNote(resourceImpactNote(hit.amount, hit.possibleOutcomeSurfaces, source), hit.sequence);
-			buildReceivedDamageRecord(hit, damageTypeLabel, source, determination, typeEvidence, typeCandidates);
+			{
+				tickRecorder
+					.addDamageEvent(DamageEvent.received(hit.amount, hit.damageType, "Unknown", "UNKNOWN", "UNKNOWN")
+						.toBuilder().observationSequence(hit.sequence).build());
+			}
+			buildReceivedDamageRecord(hit);
 		}
 		pendingHits.clear();
 		resourceImpactQueueCount = 0;
 		if (currentGameTick - pendingSelfDamageTick > 2)
+		{
 			pendingSelfDamageSource = null;
+		}
 	}
 
-	private boolean selfConsumptionObserved(PendingHit hit)
+	private Map<String, Object> selfConsumptionObservation()
 	{
 		if (pendingSelfDamageSource == null || pendingSelfDamageItemId <= 0 || pendingSelfDamageSlot < 0
 			|| pendingSelfDamageSlot >= 28 || currentGameTick - pendingSelfDamageTick > 2
-			|| pendingSelfDamageQuantity == null
-			|| pendingHits.stream().filter(h -> h.amount == hit.amount).count() != 1)
-			return false;
-		net.runelite.api.ItemContainer inventory = client.getItemContainer(net.runelite.api.InventoryID.INVENTORY);
+			|| pendingSelfDamageQuantity == null)
+		{
+			return null;
+		}
+		ItemContainer inventory = client.getItemContainer(InventoryID.INVENTORY);
 		if (inventory == null)
-			return false;
-		net.runelite.api.Item item = inventory.getItem(pendingSelfDamageSlot);
-		return item == null || item.getId() != pendingSelfDamageItemId
-			|| item.getQuantity() < pendingSelfDamageQuantity;
+		{
+			return null;
+		}
+		Item item = inventory.getItem(pendingSelfDamageSlot);
+		int after = item == null || item.getId() != pendingSelfDamageItemId ? 0 : item.getQuantity();
+		if (after >= pendingSelfDamageQuantity)
+		{
+			return null;
+		}
+		return data("kind", "ITEM_CONSUMPTION_CANDIDATE", "name", pendingSelfDamageSource, "itemId",
+			pendingSelfDamageItemId, "slot", pendingSelfDamageSlot, "quantityBefore", pendingSelfDamageQuantity,
+			"quantityAfter", after, "observedItemIdAfter", item == null ? null : item.getId(), "inputTick",
+			pendingSelfDamageTick, "inputSequence", pendingSelfDamageInputSequence, "sourceRef",
+			pendingSelfDamageSourceRef, "pageHash", pendingSelfDamagePageHash, "observedTick", currentGameTick,
+			"observedCycle", client.getGameCycle(), "evidence", "OBSERVED_INVENTORY_DECREASE_NOT_CAUSAL_PROOF");
 	}
 
 	private void ensureSelfDamageScope()
 	{
-		net.runelite.api.Scene currentScene = nativeScene();
-		net.runelite.api.WorldView currentView = nativeView();
+		Scene currentScene = nativeScene();
+		WorldView currentView = nativeView();
 		int baseX = nativeBaseX(), baseY = nativeBaseY(), plane = nativePlane();
 		if (!selfDamageScopeKnown || selfDamageScopeEpoch != causalSceneEpoch || selfDamageScopeScene != currentScene
 			|| selfDamageScopeView != currentView || selfDamageScopeBaseX != baseX || selfDamageScopeBaseY != baseY
@@ -4386,260 +3705,155 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
-	private String selfDamageInputSource(PendingHit hit)
-	{
-		return selfDamageInputSource(hit, null);
-	}
-
-	private String selfDamageInputSource(PendingHit hit, String consumedSource)
-	{
-		if (hit.nativeScope == null || !hit.nativeScope.known || activeHitScope == null || !activeHitScope.known)
-			return null;
-		if (hit.epoch != causalSceneEpoch || hit.plane != nativePlane() || hit.worldView != nativeView()
-			|| hit.scene != nativeScene() || hit.baseX != nativeBaseX() || hit.baseY != nativeBaseY())
-			return null;
-		ensureSelfDamageScope();
-		if (hit.amount <= 0 || (hit.damageType != DamageEvent.DamageType.UNKNOWN
-			&& hit.damageType != DamageEvent.DamageType.POISON && hit.damageType != DamageEvent.DamageType.VENOM))
-			return null;
-		List<Map<String, Object>> candidates = selfDamageInputs.candidates(currentGameTick);
-		if (candidates.isEmpty() && consumedSource != null)
-			candidates.add(data("kind", "ITEM_CONSUMPTION_CANDIDATE", "name", consumedSource, "evidence",
-				"Observed inventory consumption and HP impact; causal relation unproven"));
-		if (candidates.isEmpty())
-			return null;
-		lastAttributionCandidates.addAll(candidates);
-		boolean competing = candidates.size() > 1;
-		for (String hazard : hazardsForHit(hit))
-		{
-			competing = true;
-			lastAttributionCandidates.add(hazardCandidate(hit, hazard));
-		}
-		for (PendingProjectile projectile : pendingProjectiles)
-			if (projectile.epoch == hit.epoch && projectile.plane == hit.plane && projectile.worldView == hit.worldView
-				&& projectile.scene == hit.scene
-				&& (!projectile.timingKnown || Math.abs(projectile.estimatedArrivalTick - currentGameTick) <= 2))
-			{
-				competing = true;
-				lastAttributionCandidates.add(data("kind", "PROJECTILE_CORRELATION", "name", projectile.sourceName,
-					"projectileId", projectile.projectileId, "projectileObservationId",
-					projectile.projectileObservationId, "sourceHistory",
-					projectile.latestObservation == null ? null : projectile.latestObservation.getSourceHistory(),
-					"latestSourceObservation", projectileLatestSource(projectile), "sourceSamplingUnavailable",
-					projectile.sourceSamplingUnavailable, "matchBasis",
-					projectile.timingKnown ? "ARRIVAL_WINDOW" : "TIMING_UNAVAILABLE"));
-			}
-		for (NPC npc : nativeNpcs())
-			if (npc != null && npc.getInteracting() == nativeLocalPlayer() && isCombatNpc(npc))
-			{
-				competing = true;
-				lastAttributionCandidates
-					.add(data("kind", "ENGAGED_NPC_CANDIDATE", "name", getActorName(npc), "actorRef", actorRef(npc)));
-			}
-		for (Player other : playerDamageCandidates(nativeLocalPlayer()))
-		{
-			competing = true;
-			lastAttributionCandidates.add(playerCandidate(other));
-		}
-		if (hit.damageType == DamageEvent.DamageType.UNKNOWN)
-			for (String failure : failedPickpockets)
-			{
-				competing = true;
-				lastAttributionCandidates.add(data("kind", "PICKPOCKET_FAILURE_CORRELATION", "name", failure));
-			}
-		if (hit.damageType == DamageEvent.DamageType.POISON || hit.damageType == DamageEvent.DamageType.VENOM)
-		{
-			String state = null;
-			try
-			{
-				Integer id = damageMap == null ? null
-					: damageMap.catalog().localStatusVarpId("poison_venom_client_state");
-				if (id != null)
-					state = damageMap.catalog().localStatusState("poison_venom_client_state", client.getVarpValue(id));
-			}
-			catch (RuntimeException unavailable)
-			{
-				/* Missing state must remain a competing possibility. */}
-			if (state == null)
-			{
-				competing = true;
-				lastAttributionCandidates.add(data("kind", "LOCAL_STATUS_STATE_UNAVAILABLE", "name",
-					"Local poison/venom state", "evidence", "Status reference or variable unavailable"));
-			}
-			else if (hit.damageType == DamageEvent.DamageType.POISON && "poison".equals(state))
-			{
-				competing = true;
-				lastAttributionCandidates.add(data("kind", "ACTIVE_POISON_STATE", "name", "Poison"));
-			}
-			else if (hit.damageType == DamageEvent.DamageType.VENOM && "venom".equals(state))
-			{
-				competing = true;
-				lastAttributionCandidates.add(data("kind", "ACTIVE_VENOM_STATE", "name", "Venom"));
-			}
-		}
-		lastAttributionConfidence = competing ? "UNKNOWN" : "TIMED";
-		lastAttributionEvidence = competing ? "MULTIPLE_POSSIBLE_DAMAGE_SOURCES"
-			: "SELF_DAMAGE_RESOURCE_CANDIDATE".equals(candidates.get(0).get("kind"))
-				? "SELF_DAMAGE_RESOURCE_CORRELATION"
-				: "SELF_DAMAGE_INPUT_CORRELATION";
-		return competing ? "Unknown" : String.valueOf(candidates.get(0).get("name"));
-	}
-
 	/** Called only on user save/pause; buffered observations need no off-thread client API calls. */
 	String captureLiveExport(List<TickData> journalTicks)
 	{
 		return prepareLiveExport(journalTicks).get();
 	}
 
-	/** Freeze finished DTOs now; the returned task performs no RuneLite API reads. */
-	private java.util.function.Supplier<String> prepareLiveExport(List<TickData> journalTicks)
+	/** Shared factual provenance for death and manually saved recordings. */
+	private DeathRecordingV2.Meta.MetaBuilder exportMetadata()
 	{
-		if (journalTicks.isEmpty() || worldRecorder == null || !config.captureWorldSnapshots())
+		return DeathRecordingV2.Meta.builder().recordingId(UUID.randomUUID().toString()).pluginVersion("1.0.0")
+			.captureBuildId(CaptureBuild.sourceTreeHash()).runeLiteApiVersion(CaptureBuild.apiVersion())
+			.runeLiteArtifactIdentityScope(CaptureBuild.artifactIdentityScope())
+			.runeLiteRuntimeVersion(CaptureBuild.runtimeVersion())
+			.runeLiteRuntimeReferenceVerification(CaptureBuild.runtimeReferenceVerification())
+			.runeLiteCompiledApiVersion(CaptureBuild.compiledApiVersion())
+			.runeLiteCompiledApiArtifactSha256(CaptureBuild.compiledApiArtifactSha256())
+			.runeLiteCompiledClientArtifactSha256(CaptureBuild.compiledClientArtifactSha256())
+			.runeLiteApiArtifactSha256(CaptureBuild.apiArtifactSha256())
+			.runeLiteClientArtifactSha256(CaptureBuild.clientArtifactSha256())
+			.dataMapVersion(damageMap == null ? "unknown" : damageMap.getVersion())
+			.referenceCatalogId(damageMap == null ? null : damageMap.catalog().id());
+	}
+
+	/** Freeze finished DTOs now; the returned task performs no RuneLite API reads. */
+	private Supplier<String> prepareLiveExport(List<TickData> journalTicks)
+	{
+		if (journalTicks.isEmpty() || worldRecorder == null)
+		{
 			return () -> null;
+		}
 		WorldSnapshotRecorder recorder = worldRecorder;
 		int first = journalTicks.get(0).getTickNumber();
 		int last = journalTicks.get(journalTicks.size() - 1).getTickNumber();
-		DeathRecordingV2.Meta meta = DeathRecordingV2.Meta.builder().recordingId(java.util.UUID.randomUUID().toString())
-			.pluginVersion("1.0.0").captureBuildId(com.tickreplaylogger.capture.CaptureBuild.sourceTreeHash())
-			.runeLiteApiVersion(com.tickreplaylogger.capture.CaptureBuild.apiVersion())
-			.runeLiteArtifactIdentityScope(com.tickreplaylogger.capture.CaptureBuild.artifactIdentityScope())
-			.runeLiteRuntimeVersion(com.tickreplaylogger.capture.CaptureBuild.runtimeVersion())
-			.runeLiteRuntimeReferenceVerification(
-				com.tickreplaylogger.capture.CaptureBuild.runtimeReferenceVerification())
-			.runeLiteCompiledApiVersion(com.tickreplaylogger.capture.CaptureBuild.compiledApiVersion())
-			.runeLiteCompiledApiArtifactSha256(com.tickreplaylogger.capture.CaptureBuild.compiledApiArtifactSha256())
-			.runeLiteCompiledClientArtifactSha256(
-				com.tickreplaylogger.capture.CaptureBuild.compiledClientArtifactSha256())
-			.runeLiteApiArtifactSha256(com.tickreplaylogger.capture.CaptureBuild.apiArtifactSha256())
-			.runeLiteClientArtifactSha256(com.tickreplaylogger.capture.CaptureBuild.clientArtifactSha256())
-			.dataMapVersion(damageMap == null ? "unknown" : damageMap.getVersion())
-			.referenceCatalogId(damageMap == null ? null : damageMap.catalog().id())
-			.exportedAtMs(System.currentTimeMillis()).rsn(capturedRsn).world(capturedWorld).snapshotTick(last)
-			.bufferTicks(journalTicks.size()).captureSettings(captureSettings()).build();
+		DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis()).rsn(capturedRsn)
+			.world(capturedWorld).snapshotTick(last).bufferTicks(journalTicks.size()).captureSettings(captureSettings())
+			.build();
 		DeathRecordingV2.Summary summary = DeathRecordingV2.Summary.builder()
 			.totalDamageTakenInBuffer(TickRecording.calculateTotalDamage(journalTicks))
 			.ticksCaptured(journalTicks.size()).build();
 		DeathRecordingV2 frozen = recorder.freezeExport(meta, summary, first, last).toBuilder()
 			.journalTicks(new ArrayList<>(journalTicks)).build();
-		return () -> gson.toJson(recorder.completeExport(frozen));
+		return () ->
+		{
+			DeathRecordingV2 completed = recorder.completeExport(frozen);
+			return gson.toJson(completed.toBuilder()
+				.journalTicks(ResolverV1Recording.projectJournalTicks(journalTicks, completed)).build());
+		};
 	}
 
-	/**
-	 * Build a rich {@link DamageRecord} (full Â§3 lifecycle + attribution confidence) for a hit the
-	 * player received, and add it to the death-reconstruction buffer.
-	 */
-	private void buildReceivedDamageRecord(PendingHit hit, String damageTypeLabel, String source, String determination,
-		String typeEvidence, List<String> typeCandidates)
+	private void buildReceivedDamageRecord(PendingHit hit)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
 		{
 			return;
 		}
-		String attribution = lastAttributionConfidence;
-		int launchTick = (lastAttributionLaunchTick > 0 && lastAttributionLaunchTick <= currentGameTick)
-			? lastAttributionLaunchTick
-			: currentGameTick;
-		boolean impactPrayerStateKnown = hit.prayerObservation.isFlagsComplete()
-			&& hit.prayerObservation.isOverheadResolved();
-		List<String> prayers = hit.prayerObservation.isAvailable() ? hit.prayers : null;
-		String overhead = hit.prayerObservation.getOverhead();
-		WorldPoint w = hit.position;
-		int impactX = w != null ? w.getX() : 0;
-		int impactY = w != null ? w.getY() : 0;
-
-		// Defender state at the LAUNCH tick (reactability: "wrong prayer at launch, flicked too late").
-		// Read from the buffered snapshot for that tick; fall back to impact state if not present.
-		String overheadAtLaunch = overhead;
-		List<String> prayersAtLaunch = prayers;
-		int launchX = impactX;
-		int launchY = impactY;
-		Boolean launchPositionKnown = false; // Impact fallback is not an observed launch location.
-		boolean launchPrayerStateKnown = false;
-		String launchStateEvidence = "IMPACT_FALLBACK";
-		if (launchTick != currentGameTick && worldRecorder != null)
+		List<Map<String, Object>> witnesses = new ArrayList<>(hit.sourceWitnesses);
+		if (hit.epoch != causalSceneEpoch)
 		{
-			com.tickreplaylogger.model.world.WorldSnapshot ls = worldRecorder.snapshotAtTick(launchTick);
-			if (ls != null && ls.getPlayer() != null)
+			hit.captureIssues
+				.add("impactContextEpoch: CHANGED_BEFORE_FINALIZATION " + hit.epoch + " -> " + causalSceneEpoch);
+		}
+		if (hit.nativeScope != null && hit.nativeScope.known && activeHitScope != null && activeHitScope.known
+			&& hit.epoch == causalSceneEpoch && hit.nativeScope.view == nativeView()
+			&& hit.nativeScope.scene == nativeScene()
+			&& (hit.position == null ? hit.nativeScope.plane : hit.position.getPlane()) == nativePlane()
+			&& hit.nativeScope.baseX == nativeBaseX() && hit.nativeScope.baseY == nativeBaseY())
+		{
+			try
 			{
-				overheadAtLaunch = ls.getPlayer().getOverheadPrayer();
-				prayersAtLaunch = ls.getPlayer().getActivePrayers();
-				launchPrayerStateKnown = ls.getPlayer().getPrayerStateKnown() != null
-					? Boolean.TRUE.equals(ls.getPlayer().getPrayerStateKnown())
-					: prayersAtLaunch != null;
-				launchX = ls.getPlayer().getWorldX();
-				launchY = ls.getPlayer().getWorldY();
-				launchPositionKnown = ls.getPlayer().getWorldPositionKnown();
-				launchStateEvidence = "SNAPSHOT";
+				ensureSelfDamageScope();
+				witnesses.addAll(selfDamageInputs.candidates(currentGameTick));
+				Map<String, Object> consumption = selfConsumptionObservation();
+				if (consumption != null)
+				{
+					witnesses.add(consumption);
+				}
+			}
+			catch (RuntimeException unavailable)
+			{
+				hit.captureIssues.add("selfInputObservation: " + unavailable.getClass().getSimpleName());
 			}
 		}
-		String timingRuleKey = "UNKNOWN".equals(determination) || damageMap == null ? null
-			: damageMap.catalog().prayerTimingRuleKey(lastAttributionNpcId, lastAttributionProjectileId,
-				lastAttributionNpcLevel, lastAttributionNormalContext);
-		String defenderName = readHitContext("defenderName",
-			() -> nativeLocalPlayer() == null ? null : nativeLocalPlayer().getName(), hit.captureIssues);
-		List<Map<String, Object>> receivedCandidates = new ArrayList<>(lastAttributionCandidates);
+		for (PendingProjectile projectile : pendingProjectiles)
+		{
+			if (projectile.latestObservation != null)
+			{
+				Map<String, Object> witness = new LinkedHashMap<>(projectile.launchObservation);
+				witness.put("kind", "PROJECTILE_OBSERVATION");
+				witness.put("projectileObservationId", projectile.projectileObservationId);
+				witness.put("projectile", projectile.latestObservation);
+				witness.put("projectileId", projectile.latestObservation.getProjectileId());
+				witness.put("sourceHistory", projectile.latestObservation.getSourceHistory());
+				witness.put("name", projectile.latestObservation.getSourceName());
+				witness.put("observedTick", projectile.latestObservation.getObservedTick());
+				witness.put("observedCycle", projectile.latestObservation.getObservedCycle());
+				witnesses.add(Collections.unmodifiableMap(witness));
+			}
+		}
 		if (damageMap != null && hit.inventorySourceObservation != null)
-			receivedCandidates.addAll(damageMap.catalog().inventorySourceHints().witnesses(hit.inventorySourceObservation, hit.sequence));
-		DamageRecord record = DamageRecord.builder().direction(hit.hpOutcomeKnown ? "RECEIVED" : "RESOURCE_IMPACT").defenderRef("player")
-			.defenderName(defenderName).defenderIdentityEvidence(hit.defenderIdentityEvidence)
+		{
+			witnesses.addAll(
+				damageMap.catalog().inventorySourceHints().witnesses(hit.inventorySourceObservation, hit.sequence));
+		}
+		WorldPoint position = hit.position;
+		DamageRecord record = DamageRecord.builder().direction(hit.hpOutcomeKnown ? "RECEIVED" : "RESOURCE_IMPACT")
+			.defenderRef("player").defenderName(hit.defenderName).defenderIdentityEvidence(hit.defenderIdentityEvidence)
 			.captureIssues(hit.captureIssues.isEmpty() ? null : new ArrayList<>(hit.captureIssues))
-			.impactPositionKnown(w != null).launchPositionKnown(launchPositionKnown).impactSceneKey(hit.impactSceneKey)
-			.impactWorldViewId(hit.nativeScope == null ? null : hit.nativeScope.viewId)
-			.impactPlane(hit.nativeScope == null ? null : hit.nativeScope.plane)
-			.impactPrayerStateKnown(impactPrayerStateKnown).defenderGraphicsAtImpact(hit.graphicsObservation)
-			.defenderPrayerStateAtImpact(hit.prayerObservation.toState()).launchPrayerStateKnown(launchPrayerStateKnown)
-			.attackerRef(lastAttributionActorRef).observedCycle(hit.observedCycle).observationSequence(hit.sequence)
-			.attributionEvidence(lastAttributionEvidence).launchTickEstimated(true)
-			.launchStateEvidence(launchStateEvidence)
-			.observedHazardContacts(java.util.Collections.unmodifiableList(new ArrayList<>(hit.hazardWitnesses)))
-			.launchTick(launchTick).impactTick(currentGameTick).attackerName(source)
-			.attackerNpcId(lastAttributionNpcId < 0 ? null : lastAttributionNpcId)
-			.attackerCombatLevel(lastAttributionNpcLevel).attribution(attribution)
-			.attributionCandidates(receivedCandidates).amount(hit.amount)
-			.hitsplatType(hit.hitsplatType).hitsplatTypeKnown(true).damageType(damageTypeLabel)
+			.impactTick(currentGameTick).observedCycle(hit.observedCycle).observationSequence(hit.sequence)
+			.impactContextEpoch(hit.epoch).finalizationContextEpoch(causalSceneEpoch).amount(hit.amount)
+			.hitsplatType(hit.hitsplatType).hitsplatTypeKnown(true).damageType(damageTypeString(hit.damageType))
+			.damageTypeEvidence(hit.damageType == DamageEvent.DamageType.UNKNOWN ? "UNKNOWN" : "HITSPLAT_TYPE")
+			.damageTypeCandidates(Collections.emptyList())
 			.damageRecurrence(typedStatusHit(hit.hitsplatType) ? "UNKNOWN" : null)
 			.damageRecurrenceEvidence(typedStatusHit(hit.hitsplatType) ? "HITSPLAT_TYPE_ONLY" : null)
-			.damageTypeEvidence(typeEvidence).damageTypeCandidates(typeCandidates)
-			.attackStyleName(lastAttributionAttackName != null ? lastAttributionAttackName
-				: lastAttributionAttackRule == null ? null : lastAttributionAttackRule.getName())
-			.determination(determination) // LAUNCH / IMPACT / UNKNOWN from the bundled map
-			.determinationEvidence(timingRuleKey == null ? null : "REVIEWED_ATTACK_CONTEXT")
-			.determinationRuleKey(timingRuleKey)
-			.damageTypeRuleKey(
-				"REVIEWED_PROJECTILE_BINDING".equals(typeEvidence) && damageMap != null
-					? damageMap.catalog().projectileDamageTypeRuleKey(lastAttributionNpcId, lastAttributionProjectileId,
-						lastAttributionNpcLevel, lastAttributionNormalContext)
-					: null)
-			.damageTypeCatalogId(
-				"REVIEWED_PROJECTILE_BINDING".equals(typeEvidence) && damageMap != null ? damageMap.catalog().id()
-					: null)
-			.prayerEffect(damageMap == null ? null
-				: damageMap.catalog().hitsplatPlayerPrayerEffect(hit.hitsplatType) != null
-					? damageMap.catalog().hitsplatPlayerPrayerEffect(hit.hitsplatType)
-					: damageMap.catalog().prayerIneffective(lastAttributionNpcId, lastAttributionNpcLevel,
-						lastAttributionNormalContext) ? "NONE_REVIEWED" : null)
-			.damageReferenceKey(damageMap == null ? null : damageMap.catalog().hitsplatReferenceKey(hit.hitsplatType))
-			.damagePropertyEvidence(
-				damageMap != null && damageMap.catalog().hitsplatPlayerPrayerEffect(hit.hitsplatType) != null
-					? "SOURCE_REFERENCE"
-					: null)
-			.pvp(lastAttributionSourceIsPlayer).overheadAtLaunch(overheadAtLaunch).prayersAtLaunch(prayersAtLaunch)
-			.launchX(launchX).launchY(launchY).overheadAtImpact(overhead)
-			.overheadIconAtImpact(hit.prayerObservation.getIcon())
+			.attackerName("Unknown").attribution("UNKNOWN").attributionEvidence("UNRESOLVED_OBSERVATIONS")
+			.determination("UNKNOWN").launchTick(currentGameTick).launchTickEstimated(true).launchPositionKnown(false)
+			.launchPrayerStateKnown(false).launchStateEvidence("UNOBSERVED").impactPositionKnown(position != null)
+			.impactSceneKey(hit.impactSceneKey)
+			.impactWorldViewId(hit.nativeScope == null ? null : hit.nativeScope.viewId)
+			.impactPlane(hit.nativeScope == null ? null : hit.nativeScope.plane)
+			.impactX(position == null ? 0 : position.getX()).impactY(position == null ? 0 : position.getY())
+			.defenderGraphicsAtImpact(hit.graphicsObservation)
+			.defenderPrayerStateAtImpact(hit.prayerObservation.toState())
+			.impactPrayerStateKnown(
+				hit.prayerObservation.isFlagsComplete() && hit.prayerObservation.isOverheadResolved())
+			.prayersAtImpact(hit.prayerObservation.isAvailable() ? hit.prayers : null)
+			.overheadAtImpact(hit.prayerObservation.getOverhead()).overheadIconAtImpact(hit.prayerObservation.getIcon())
 			.reportedPrayersAtImpact(
 				hit.prayerObservation.getFlags().isEmpty() ? null : hit.prayerObservation.getReported())
 			.prayerStateConflictAtImpact(
 				hit.prayerObservation.isAvailable() ? hit.prayerObservation.isConflict() : null)
-			.overheadAtImpactEvidence(hit.prayerObservation.getEvidence()).prayersAtImpact(prayers).impactX(impactX)
-			.impactY(impactY).mapRef(lastAttributionMapRef).build();
-		if (hit.hpOutcomeKnown) worldRecorder.addDamage(record);
-		else resourceImpactContexts.put(hit.sequence, record);
+			.overheadAtImpactEvidence(hit.prayerObservation.getEvidence())
+			.observedHazardContacts(Collections.unmodifiableList(new ArrayList<>(hit.hazardWitnesses)))
+			.attributionCandidates(Collections.unmodifiableList(witnesses)).build();
+		if (hit.hpOutcomeKnown)
+		{
+			worldRecorder.addDamage(record);
+		}
+		else
+		{
+			resourceImpactContexts.put(hit.sequence, record);
+		}
 	}
 
 	private static String resourceImpactNote(int amount, List<String> surfaces, String source)
 	{
-		String outcome = surfaces.contains("SKILL") ? "HP/stat" : surfaces.contains("COMBAT_RESOURCE") ? "HP/resource" : "HP/unknown";
-		String label = com.tickreplaylogger.util.SourceResolutionLabels.usableName(source);
+		String outcome = surfaces.contains("SKILL") ? "HP/stat"
+			: surfaces.contains("COMBAT_RESOURCE") ? "HP/resource" : "HP/unknown";
+		String label = SourceResolutionLabels.usableName(source);
 		return "Impact " + amount + " (" + outcome + ") from " + (label == null ? "Unknown" : label);
 	}
 
@@ -4679,27 +3893,39 @@ public class TickReplayLoggerPlugin extends Plugin
 	private void detectEffectSpotanims(Player localPlayer)
 	{
 		if (worldRecorder == null || damageMap == null)
+		{
 			return;
+		}
 		if (localPlayer == null)
+		{
 			throw new IllegalStateException("local graphic actor unavailable");
+		}
 		if (lastEffectGraphicSampleTick == null || lastEffectGraphicSampleTick + 1 != currentGameTick
 			|| lastEffectGraphicSampleEpoch != causalSceneEpoch)
+		{
 			activeEffectSpotanims.clear();
-		java.util.Set<Integer> present = new java.util.HashSet<>();
+		}
+		Set<Integer> present = new HashSet<>();
 		List<String> issues = new ArrayList<>();
 		boolean collectionKnown = false, primaryKnown = false;
 		try
 		{
-			net.runelite.api.IterableHashTable<net.runelite.api.ActorSpotAnim> graphics = localPlayer.getSpotAnims();
+			IterableHashTable<ActorSpotAnim> graphics = localPlayer.getSpotAnims();
 			if (graphics != null)
 			{
-				for (net.runelite.api.ActorSpotAnim graphic : graphics)
+				for (ActorSpotAnim graphic : graphics)
+				{
 					if (graphic != null)
+					{
 						present.add(graphic.getId());
+					}
+				}
 				collectionKnown = true;
 			}
 			else
+			{
 				issues.add("effectGraphics: active graphic collection unavailable");
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -4709,7 +3935,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			int graphic = localPlayer.getGraphic();
 			if (graphic >= 0)
+			{
 				present.add(graphic);
+			}
 			primaryKnown = true;
 		}
 		catch (RuntimeException unavailable)
@@ -4717,18 +3945,28 @@ public class TickReplayLoggerPlugin extends Plugin
 			issues.add("effectGraphics primary: " + unavailable.getClass().getSimpleName());
 		}
 		for (String issue : issues)
+		{
 			tickRecorder.addCaptureIssue(issue);
+		}
 		if (!collectionKnown || !primaryKnown)
+		{
 			tickRecorder.markStateUnavailable("effectGraphics");
+		}
 		if (!collectionKnown && !primaryKnown && present.isEmpty())
+		{
 			throw new IllegalStateException("local graphics unavailable");
+		}
 		for (int id : present)
 		{
 			if (activeEffectSpotanims.contains(id))
+			{
 				continue;
-			com.google.gson.JsonObject rule = damageMap.catalog().localGraphicReference(id);
+			}
+			JsonObject rule = damageMap.catalog().localGraphicReference(id);
 			if (rule.size() == 0)
+			{
 				continue;
+			}
 			String note = rule.get("label").getAsString();
 			worldRecorder.addEffect(EffectEvent.builder().type("graphic_reference").targetRef("player")
 				.observedGraphicId(id).attribution("UNKNOWN").startTick(currentGameTick).durationTicks(null)
@@ -4763,7 +4001,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		int poison = client.getVarpValue(variable);
 		if (poisonBaselineObserved && (lastPoisonSampleTick == null || currentGameTick - lastPoisonSampleTick != 1))
+		{
 			poisonBaselineObserved = false;
+		}
 		String previousState = damageMap.catalog().localStatusState("poison_venom_client_state", lastPoisonVarp);
 		String currentState = damageMap.catalog().localStatusState("poison_venom_client_state", poison);
 		if (currentState == null)
@@ -4772,11 +4012,17 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		if (previousState == null)
+		{
 			poisonBaselineObserved = false;
+		}
 		if ("inactive".equals(previousState))
+		{
 			previousState = "clear";
+		}
 		if ("inactive".equals(currentState))
+		{
 			currentState = "clear";
+		}
 		if (poisonBaselineObserved && !previousState.equals(currentState))
 		{
 			boolean venom = "venom".equals(currentState);
@@ -4799,39 +4045,7 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private String damageTypeString(DamageEvent.DamageType dt)
 	{
-		switch (dt)
-		{
-		case MELEE:
-			return "melee";
-		case RANGED:
-			return "ranged";
-		case MAGIC:
-			return "magic";
-		case POISON:
-			return "poison";
-		case VENOM:
-			return "venom";
-		case BURN:
-			return "burn";
-		case BLEED:
-			return "bleed";
-		case TYPELESS:
-			return "typeless";
-		default:
-			return "unknown";
-		}
-	}
-
-	private String overheadFromPrayers(List<String> prayers)
-	{
-		for (String p : prayers)
-		{
-			if (OVERHEAD_PRAYERS.contains(p))
-			{
-				return p;
-			}
-		}
-		return null;
+		return dt.name().toLowerCase(Locale.ROOT);
 	}
 
 	/**
@@ -4849,18 +4063,24 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private boolean captureActor(Actor actor)
 	{
-		return actor != null && worldRecorder != null && config.captureWorldSnapshots()
+		return actor != null && worldRecorder != null
 			&& (!(actor instanceof Player) || actor == nativeLocalPlayer() || config.captureOtherPlayers());
 	}
 
 	private String actorRef(Actor actor)
 	{
 		if (actor == null)
+		{
 			return null;
+		}
 		if (actor == nativeLocalPlayer())
+		{
 			return "player";
+		}
 		if (actor instanceof Player && !config.captureOtherPlayers())
+		{
 			return null;
+		}
 		return captureService == null ? null : captureService.actorRef(actor, nativeLocalPlayer());
 	}
 
@@ -4868,35 +4088,42 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		Map<String, Object> result = new LinkedHashMap<>();
 		for (int i = 0; i < pairs.length; i += 2)
+		{
 			result.put((String) pairs[i], pairs[i + 1]);
-		return java.util.Collections.unmodifiableMap(result);
+		}
+		return Collections.unmodifiableMap(result);
 	}
 
 	private Map<String, Object> actorDataSnapshot(Actor actor, CallbackContext c)
 	{
 		if (c.actorSamples.containsKey(actor))
+		{
 			return c.actorSamples.get(actor).data();
-		com.tickreplaylogger.capture.ActorCallbackObservation.Sample sample = com.tickreplaylogger.capture.ActorCallbackObservation
-			.captureSample(actor, c.ready ? client : null, c.localPlayer, config.captureOtherPlayers(),
-				target -> callbackActorRef(target, c), (target, metadata) -> callbackActorRef(target, c, metadata));
+		}
+		ActorCallbackObservation.Sample sample = ActorCallbackObservation.captureSample(actor, c.ready ? client : null,
+			c.localPlayer, config.captureOtherPlayers(), target -> callbackActorRef(target, c),
+			(target, metadata) -> callbackActorRef(target, c, metadata));
 		c.actorSamples.put(actor, sample);
 		return sample.data();
 	}
 
 	private void observeActorCallback(String type, Actor actor)
 	{
-		observeActorCallback(type, actor, java.util.Collections::emptyMap);
+		observeActorCallback(type, actor, Collections::emptyMap);
 	}
 
-	private void observeActorCallback(String type, Actor actor,
-		java.util.function.Supplier<Map<String, Object>> payload)
+	private void observeActorCallback(String type, Actor actor, Supplier<Map<String, Object>> payload)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
+		{
 			return;
+		}
 		CallbackContext c = callbackContext();
 		if (!c.allowed || actor == null
 			|| actor instanceof Player && actor != c.localPlayer && !config.captureOtherPlayers())
+		{
 			return;
+		}
 		Map<String, Object> fields = new LinkedHashMap<>(actorDataSnapshot(actor, c));
 		fields.putAll(payload.get());
 		fields.put("callbackMetadataEvidence",
@@ -4912,22 +4139,34 @@ public class TickReplayLoggerPlugin extends Plugin
 	private String callbackActorRef(Actor actor, CallbackContext c, Map<String, Object> metadata)
 	{
 		if (actor == null || !c.ready)
+		{
 			return null;
+		}
 		if (actor == c.localPlayer)
+		{
 			return "player";
+		}
 		if (actor instanceof Player && (c.localPlayer == null || !config.captureOtherPlayers()))
+		{
 			return null;
+		}
 		if (c.actorReferences.containsKey(actor))
+		{
 			return c.actorReferences.get(actor);
+		}
 		String result = null;
 		try
 		{
 			if (metadata == null && c.actorSamples.containsKey(actor))
+			{
 				metadata = c.actorSamples.get(actor).data();
+			}
 			if (captureService != null)
+			{
 				result = metadata == null ? captureService.actorRef(actor, c.localPlayer)
 					: captureService.observedActorRef(actor, c.localPlayer, integerField(metadata, "worldViewId"),
 						integerField(metadata, actor instanceof NPC ? "sceneId" : "playerId"));
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -4943,41 +4182,49 @@ public class TickReplayLoggerPlugin extends Plugin
 		return value instanceof Number ? ((Number) value).intValue() : null;
 	}
 
-	private static void retainActorSampleIssue(com.tickreplaylogger.capture.ActorCallbackObservation.Sample sample,
-		String field, String label, List<String> issues)
+	private static void retainActorSampleIssue(ActorCallbackObservation.Sample sample, String field, String label,
+		List<String> issues)
 	{
 		Object original = sample == null ? null : sample.data().get("observationIssues");
 		Object reason = original instanceof Map ? ((Map<?, ?>) original).get(field) : null;
 		if (reason instanceof String)
+		{
 			issues.add(label + ": " + reason);
+		}
 	}
 
 	@Subscribe
-	public void onSoundEffectPlayed(net.runelite.api.events.SoundEffectPlayed event)
+	public void onSoundEffectPlayed(SoundEffectPlayed event)
 	{
 		if (event == null || worldRecorder == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		CallbackContext c = callbackContext();
 		if (!c.allowed)
+		{
 			return;
+		}
 		observe("SOUND_EFFECT", null, null,
-			com.tickreplaylogger.capture.SoundCallbackObservation.capture(event, c.localPlayer, c.ready,
-				config.captureOtherPlayers(),
+			SoundCallbackObservation.capture(event, c.localPlayer, c.ready, config.captureOtherPlayers(),
 				actor -> captureService == null ? null : captureService.existingActorRef(actor, c.localPlayer)),
 			c);
 	}
 
 	@Subscribe
-	public void onAreaSoundEffectPlayed(net.runelite.api.events.AreaSoundEffectPlayed event)
+	public void onAreaSoundEffectPlayed(AreaSoundEffectPlayed event)
 	{
 		if (event == null || worldRecorder == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		CallbackContext c = callbackContext();
 		if (!c.allowed)
+		{
 			return;
+		}
 		observe("AREA_SOUND_EFFECT", null, null,
-			com.tickreplaylogger.capture.SoundCallbackObservation.capture(event, c.localPlayer, c.ready,
-				config.captureOtherPlayers(),
+			SoundCallbackObservation.capture(event, c.localPlayer, c.ready, config.captureOtherPlayers(),
 				actor -> captureService == null ? null : captureService.existingActorRef(actor, c.localPlayer)),
 			c);
 	}
@@ -4985,7 +4232,9 @@ public class TickReplayLoggerPlugin extends Plugin
 	private Map<String, Object> callbackActorData(Actor actor, CallbackContext c)
 	{
 		if (!c.ready || actor instanceof Player && actor != c.localPlayer && !config.captureOtherPlayers())
-			return java.util.Collections.emptyMap();
+		{
+			return Collections.emptyMap();
+		}
 		try
 		{
 			return actorDataSnapshot(actor, c);
@@ -4997,6 +4246,27 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
+	/** A pose sampled during an HP callback is an observation, never an observed attack. */
+	private Map<String, Object> impactActivityWitness(Actor actor, CallbackContext context, long hitSequence)
+	{
+		boolean redacted = actor instanceof Player && actor != context.localPlayer && !config.captureOtherPlayers();
+		Map<String, Object> state = redacted ? Collections.emptyMap() : callbackActorData(actor, context);
+		ActorCallbackObservation.Sample original = context.actorSamples.get(actor);
+		Integer viewId = integerField(state, "worldViewId"), plane = integerField(state, "plane");
+		boolean nativeScope = original != null && original.view() != null && original.view() == nativeView()
+			&& viewId != null && Objects.equals(viewId, nativeViewId()) && Boolean.TRUE.equals(state.get("planeKnown"))
+			&& Objects.equals(plane, nativePlane());
+		return data("kind", actor instanceof NPC ? "NPC_ACTIVITY_OBSERVATION" : "PLAYER_ACTIVITY_OBSERVATION",
+			"actorState", state, "actorRef", redacted ? null : callbackActorRef(actor, context), "name",
+			redacted ? "Other player" : state.get("name"), "npcId", state.get("npcId"), "combatLevel",
+			state.get("combatLevel"), "animationId", state.get("animationId"), "targetRef", "player", "sceneKey",
+			nativeScope ? currentSceneKey : null, "worldViewId", viewId, "plane",
+			Boolean.TRUE.equals(state.get("planeKnown")) ? plane : null, "sourceCollectionEvidence",
+			"NATIVE_ACTOR_COLLECTION_MEMBERSHIP", "observedTick", eventTick(), "observedCycle", context.cycle,
+			"impactSequence", hitSequence, "observationStage", "HITSPLAT_CALLBACK", "evidence",
+			"CURRENT_ENGAGED_POSE_NOT_ATTACK_PROOF");
+	}
+
 	private long observe(String type, Actor actor, Actor related, Map<String, Object> values)
 	{
 		return observe(type, actor, related, values, callbackContext());
@@ -5005,24 +4275,33 @@ public class TickReplayLoggerPlugin extends Plugin
 	private long observe(String type, Actor actor, Actor related, Map<String, Object> values, CallbackContext c)
 	{
 		long sequence = ++observationSequence;
-		if (worldRecorder == null || !config.captureWorldSnapshots() || !c.allowed)
+		if (worldRecorder == null || !c.allowed)
+		{
 			return sequence;
+		}
 		boolean privateActor = actor instanceof Player && actor != c.localPlayer && !config.captureOtherPlayers();
 		if (privateActor)
 		{
 			if (c.localPlayer != null || !("HITSPLAT".equals(type) || "ACTOR_DEATH".equals(type)))
+			{
 				return sequence;
+			}
 			// Preserve anonymous primitive combat facts when local identity is unavailable, never another player's metadata.
 			Map<String, Object> safe = new LinkedHashMap<>();
-			for (String key : java.util.Arrays.asList("amount", "hitsplatType", "resourceSurface", "isMine", "isOthers",
+			for (String key : Arrays.asList("amount", "hitsplatType", "resourceSurface", "isMine", "isOthers",
 				"disappearsOnGameCycle", "renderingKnown", "receiverKind"))
+			{
 				if (values != null && values.containsKey(key))
+				{
 					safe.put(key, values.get(key));
+				}
+			}
 			values = safe;
 			actor = null;
 			related = null;
 		}
 		Map<String, Object> recorded = values == null ? new LinkedHashMap<>() : new LinkedHashMap<>(values);
+		recorded.put("causalSceneEpoch", c.epoch);
 		String ref = actor == c.localPlayer && actor != null ? "player" : null, name = null, relatedRef = null,
 			sceneKey = null;
 		List<String> observationOnlyIssues = new ArrayList<>();
@@ -5030,8 +4309,10 @@ public class TickReplayLoggerPlugin extends Plugin
 		if (c.ready)
 		{
 			if (ref == null)
+			{
 				ref = readHitContext("observationActorRef", () -> callbackActorRef(observedActor, c), c.issues);
-			com.tickreplaylogger.capture.ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
+			}
+			ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
 			retainActorSampleIssue(original, "name", "observationActorName", c.issues);
 			name = actor == null ? null
 				: original == null ? readHitContext("observationActorName", actor::getName, c.issues)
@@ -5040,29 +4321,38 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		values = recorded;
 		if (c.ready)
+		{
 			try
 			{
 				boolean primaryScopeKnown = prepareCallbackCaptureScope(c);
 				if (values != null && damageMap != null)
 				{
-					values = new java.util.LinkedHashMap<>(values);
-					com.tickreplaylogger.capture.CombatCatalog catalog = damageMap.catalog();
-					java.util.Set<String> candidates = new java.util.LinkedHashSet<>();
+					values = new LinkedHashMap<>(values);
+					CombatCatalog catalog = damageMap.catalog();
+					Set<String> candidates = new LinkedHashSet<>();
 					Object animation = values.get("animationId");
 					if (animation instanceof Number)
+					{
 						candidates.addAll(catalog.observationReferences("animation", ((Number) animation).intValue()));
+					}
 					if (type.equals("GRAPHICS_OBJECT_CREATED") && values.get("id") instanceof Number)
+					{
 						candidates
 							.addAll(catalog.observationReferences("graphic", ((Number) values.get("id")).intValue()));
+					}
 					Object object = values.get("object");
-					if (object instanceof com.tickreplaylogger.model.world.ObservedObjectState)
+					if (object instanceof ObservedObjectState)
 					{
-						Integer id = ((com.tickreplaylogger.model.world.ObservedObjectState) object).getId();
+						Integer id = ((ObservedObjectState) object).getId();
 						if (id != null)
+						{
 							candidates.addAll(catalog.observationReferences("object", id));
+						}
 					}
 					if (!candidates.isEmpty())
+					{
 						values.put("referenceCandidates", new ArrayList<>(candidates));
+					}
 					if (actor instanceof NPC)
 					{
 						Object nested = values.get("actorState");
@@ -5072,15 +4362,18 @@ public class TickReplayLoggerPlugin extends Plugin
 						{
 							Object observedId = metadata.get("npcId");
 							if (observedId instanceof Number)
+							{
 								id = ((Number) observedId).intValue();
+							}
 						}
 						else
 						{
 							Map<String, String> definitionIssues = new LinkedHashMap<>();
-							id = com.tickreplaylogger.capture.NpcDefinitionObservation
-								.capture((NPC) actor, definitionIssues, "").getId();
+							id = NpcDefinitionObservation.capture((NPC) actor, definitionIssues, "").getId();
 							if (!definitionIssues.isEmpty())
+							{
 								values.put("actorResearchIssues", definitionIssues);
+							}
 						}
 						Object metadataIssues = metadata.get("observationIssues");
 						boolean nameKnown = (!(metadataIssues instanceof Map)
@@ -5105,14 +4398,14 @@ public class TickReplayLoggerPlugin extends Plugin
 					}
 				}
 				Object nativeScene = values == null ? null : values.get("nativeSceneKey");
-				com.tickreplaylogger.capture.ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
+				ActorCallbackObservation.Sample original = c.actorSamples.get(actor);
 				retainActorSampleIssue(original, "worldPosition", "observationActorWorldPosition", c.issues);
 				retainActorSampleIssue(original, "worldView", "observationActorWorldView", c.issues);
 				// The ID diagnostic describes raw placement; it adds no damage-attribution guard.
 				retainActorSampleIssue(original, "worldViewId", "observationActorWorldViewId", observationOnlyIssues);
 				WorldPoint actorPosition = actor == null ? null
 					: original == null ? actor.getWorldLocation() : original.world();
-				net.runelite.api.WorldView actorView = actor == null ? null
+				WorldView actorView = actor == null ? null
 					: original != null ? original.view()
 						: actor == c.localPlayer && c.localViewSampled ? c.localView : actor.getWorldView();
 				Integer actorViewId = original != null ? integerField(original.data(), "worldViewId")
@@ -5120,9 +4413,10 @@ public class TickReplayLoggerPlugin extends Plugin
 				boolean unknownActorScope = actor != null
 					&& (actorPosition == null || actorView == null || actorViewId == null);
 				boolean foreignActor = actor != null && (unknownActorScope || actorView != c.primaryView
-					|| !java.util.Objects.equals(actorPosition.getPlane(), c.primaryPlane));
+					|| !Objects.equals(actorPosition.getPlane(), c.primaryPlane));
 				if (!(nativeScene instanceof String) && foreignActor && !unknownActorScope && primaryScopeKnown
 					&& captureService != null)
+				{
 					try
 					{
 						nativeScene = captureService.observedSceneKey(actorView, actorPosition.getPlane(), actorViewId,
@@ -5132,6 +4426,7 @@ public class TickReplayLoggerPlugin extends Plugin
 					{
 						c.issues.add("observationActorScope: " + unavailable.getClass().getSimpleName());
 					}
+				}
 				sceneKey = nativeScene instanceof String ? (String) nativeScene
 					: foreignActor || !primaryScopeKnown || Boolean.FALSE.equals(values.get("scopeKnown")) ? null
 						: c.primarySceneKey;
@@ -5140,6 +4435,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				c.issues.add("observationContext: " + unavailable.getClass().getSimpleName());
 			}
+		}
 		recorded = new LinkedHashMap<>(values);
 		List<String> recordedIssues = new ArrayList<>(c.issues);
 		recordedIssues.addAll(observationOnlyIssues);
@@ -5163,7 +4459,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		CallbackContext context)
 	{
 		if (worldRecorder == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		String targetRef = readHitContext("actionTargetRef", () -> callbackActorRef(target, context), context.issues);
 		worldRecorder.addPlayerAction(DeathRecordingV2.Events.PlayerActionRecord.builder().tick(eventTick())
 			.type(action.getType().name()).detail(action.getDescription()).target(action.getTarget())
@@ -5193,23 +4491,29 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	@Subscribe
-	public void onPlayerChanged(net.runelite.api.events.PlayerChanged event)
+	public void onPlayerChanged(PlayerChanged event)
 	{
 		observeActorCallback("PLAYER_CHANGED", event.getPlayer());
 	}
 
 	@Subscribe
-	public void onVarClientIntChanged(net.runelite.api.events.VarClientIntChanged event)
+	public void onVarClientIntChanged(VarClientIntChanged event)
 	{
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
+		}
 		CallbackFieldObservation fields = new CallbackFieldObservation();
 		Integer id = fields.value("id", event::getIndex);
 		if (id != null)
+		{
 			fields.value("value", () -> client.getVarcIntValue(id));
+		}
 		else
+		{
 			fields.unavailable("value", "ID_UNAVAILABLE");
+		}
 		if (!context.ready)
 		{
 			fields.put("scopeKnown", false);
@@ -5228,24 +4532,29 @@ public class TickReplayLoggerPlugin extends Plugin
 	@Subscribe
 	public void onNpcDespawned(NpcDespawned event)
 	{
-		recentAttackers.entrySet().removeIf(entry -> entry.getValue().actor == event.getNpc());
 		observeActorCallback("NPC_DESPAWNED", event.getNpc());
 		if (captureService != null)
+		{
 			captureService.clearMechanics(event.getNpc());
+		}
 		if (captureService != null)
+		{
 			captureService.forgetActor(event.getNpc());
+		}
 	}
 
 	@Subscribe
-	public void onPlayerDespawned(net.runelite.api.events.PlayerDespawned event)
+	public void onPlayerDespawned(PlayerDespawned event)
 	{
 		observeActorCallback("PLAYER_DESPAWNED", event.getPlayer());
 		if (captureService != null)
+		{
 			captureService.forgetActor(event.getPlayer());
+		}
 	}
 
 	@Subscribe
-	public void onPlayerSpawned(net.runelite.api.events.PlayerSpawned event)
+	public void onPlayerSpawned(PlayerSpawned event)
 	{
 		observeActorCallback("PLAYER_SPAWNED", event.getPlayer());
 	}
@@ -5253,10 +4562,8 @@ public class TickReplayLoggerPlugin extends Plugin
 	@Subscribe
 	public void onNpcChanged(NpcChanged event)
 	{
-		observeActorCallback("NPC_CHANGED", event.getNpc(),
-			() -> data("oldComposition",
-				com.tickreplaylogger.capture.ActorCallbackObservation.oldComposition(event.getOld()),
-				"oldCompositionProvided", event.getOld() != null));
+		observeActorCallback("NPC_CHANGED", event.getNpc(), () -> data("oldComposition",
+			ActorCallbackObservation.oldComposition(event.getOld()), "oldCompositionProvided", event.getOld() != null));
 	}
 
 	@Subscribe
@@ -5264,19 +4571,24 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		CallbackFieldObservation fields = new CallbackFieldObservation();
 		Integer id = fields.value("containerId", event::getContainerId);
-		if (id == null || id != net.runelite.api.InventoryID.INVENTORY.getId()
-			&& id != net.runelite.api.InventoryID.EQUIPMENT.getId())
+		if (id == null || id != InventoryID.INVENTORY.getId() && id != InventoryID.EQUIPMENT.getId())
+		{
 			return;
-		net.runelite.api.ItemContainer container = fields.sample("itemContainer", event::getItemContainer);
-		net.runelite.api.Item[] items = null;
+		}
+		ItemContainer container = fields.sample("itemContainer", event::getItemContainer);
+		Item[] items = null;
 		if (container != null)
+		{
 			items = fields.sample("items", () ->
 			{
-				net.runelite.api.Item[] value = container.getItems();
+				Item[] value = container.getItems();
 				return value == null ? null : value.clone();
 			});
+		}
 		else
+		{
 			fields.unavailable("items", "ITEM_CONTAINER_UNAVAILABLE");
+		}
 		fields.put("itemsKnown", items != null);
 		if (items == null)
 		{
@@ -5285,19 +4597,23 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		else
 		{
-			final net.runelite.api.Item[] observed = items;
+			final Item[] observed = items;
 			fields.value("itemIds", () ->
 			{
 				int[] values = new int[observed.length];
 				for (int i = 0; i < values.length; i++)
+				{
 					values[i] = observed[i] == null ? -1 : observed[i].getId();
+				}
 				return values;
 			});
 			fields.value("quantities", () ->
 			{
 				int[] values = new int[observed.length];
 				for (int i = 0; i < values.length; i++)
+				{
 					values[i] = observed[i] == null ? 0 : observed[i].getQuantity();
+				}
 				return values;
 			});
 		}
@@ -5311,13 +4627,33 @@ public class TickReplayLoggerPlugin extends Plugin
 		return configManager.getConfig(TickReplayLoggerConfig.class);
 	}
 
-	private void observeObject(String kind, net.runelite.api.TileObject object, boolean spawn)
+	/** Reuse the original sampled point; unavailable coordinates remain individually marked. */
+	private static Integer observeLocalPosition(CallbackFieldObservation fields, LocalPoint location)
+	{
+		if (location == null)
+		{
+			for (String field : Arrays.asList("localX", "localY", "localWorldViewId"))
+			{
+				fields.unavailable(field, "LOCATION_UNAVAILABLE");
+			}
+			return null;
+		}
+		fields.value("localX", location::getX);
+		fields.value("localY", location::getY);
+		return fields.value("localWorldViewId", location::getWorldView);
+	}
+
+	private void observeObject(String kind, TileObject object, boolean spawn)
 	{
 		if (object == null || captureService == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
+		}
 		if (!context.ready)
 		{
 			CallbackFieldObservation fields = new CallbackFieldObservation();
@@ -5325,18 +4661,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			fields.value("id", object::getId);
 			fields.value("plane", object::getPlane);
 			LocalPoint location = fields.sample("location", object::getLocalLocation);
-			if (location != null)
-			{
-				fields.value("localX", location::getX);
-				fields.value("localY", location::getY);
-				fields.value("localWorldViewId", location::getWorldView);
-			}
-			else
-			{
-				fields.unavailable("localX", "LOCATION_UNAVAILABLE");
-				fields.unavailable("localY", "LOCATION_UNAVAILABLE");
-				fields.unavailable("localWorldViewId", "LOCATION_UNAVAILABLE");
-			}
+			observeLocalPosition(fields, location);
 			WorldPoint world = fields.sample("worldLocation", object::getWorldLocation);
 			if (world != null)
 			{
@@ -5348,11 +4673,15 @@ public class TickReplayLoggerPlugin extends Plugin
 				fields.unavailable("worldX", "WORLD_LOCATION_UNAVAILABLE");
 				fields.unavailable("worldY", "WORLD_LOCATION_UNAVAILABLE");
 			}
-			net.runelite.api.WorldView view = fields.sample("worldView", object::getWorldView);
+			WorldView view = fields.sample("worldView", object::getWorldView);
 			if (view != null)
+			{
 				fields.value("worldViewId", view::getId);
+			}
 			else
+			{
 				fields.unavailable("worldViewId", "WORLD_VIEW_UNAVAILABLE");
+			}
 			fields.put("scopeKnown", false);
 			fields.put("positionScopeKnown", false);
 			fields.unavailable("nativeSceneKey", "WORLD_CONTEXT_UNAVAILABLE");
@@ -5361,13 +4690,13 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		preparePrimaryCaptureScope();
-		com.tickreplaylogger.capture.ObjectStateTracker tracker = null;
+		ObjectStateTracker tracker = null;
 		Integer plane = null;
 		try
 		{
 			plane = object.getPlane();
 			tracker = captureService.objects(client, object.getWorldView(), plane);
-			com.tickreplaylogger.model.world.ObservedObjectState state = tracker.observation(client, kind, object);
+			ObservedObjectState state = tracker.observation(client, kind, object);
 			Map<String, Object> values = new LinkedHashMap<>(data("object", state, "nativeSceneKey",
 				captureService.additionalSceneKey(client, object.getWorldView(), plane)));
 			if (state != null && state.getObservationIssues() != null)
@@ -5401,18 +4730,23 @@ public class TickReplayLoggerPlugin extends Plugin
 		finally
 		{
 			if (!spawn && tracker != null)
+			{
 				tracker.despawned(object);
+			}
 		}
 	}
 
-	private void observeGroundItem(String type, net.runelite.api.Tile tile, net.runelite.api.TileItem item,
-		Integer oldQuantity, Integer newQuantity)
+	private void observeGroundItem(String type, Tile tile, TileItem item, Integer oldQuantity, Integer newQuantity)
 	{
 		if (item == null || captureService == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
+		}
 		if (!context.ready)
 		{
 			CallbackFieldObservation fields = new CallbackFieldObservation();
@@ -5431,18 +4765,7 @@ public class TickReplayLoggerPlugin extends Plugin
 				fields.unavailable("plane", "TILE_UNAVAILABLE");
 				fields.unavailable("location", "TILE_UNAVAILABLE");
 			}
-			if (location != null)
-			{
-				fields.value("localX", location::getX);
-				fields.value("localY", location::getY);
-				fields.value("localWorldViewId", location::getWorldView);
-			}
-			else
-			{
-				fields.unavailable("localX", "LOCATION_UNAVAILABLE");
-				fields.unavailable("localY", "LOCATION_UNAVAILABLE");
-				fields.unavailable("localWorldViewId", "LOCATION_UNAVAILABLE");
-			}
+			observeLocalPosition(fields, location);
 			fields.put("scopeKnown", false);
 			fields.put("positionScopeKnown", false);
 			fields.unavailable("nativeSceneKey", "WORLD_CONTEXT_UNAVAILABLE");
@@ -5451,29 +4774,30 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		if (tile == null)
+		{
 			return;
-		com.tickreplaylogger.capture.GroundItemTracker tracker = null;
+		}
+		GroundItemTracker tracker = null;
 		Map<String, Object> values = new LinkedHashMap<>(
 			data("oldQuantity", oldQuantity, "newQuantity", newQuantity, "scopeKnown", false));
 		try
 		{
 			preparePrimaryCaptureScope();
 			LocalPoint point = tile.getLocalLocation();
-			net.runelite.api.WorldView nativeView = point == null ? null : client.getWorldView(point.getWorldView());
-			if (nativeView == null && point != null && point.getWorldView() == net.runelite.api.WorldView.TOPLEVEL)
+			WorldView nativeView = point == null ? null : client.getWorldView(point.getWorldView());
+			if (nativeView == null && point != null && point.getWorldView() == WorldView.TOPLEVEL)
+			{
 				nativeView = client.getTopLevelWorldView();
-			boolean known = com.tickreplaylogger.capture.WorldViews.containsTile(nativeView, tile);
+			}
+			boolean known = WorldViews.containsTile(nativeView, tile);
 			String key = known ? captureService.additionalSceneKey(client, nativeView, tile.getPlane()) : null;
 			if (known)
 			{
 				tracker = captureService.groundItems(client, nativeView, tile.getPlane());
 				tracker.beginScope(key == null ? currentSceneKey : key);
 			}
-			com.tickreplaylogger.capture.GroundItemTracker reader = tracker == null
-				? new com.tickreplaylogger.capture.GroundItemTracker()
-				: tracker;
-			com.tickreplaylogger.model.world.GroundItemState state = reader.observation(tile, item,
-				known ? nativeView.getId() : null);
+			GroundItemTracker reader = tracker == null ? new GroundItemTracker() : tracker;
+			GroundItemState state = reader.observation(tile, item, known ? nativeView.getId() : null);
 			values.put("item", known || state == null ? state : state.toBuilder().itemKey(null).build());
 			values.put("scopeKnown", known);
 			values.put("nativeSceneKey", key);
@@ -5501,88 +4825,96 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			observe(type, null, null, values, context);
 			if ("GROUND_ITEM_DESPAWNED".equals(type) && tracker != null)
+			{
 				tracker.despawned(item);
+			}
 		}
 	}
 
 	@Subscribe
-	public void onItemSpawned(net.runelite.api.events.ItemSpawned e)
+	public void onItemSpawned(ItemSpawned e)
 	{
 		observeGroundItem("GROUND_ITEM_SPAWNED", e.getTile(), e.getItem(), null, null);
 	}
 
 	@Subscribe
-	public void onItemDespawned(net.runelite.api.events.ItemDespawned e)
+	public void onItemDespawned(ItemDespawned e)
 	{
 		observeGroundItem("GROUND_ITEM_DESPAWNED", e.getTile(), e.getItem(), null, null);
 	}
 
 	@Subscribe
-	public void onItemQuantityChanged(net.runelite.api.events.ItemQuantityChanged e)
+	public void onItemQuantityChanged(ItemQuantityChanged e)
 	{
 		observeGroundItem("GROUND_ITEM_QUANTITY_CHANGED", e.getTile(), e.getItem(), e.getOldQuantity(),
 			e.getNewQuantity());
 	}
 
 	@Subscribe
-	public void onGameObjectSpawned(net.runelite.api.events.GameObjectSpawned e)
+	public void onGameObjectSpawned(GameObjectSpawned e)
 	{
 		observeObject("gameObject", e.getGameObject(), true);
 	}
 
 	@Subscribe
-	public void onGameObjectDespawned(net.runelite.api.events.GameObjectDespawned e)
+	public void onGameObjectDespawned(GameObjectDespawned e)
 	{
 		observeObject("gameObject", e.getGameObject(), false);
 	}
 
 	@Subscribe
-	public void onGroundObjectSpawned(net.runelite.api.events.GroundObjectSpawned e)
+	public void onGroundObjectSpawned(GroundObjectSpawned e)
 	{
 		observeObject("groundObject", e.getGroundObject(), true);
 	}
 
 	@Subscribe
-	public void onGroundObjectDespawned(net.runelite.api.events.GroundObjectDespawned e)
+	public void onGroundObjectDespawned(GroundObjectDespawned e)
 	{
 		observeObject("groundObject", e.getGroundObject(), false);
 	}
 
 	@Subscribe
-	public void onWallObjectSpawned(net.runelite.api.events.WallObjectSpawned e)
+	public void onWallObjectSpawned(WallObjectSpawned e)
 	{
 		observeObject("wallObject", e.getWallObject(), true);
 	}
 
 	@Subscribe
-	public void onWallObjectDespawned(net.runelite.api.events.WallObjectDespawned e)
+	public void onWallObjectDespawned(WallObjectDespawned e)
 	{
 		observeObject("wallObject", e.getWallObject(), false);
 	}
 
 	@Subscribe
-	public void onDecorativeObjectSpawned(net.runelite.api.events.DecorativeObjectSpawned e)
+	public void onDecorativeObjectSpawned(DecorativeObjectSpawned e)
 	{
 		observeObject("decorativeObject", e.getDecorativeObject(), true);
 	}
 
 	@Subscribe
-	public void onDecorativeObjectDespawned(net.runelite.api.events.DecorativeObjectDespawned e)
+	public void onDecorativeObjectDespawned(DecorativeObjectDespawned e)
 	{
 		observeObject("decorativeObject", e.getDecorativeObject(), false);
 	}
 
 	@Subscribe
-	public void onGraphicsObjectCreated(net.runelite.api.events.GraphicsObjectCreated event)
+	public void onGraphicsObjectCreated(GraphicsObjectCreated event)
 	{
 		if (captureService == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
+		{
 			return;
-		net.runelite.api.GraphicsObject graphic = event.getGraphicsObject();
+		}
+		GraphicsObject graphic = event.getGraphicsObject();
 		if (graphic == null)
+		{
 			return;
+		}
 		CallbackFieldObservation fields = new CallbackFieldObservation();
 		fields.value("graphicObservationId", () -> surfaceObservationIds.id(graphic));
 		fields.value("id", graphic::getId);
@@ -5590,25 +4922,17 @@ public class TickReplayLoggerPlugin extends Plugin
 		fields.value("startCycle", graphic::getStartCycle);
 		fields.value("z", graphic::getZ);
 		LocalPoint location = fields.sample("location", graphic::getLocation);
-		Integer localViewId = null;
-		if (location != null)
-		{
-			fields.value("localX", location::getX);
-			fields.value("localY", location::getY);
-			localViewId = fields.value("localWorldViewId", location::getWorldView);
-		}
-		else
-		{
-			fields.unavailable("localX", "LOCATION_UNAVAILABLE");
-			fields.unavailable("localY", "LOCATION_UNAVAILABLE");
-			fields.unavailable("localWorldViewId", "LOCATION_UNAVAILABLE");
-		}
-		net.runelite.api.WorldView view = fields.sample("worldView", graphic::getWorldView);
+		Integer localViewId = observeLocalPosition(fields, location);
+		WorldView view = fields.sample("worldView", graphic::getWorldView);
 		Integer viewId = null;
 		if (view != null)
+		{
 			viewId = fields.value("worldViewId", view::getId);
+		}
 		else
+		{
 			fields.unavailable("worldViewId", "WORLD_VIEW_UNAVAILABLE");
+		}
 		boolean known = false;
 		if (context.ready && view != null && viewId != null && plane != null && plane >= 0 && plane < 4)
 		{
@@ -5616,46 +4940,60 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				String key = captureService.additionalSceneKey(client, view, plane);
 				if (key == null && !preparePrimaryCaptureScope())
+				{
 					throw new IllegalStateException("primary scene unavailable");
+				}
 				return key;
 			});
 			known = fields.known("nativeSceneKey");
 		}
 		else
+		{
 			fields.unavailable("nativeSceneKey",
 				context.ready ? "NATIVE_SCOPE_UNAVAILABLE" : "WORLD_CONTEXT_UNAVAILABLE");
+		}
 		fields.put("scopeKnown", known);
 		fields.put("positionScopeKnown", known && localViewId != null && localViewId.equals(viewId));
 		if (!known)
+		{
 			fields.put("captureStatus", "PARTIAL_CALLBACK_FIELDS");
+		}
 		observe("GRAPHICS_OBJECT_CREATED", null, null, fields.data(), context);
 	}
 
 	@Subscribe
-	public void onGraphicChanged(net.runelite.api.events.GraphicChanged event)
+	public void onGraphicChanged(GraphicChanged event)
 	{
 		if (worldRecorder == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		Actor actor = event.getActor();
 		CallbackContext c = callbackContext();
 		if (!c.allowed || actor == null
 			|| actor instanceof Player && actor != c.localPlayer && !config.captureOtherPlayers())
+		{
 			return;
+		}
 		Map<String, Object> fields = actorDataSnapshot(actor, c);
 		observe("ACTOR_GRAPHICS_CHANGED", actor, null, data("actorState", fields, "graphicIds",
 			fields.get("graphicIds"), "graphicsKnown", fields.get("graphicsKnown")), c);
 	}
 
 	@Subscribe
-	public void onOverheadTextChanged(net.runelite.api.events.OverheadTextChanged event)
+	public void onOverheadTextChanged(OverheadTextChanged event)
 	{
 		if (worldRecorder == null || !config.captureWorldSnapshots())
+		{
 			return;
+		}
 		Actor actor = event.getActor();
 		CallbackContext c = callbackContext();
 		if (!c.allowed || actor == null
 			|| actor instanceof Player && actor != c.localPlayer && !config.captureOtherPlayers())
+		{
 			return;
+		}
 		Map<String, Object> fields = actorDataSnapshot(actor, c);
 		String text = event.getOverheadText();
 		if (c.ready && actor instanceof NPC && captureService != null && damageMap != null)
@@ -5668,34 +5006,37 @@ public class TickReplayLoggerPlugin extends Plugin
 			boolean qualified = id != null && Boolean.TRUE.equals(fields.get("normalWorldContextObserved"))
 				&& damageMap.catalog().observedNameCompatible(id, (String) fields.get("name"), nameKnown);
 			if (!qualified)
+			{
 				captureService.clearMechanics(npc);
+			}
 			else
+			{
 				try
 				{
 					preparePrimaryCaptureScope();
-					net.runelite.api.WorldView view = npc.getWorldView();
-					com.tickreplaylogger.capture.ObservedMechanics mechanics = Boolean.TRUE
-						.equals(fields.get("planeKnown"))
-							? captureService.mechanics(client, view, ((Number) fields.get("plane")).intValue())
-							: captureService.mechanics(client, view);
+					WorldView view = npc.getWorldView();
+					ObservedMechanics mechanics = Boolean.TRUE.equals(fields.get("planeKnown"))
+						? captureService.mechanics(client, view, ((Number) fields.get("plane")).intValue())
+						: captureService.mechanics(client, view);
 					mechanics.validateIdentity(damageMap.catalog(), npc, id, true);
 					Object animation = fields.get("animationId");
 					mechanics.observe(damageMap.catalog(), npc, id, "overheadEquals", text,
-						animation instanceof Number ? ((Number) animation).intValue() : -1,
-						java.util.Collections.emptyList(), eventTick(), "OVERHEAD_TEXT_CALLBACK");
+						animation instanceof Number ? ((Number) animation).intValue() : -1, Collections.emptyList(),
+						eventTick(), "OVERHEAD_TEXT_CALLBACK");
 				}
 				catch (RuntimeException unavailable)
 				{
 					captureService.clearMechanics(npc);
 					c.issues.add("overheadPhaseContext: " + unavailable.getClass().getSimpleName());
 				}
+			}
 		}
 		observe("OVERHEAD_TEXT_CHANGED", actor, null,
 			data("text", text, "textEvidence", "EVENT_PAYLOAD", "actorState", fields), c);
 	}
 
 	@Subscribe
-	public void onStatChanged(net.runelite.api.events.StatChanged event)
+	public void onStatChanged(StatChanged event)
 	{
 		CallbackFieldObservation fields = new CallbackFieldObservation();
 		fields.value("skill", () ->

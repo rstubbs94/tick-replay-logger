@@ -112,11 +112,11 @@ public class ObservedActorMechanismResolverTest
 			ObservedMechanismResolver.Result result = resolve(declaration(type, delivery, "CHEBYSHEV_RADIUS"), hit(),
 				Collections.singletonList(event(type, metadata())), Collections.singletonList(frame(3)), Collections.emptyList());
 			assertEquals(1, result.getContributions().size()); assertFalse(result.isUnidentifiedPossible());
-			SourceEvidenceResolver.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
 			assertEquals(delivery, hypothesis.getMechanism()); assertEquals("independent-area-hp", hypothesis.getDamageComponent());
 			assertNull(hypothesis.getConstraints()); assertEquals("npc:lifetime-one", hypothesis.getCandidate().getActorRef());
 			assertTrue(hypothesis.isCausalAssociationOnly());
-			com.tickreplaylogger.model.world.SourceResolution resolution = SourceEvidenceResolver.resolve(
+			com.tickreplaylogger.model.world.SourceResolution resolution = LegacyConstraintOracle.resolve(
 				Collections.singletonList(hypothesis), hit().getAmount(), result.isUnidentifiedPossible(), "fixture");
 			assertEquals("ALTERNATIVES", resolution.getStatus()); assertTrue(resolution.isUnidentifiedPossible());
 			assertEquals("npc:lifetime-one", resolution.getCandidates().get(0).getActorRef());
@@ -257,8 +257,9 @@ public class ObservedActorMechanismResolverTest
 	@Test
 	public void newCueIdentityAndSignatureCannotBorrowOrdinaryOutcomeRules() throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		Field rootField = CombatCatalog.class.getDeclaredField("root"); rootField.setAccessible(true);
+		rootField.set(map.catalog(), ((JsonObject) rootField.get(map.catalog())).deepCopy());
 		JsonObject root = (JsonObject) rootField.get(map.catalog());
 		root.add("mechanismRules", namespace(declaration("ANIMATION_CHANGED", "AREA_IMPACT", "CHEBYSHEV_RADIUS")));
 		JsonObject ordinary = GSON.fromJson("{\"key\":\"only-ordinary-venom\",\"selector\":{\"kind\":\"NPC_ORDINARY_ATTACK\",\"ids\":[" + ID
@@ -267,7 +268,7 @@ public class ObservedActorMechanismResolverTest
 		root.getAsJsonObject("damageCompatibility").getAsJsonArray("rules").add(ordinary);
 		for (String index : Arrays.asList("mechanismRuleIndex", "damageCompatibilityIndex"))
 		{
-			Field field = CombatCatalog.class.getDeclaredField(index); field.setAccessible(true); field.set(map.catalog(), null);
+			Field field = LegacyCombatCatalog.class.getDeclaredField(index); field.setAccessible(true); field.set(LegacyCombatCatalog.from(map.catalog()), null);
 		}
 		SourceResolution result = new RecordedSourceResolver(Arrays.asList(frame(3), frame(5)), Collections.emptyList(), map,
 			Collections.singletonList(event("ANIMATION_CHANGED", metadata())), Collections.emptyList()).resolve(hit());

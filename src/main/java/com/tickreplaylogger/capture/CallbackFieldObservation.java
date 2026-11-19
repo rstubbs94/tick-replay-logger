@@ -24,11 +24,7 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
 /** Independent callback reads. Native dependencies are sampled without entering export data. */
@@ -46,7 +42,9 @@ public final class CallbackFieldObservation
 			T value = getter.get();
 			availability.put(field, true);
 			if (value == null)
+			{
 				nulls.add(field);
+			}
 			return value;
 		}
 		catch (RuntimeException unavailable)
@@ -87,7 +85,9 @@ public final class CallbackFieldObservation
 		result.put("fieldObservationVersion", 1);
 		result.put("fieldAvailability", new LinkedHashMap<>(availability));
 		if (!nulls.isEmpty())
+		{
 			result.put("nullFields", new ArrayList<>(nulls));
+		}
 		if (!issues.isEmpty())
 		{
 			result.put("observationIssues", new LinkedHashMap<>(issues));

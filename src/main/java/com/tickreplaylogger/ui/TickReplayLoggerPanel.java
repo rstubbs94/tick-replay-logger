@@ -24,6 +24,8 @@
  */
 package com.tickreplaylogger.ui;
 
+import com.tickreplaylogger.util.TickDisplay;
+import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import com.tickreplaylogger.model.TickRecording;
 import com.tickreplaylogger.model.TickData;
 import com.tickreplaylogger.ui.playback.PlaybackPanel;
@@ -34,38 +36,15 @@ import com.tickreplaylogger.capture.DamageMap;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
-
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JViewport;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
+import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
-import java.awt.BorderLayout;
-import java.awt.CardLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
+import java.awt.*;
 import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
 import java.util.List;
 
 /**
@@ -121,7 +100,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private SwingWorker<String, Void> clipboardExport;
 	private SwingWorker<Void, Void> encounterLabelsWorker;
 	private long encounterLabelsGeneration;
-	private final java.util.IdentityHashMap<String, TickRecording.PreparedEncounterTitle> encounterTitles = new java.util.IdentityHashMap<>();
+	private final IdentityHashMap<String, TickRecording.PreparedEncounterTitle> encounterTitles = new IdentityHashMap<>();
 
 	// Config, for display options like collapsing unchanged ticks
 	private final com.tickreplaylogger.TickReplayLoggerConfig config;
@@ -399,7 +378,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 		if (SwingUtilities.isEventDispatchThread())
 		{
 			if (!disposed)
+			{
 				refreshRecordingsList();
+			}
 		}
 		else
 		{
@@ -413,7 +394,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 		SwingUtilities.invokeLater(() ->
 		{
 			if (disposed)
+			{
 				return;
+			}
 			refresh();
 			if (error != null)
 			{
@@ -431,14 +414,20 @@ public class TickReplayLoggerPanel extends PluginPanel
 		SwingUtilities.invokeLater(() ->
 		{
 			if (clipboardExport != null)
+			{
 				clipboardExport.cancel(false);
+			}
 			encounterLabelsGeneration++;
 			if (encounterLabelsWorker != null)
+			{
 				encounterLabelsWorker.cancel(false);
+			}
 			encounterLabelsWorker = null;
 			encounterTitles.clear();
 			if (liveSaveFeedbackTimer != null)
+			{
 				liveSaveFeedbackTimer.stop();
+			}
 			playbackPanel.dispose();
 			pausedSnapshot = null;
 			pausedRichExport = null;
@@ -469,25 +458,33 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private void refreshRecordingsList()
 	{
 		if (disposed)
+		{
 			return;
+		}
 		long generation = ++encounterLabelsGeneration;
 		if (encounterLabelsWorker != null)
+		{
 			encounterLabelsWorker.cancel(false);
+		}
 		encounterLabelsWorker = null;
 		List<TickRecording> deaths = recordingStorage.getDeaths();
 		List<TickRecording> saved = recordingStorage.getSavedRecordings();
 		List<TickRecording> all = new java.util.ArrayList<>(deaths);
 		all.addAll(saved);
-		java.util.IdentityHashMap<String, TickRecording.PreparedEncounterTitle> currentTitles = new java.util.IdentityHashMap<>();
+		IdentityHashMap<String, TickRecording.PreparedEncounterTitle> currentTitles = new IdentityHashMap<>();
 		boolean preparationNeeded = false;
 		for (TickRecording recording : all)
 		{
 			String payload = recording.getRichExportJson();
 			TickRecording.PreparedEncounterTitle cached = encounterTitles.get(payload);
 			if (cached != null)
+			{
 				recording.rememberEncounterTitle(cached);
+			}
 			if (recording.preparedEncounterTitle() != null)
+			{
 				currentTitles.put(payload, recording.preparedEncounterTitle());
+			}
 			preparationNeeded |= com.tickreplaylogger.capture.RecordingEncounterLabels.needsPreparation(recording,
 				damageMap);
 		}
@@ -506,7 +503,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 				for (TickRecording recording : all)
 				{
 					if (isCancelled())
+					{
 						break;
+					}
 					com.tickreplaylogger.capture.RecordingEncounterLabels.prepareTitle(recording, damageMap, gson);
 				}
 				return null;
@@ -516,7 +515,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 			protected void done()
 			{
 				if (disposed || isCancelled() || generation != encounterLabelsGeneration)
+				{
 					return;
+				}
 				try
 				{
 					get();
@@ -527,8 +528,12 @@ public class TickReplayLoggerPanel extends PluginPanel
 				encounterLabelsWorker = null;
 				encounterTitles.clear();
 				for (TickRecording recording : all)
+				{
 					if (recording.getRichExportJson() != null && recording.preparedEncounterTitle() != null)
+					{
 						encounterTitles.put(recording.getRichExportJson(), recording.preparedEncounterTitle());
+					}
+				}
 				renderRecordingsList(deaths, saved);
 			}
 		};
@@ -538,7 +543,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private void renderRecordingsList(List<TickRecording> deaths, List<TickRecording> saved)
 	{
 		if (disposed)
+		{
 			return;
+		}
 		recordingsListContainer.removeAll();
 
 		GridBagConstraints gbc = new GridBagConstraints();
@@ -626,9 +633,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 		header.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		header.setBorder(new EmptyBorder(6, 10, 6, 10));
 
-		JLabel label = new JLabel(text);
-		label.setForeground(color);
-		label.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		JLabel label = createTextLabel(text, color, Font.BOLD, 13);
 		header.add(label, BorderLayout.WEST);
 
 		return header;
@@ -674,13 +679,12 @@ public class TickReplayLoggerPanel extends PluginPanel
 			liveStatusLabel.setText(statusText);
 
 			// Build display rows (optionally collapsing unchanged ticks), then render newest-first
-			List<com.tickreplaylogger.util.TickDisplay.Row> rows = com.tickreplaylogger.util.TickDisplay
-				.build(chronological, config.collapseUnchangedTicks());
+			List<TickDisplay.Row> rows = TickDisplay.build(chronological, config.collapseUnchangedTicks());
 
 			int rowIndex = 0;
 			for (int r = rows.size() - 1; r >= 0; r--)
 			{
-				com.tickreplaylogger.util.TickDisplay.Row row = rows.get(r);
+				TickDisplay.Row row = rows.get(r);
 				JPanel rowPanel = row.isGap() ? LiveTickPanel.createGapPanel(row.gapCount)
 					: LiveTickPanel.createTickPanel(row.tick, rowIndex, spriteManager);
 				liveTimelineContainer.add(rowPanel, gbc);
@@ -724,7 +728,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private void exportRecording(TickRecording recording)
 	{
 		if (disposed || clipboardExport != null)
+		{
 			return;
+		}
 		boolean rich = recording.getRichExportJson() != null && !recording.getRichExportJson().isEmpty();
 		setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 		clipboardExport = new SwingWorker<String, Void>()
@@ -739,7 +745,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 			protected void done()
 			{
 				if (disposed || isCancelled())
+				{
 					return;
+				}
 				try
 				{
 					String json = get();
@@ -890,7 +898,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 				{
 					ResolvedExportJournal resolved = gson.fromJson(completed, ResolvedExportJournal.class);
 					if (resolved != null && resolved.journalTicks != null)
+					{
 						return recording.toBuilder().ticks(resolved.journalTicks).build();
+					}
 				}
 				catch (RuntimeException legacyExport)
 				{
@@ -900,12 +910,18 @@ public class TickReplayLoggerPanel extends PluginPanel
 		}).whenComplete((ignored, error) -> SwingUtilities.invokeLater(() ->
 		{
 			if (disposed)
+			{
 				return;
+			}
 			storageCompleted(error);
 			if (error == null)
+			{
 				showLiveSaveFeedback();
+			}
 			else
+			{
 				updateLiveSaveButtonState();
+			}
 		}));
 	}
 
@@ -975,7 +991,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 			return;
 		}
 		if (disposed)
+		{
 			return;
+		}
 		liveViewEnabled = enabled;
 		toggleViewBtn.setEnabled(enabled);
 		if (enabled)

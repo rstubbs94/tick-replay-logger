@@ -24,11 +24,7 @@
  */
 package com.tickreplaylogger;
 
-import net.runelite.client.config.Config;
-import net.runelite.client.config.ConfigGroup;
-import net.runelite.client.config.ConfigItem;
-import net.runelite.client.config.ConfigSection;
-import net.runelite.client.config.Range;
+import net.runelite.client.config.*;
 
 @ConfigGroup("tickreplaylogger")
 public interface TickReplayLoggerConfig extends Config

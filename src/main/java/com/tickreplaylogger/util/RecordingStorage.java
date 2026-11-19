@@ -27,28 +27,15 @@ package com.tickreplaylogger.util;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.tickreplaylogger.model.TickRecording;
-import java.io.IOException;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.channels.FileChannel;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.*;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.*;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.util.Filepath;
@@ -97,7 +84,9 @@ public class RecordingStorage implements AutoCloseable
 		{
 			shared.owners--;
 			if (shared.owners != 0)
+			{
 				return;
+			}
 			long generation = shared.generation;
 			shared.executor.execute(() ->
 			{
@@ -176,13 +165,19 @@ public class RecordingStorage implements AutoCloseable
 			catch (Exception e)
 			{
 				if (failure == null)
+				{
 					failure = e;
+				}
 				else
+				{
 					failure.addSuppressed(e);
+				}
 				log.error("Saved recordings could not be loaded; their file is protected", e);
 			}
 			if (failure != null)
+			{
 				throw failure;
+			}
 		});
 	}
 
@@ -203,7 +198,9 @@ public class RecordingStorage implements AutoCloseable
 	{
 		Filepath backup = backup(file);
 		if (!file.exists())
+		{
 			return backup.exists() ? recover(file, backup) : new ArrayList<>();
+		}
 		try
 		{
 			return read(file);
@@ -211,7 +208,9 @@ public class RecordingStorage implements AutoCloseable
 		catch (Exception invalid)
 		{
 			if (!backup.exists())
+			{
 				throw invalid;
+			}
 			List<TickRecording> recovered = read(backup); // Validate before moving any original bytes.
 			Filepath corrupt = folder.createTempFile(file.getFileName() + ".corrupt-", ".json");
 			file.moveTo(corrupt, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -238,10 +237,16 @@ public class RecordingStorage implements AutoCloseable
 		{
 			boolean malformedEncoding = false;
 			for (Throwable cause = invalid; cause != null; cause = cause.getCause())
+			{
 				if (cause instanceof CharacterCodingException)
+				{
 					malformedEncoding = true;
+				}
+			}
 			if (!malformedEncoding || legacyCharset.equals(StandardCharsets.UTF_8))
+			{
 				throw invalid;
+			}
 			List<TickRecording> recovered = read(file, legacyCharset);
 			log.warn("Read legacy {} using {}; future saves use UTF-8", file.getFileName(), legacyCharset.name());
 			return recovered;
@@ -255,7 +260,9 @@ public class RecordingStorage implements AutoCloseable
 		{
 			List<TickRecording> loaded = gson.fromJson(reader, RECORDINGS);
 			if (loaded == null || loaded.stream().anyMatch(Objects::isNull))
+			{
 				throw new IOException("Invalid recordings collection: " + file.getFileName());
+			}
 			return loaded;
 		}
 	}
@@ -310,7 +317,9 @@ public class RecordingStorage implements AutoCloseable
 	private void writable(boolean saved) throws IOException
 	{
 		if (!(saved ? savedWritable : deathsWritable))
+		{
 			throw new IOException("Recordings could not be loaded; existing file will not be overwritten");
+		}
 	}
 
 	private List<TickRecording> current(boolean saved)
@@ -328,9 +337,13 @@ public class RecordingStorage implements AutoCloseable
 		synchronized (snapshots)
 		{
 			if (saved)
+			{
 				savedRecordings = replacement;
+			}
 			else
+			{
 				deaths = replacement;
+			}
 		}
 	}
 
@@ -344,14 +357,18 @@ public class RecordingStorage implements AutoCloseable
 	private static int index(List<TickRecording> records, TickRecording sought)
 	{
 		if (sought == null)
+		{
 			return -1;
+		}
 		for (int i = 0; i < records.size(); i++)
 		{
 			TickRecording record = records.get(i);
 			if (record.getTimestamp() == sought.getTimestamp()
 				&& Objects.equals(record.getRichExportJson(), sought.getRichExportJson())
 				&& Objects.equals(record.getTicks(), sought.getTicks()))
+			{
 				return i;
+			}
 		}
 		return -1;
 	}
@@ -370,7 +387,9 @@ public class RecordingStorage implements AutoCloseable
 	{
 		List<TickRecording> result = new ArrayList<>();
 		for (TickRecording record : current(saved))
+		{
 			result.add(copy(record));
+		}
 		return result;
 	}
 
@@ -404,7 +423,9 @@ public class RecordingStorage implements AutoCloseable
 			List<TickRecording> next = current(false);
 			next.add(0, copy(Objects.requireNonNull(supplier.get())));
 			while (next.size() > maxDeaths)
+			{
 				next.remove(next.size() - 1);
+			}
 			commit(false, next);
 		});
 	}
@@ -433,9 +454,13 @@ public class RecordingStorage implements AutoCloseable
 			List<TickRecording> next = current(false);
 			int limit = Math.max(0, requested);
 			while (next.size() > limit)
+			{
 				next.remove(next.size() - 1);
+			}
 			if (next.size() != getDeathCount())
+			{
 				commit(false, next);
+			}
 			maxDeaths = limit;
 		});
 	}
@@ -496,7 +521,9 @@ public class RecordingStorage implements AutoCloseable
 			List<TickRecording> recent = current(false);
 			int at = index(recent, recording);
 			if (at < 0)
+			{
 				return;
+			}
 			List<TickRecording> saved = current(true);
 			// Destination first: interruption of the second write may duplicate, never lose a recording.
 			// Retrying that interrupted move must not duplicate its already-published destination.
@@ -515,7 +542,9 @@ public class RecordingStorage implements AutoCloseable
 		return submit(() ->
 		{
 			if (name == null || name.trim().isEmpty())
+			{
 				return;
+			}
 			for (boolean saved : new boolean[]
 			{ false, true })
 			{

@@ -174,14 +174,14 @@ public class ProjectileCausalityTest
 	{
 		SourceResolution.Candidate a = SourceResolution.Candidate.builder().key("api-owner").name(NAME).actorRef(REF)
 			.npcId(NPC).sceneKey(SCENE).worldViewId(0).plane(0).strength("STRONG").build();
-		SourceEvidenceResolver.Hypothesis correlation = SourceEvidenceResolver.Hypothesis.builder().candidate(a)
+		LegacyConstraintOracle.Hypothesis correlation = LegacyConstraintOracle.Hypothesis.builder().candidate(a)
 			.causalAssociationOnly(true).build();
-		SourceEvidenceResolver.Hypothesis independent = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis independent = LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(a.toBuilder().key("separate-witness").build()).build();
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(correlation, independent), 13, false, "fixture");
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(correlation, independent), 13, false, "fixture");
 		assertEquals(1, result.getCandidates().size()); assertTrue(result.isUnidentifiedPossible());
 		assertEquals("ALTERNATIVES", result.getStatus());
-		SourceResolution other = SourceEvidenceResolver.resolve(Arrays.asList(correlation.toBuilder()
+		SourceResolution other = LegacyConstraintOracle.resolve(Arrays.asList(correlation.toBuilder()
 			.eligibilityExclusions(Collections.singletonList("QUALIFIED_OUTCOME_CONTRADICTION")).build(),
 			independent.toBuilder().candidate(a.toBuilder().key("other").actorRef("npc:other:v0:g2").build()).build()),
 			13, false, "fixture");

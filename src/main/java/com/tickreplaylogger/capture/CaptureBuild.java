@@ -24,27 +24,19 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import com.google.gson.*;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.client.RuneLiteProperties;
 
-/** Compile-target provenance with a bounded, cached runtime reference check; not a loaded-JAR hash. */
+/** Reviewed runtime references, separate from compile provenance unavailable in standard packaging. */
 public final class CaptureBuild
 {
-	private static final JsonObject INFO = load();
+	private static final JsonObject REFERENCES = load();
 	static final Map<String, List<String>> REFERENCE_CLASSES;
 	static
 	{
@@ -65,7 +57,7 @@ public final class CaptureBuild
 
 	private static JsonObject load()
 	{
-		try (InputStream input = CaptureBuild.class.getResourceAsStream("/com/tickreplaylogger/capture-build.json"))
+		try (InputStream input = CaptureBuild.class.getResourceAsStream("/com/tickreplaylogger/runtime-reference.json"))
 		{
 			return input == null ? new JsonObject()
 				: new JsonParser().parse(new InputStreamReader(input, StandardCharsets.UTF_8)).getAsJsonObject();
@@ -79,7 +71,10 @@ public final class CaptureBuild
 	private static final class RuntimeReference
 	{
 		static final String VERSION = loadedClientVersion();
-		static final String RESULT = verifyReferenceRuntime(INFO, VERSION, CaptureBuild::runtimeResource);
+		static final String RESULT = verifyReferenceRuntime(REFERENCES, VERSION, CaptureBuild::runtimeResource);
+		static final JsonObject REFERENCE = "MATCHED_SELECTED_CLASSES_AND_VERSION".equals(RESULT)
+			? selectedReference(REFERENCES, VERSION)
+			: new JsonObject();
 	}
 
 	private static String loadedClientVersion()
@@ -102,12 +97,12 @@ public final class CaptureBuild
 
 	public static String sourceTreeHash()
 	{
-		return value("sourceTreeHash");
+		return null; // Standard packaging does not observe the source tree used by the compiler.
 	}
 
 	public static String artifactIdentityScope()
 	{
-		return value("artifactIdentityScope");
+		return runtimeReferenceMatched() ? "REVIEWED_RUNTIME_REFERENCE" : null;
 	}
 
 	public static String runtimeVersion()
@@ -122,33 +117,48 @@ public final class CaptureBuild
 
 	public static String compiledApiVersion()
 	{
-		return value("runeLiteApiVersion");
+		return null;
 	}
 
 	public static String compiledApiArtifactSha256()
 	{
-		return artifactHash("runelite-api");
+		return null;
 	}
 
 	public static String compiledClientArtifactSha256()
 	{
-		return artifactHash("client");
+		return null;
 	}
 
-	// Existing fields identify the compile reference target only when its selected runtime witnesses match.
+	// Qualified reference aliases, never observations of the compiler or the complete loaded JAR.
 	public static String apiVersion()
 	{
-		return runtimeReferenceMatched() ? compiledApiVersion() : null;
+		return referenceVersion();
 	}
 
 	public static String apiArtifactSha256()
 	{
-		return runtimeReferenceMatched() ? compiledApiArtifactSha256() : null;
+		return referenceApiArtifactSha256();
 	}
 
 	public static String clientArtifactSha256()
 	{
-		return runtimeReferenceMatched() ? compiledClientArtifactSha256() : null;
+		return referenceClientArtifactSha256();
+	}
+
+	public static String referenceVersion()
+	{
+		return string(RuntimeReference.REFERENCE, "version");
+	}
+
+	public static String referenceApiArtifactSha256()
+	{
+		return referenceArtifactHash("runelite-api");
+	}
+
+	public static String referenceClientArtifactSha256()
+	{
+		return referenceArtifactHash("client");
 	}
 
 	public static boolean runtimeReferenceMatched()
@@ -158,8 +168,47 @@ public final class CaptureBuild
 
 	public static boolean supportsClientReference(String version, String clientHash)
 	{
-		return version != null && clientHash != null && runtimeReferenceMatched()
-			&& version.equals(compiledApiVersion()) && clientHash.equals(compiledClientArtifactSha256());
+		return supportsClientReference(REFERENCES, RuntimeReference.REFERENCE, runtimeReferenceMatched(), version,
+			clientHash);
+	}
+
+	/** Exact reviewed artifact pairs only; an alias never changes the reported runtime reference. */
+	static boolean supportsClientReference(JsonObject manifest, JsonObject runtime, boolean matched, String version,
+		String clientHash)
+	{
+		if (!matched || manifest == null || runtime == null || version == null || clientHash == null)
+		{
+			return false;
+		}
+		if (version.equals(string(runtime, "version"))
+			&& clientHash.equals(string(object(object(runtime.get("artifacts")).get("client")), "sha256")))
+		{
+			return true;
+		}
+		JsonElement aliases = runtime.get("semanticReferenceAliases");
+		if (aliases == null || !aliases.isJsonArray())
+		{
+			return false;
+		}
+		int matches = 0;
+		for (JsonElement value : aliases.getAsJsonArray())
+		{
+			JsonObject alias = object(value);
+			if (!version.equals(string(alias, "version")) || !clientHash.equals(string(alias, "clientArtifactSha256")))
+			{
+				continue;
+			}
+			JsonObject prior = selectedReference(manifest, version);
+			String proof = string(alias, "reviewedConsumerSetSha256");
+			if (!"EXACT_REVIEWED_CLIENT_REFERENCE_PAIR_V1".equals(string(alias, "scope")) || prior == null
+				|| proof == null || !proof.matches("[a-f0-9]{64}")
+				|| !clientHash.equals(string(object(object(prior.get("artifacts")).get("client")), "sha256")))
+			{
+				return false;
+			}
+			matches++;
+		}
+		return matches == 1;
 	}
 
 	@FunctionalInterface
@@ -170,17 +219,26 @@ public final class CaptureBuild
 
 	static String verifyReferenceRuntime(JsonObject info, String runtimeVersion, ReferenceResources resources)
 	{
-		if (!"COMPILE_CLASSPATH_REFERENCE".equals(string(info, "artifactIdentityScope"))
+		if (info == null || !info.has("schemaVersion") || !"1".equals(info.get("schemaVersion").toString())
+			|| !"REVIEWED_RUNTIME_REFERENCE".equals(string(info, "artifactIdentityScope"))
 			|| !"SELECTED_CLASSES_AND_VERSION_V1".equals(string(info, "runtimeReferencePolicy")))
-			return "BUILD_METADATA_UNAVAILABLE";
-		JsonObject artifacts = object(info.get("runeLiteArtifacts")), client = object(artifacts.get("client"));
-		String apiVersion = string(info, "runeLiteApiVersion");
-		if (apiVersion == null || !apiVersion.equals(string(object(artifacts.get("runelite-api")), "version")))
-			return "INVALID_REFERENCE_CLASS_MANIFEST";
+		{
+			return "REFERENCE_MANIFEST_UNAVAILABLE";
+		}
 		if (runtimeVersion == null)
+		{
 			return "RUNTIME_VERSION_UNAVAILABLE";
-		if (!runtimeVersion.equals(string(client, "version")))
+		}
+		JsonObject reference = selectedReference(info, runtimeVersion);
+		if (reference == null)
+		{
+			return "INVALID_REFERENCE_CLASS_MANIFEST";
+		}
+		if (reference.size() == 0)
+		{
 			return "RUNTIME_VERSION_MISMATCH";
+		}
+		JsonObject artifacts = object(reference.get("artifacts"));
 		try
 		{
 			byte[] buffer = new byte[8192];
@@ -191,23 +249,33 @@ public final class CaptureBuild
 				JsonObject hashes = object(artifact.get("referenceClassSha256s"));
 				if (archiveHash == null || !archiveHash.matches("[a-f0-9]{64}")
 					|| !hashes.keySet().equals(new HashSet<>(group.getValue())))
+				{
 					return "INVALID_REFERENCE_CLASS_MANIFEST";
+				}
 				for (String path : group.getValue())
 				{
 					String expected = string(hashes, path);
 					if (expected == null || !expected.matches("[a-f0-9]{64}"))
+					{
 						return "INVALID_REFERENCE_CLASS_MANIFEST";
+					}
 					MessageDigest digest = MessageDigest.getInstance("SHA-256");
 					try (InputStream input = resources.open(path))
 					{
 						if (input == null)
+						{
 							return "REFERENCE_CLASS_UNAVAILABLE";
+						}
 						int count;
 						while ((count = input.read(buffer)) > 0)
+						{
 							digest.update(buffer, 0, count);
+						}
 					}
 					if (!hex(digest.digest()).equals(expected))
+					{
 						return "REFERENCE_CLASS_MISMATCH";
+					}
 				}
 			}
 			return "MATCHED_SELECTED_CLASSES_AND_VERSION";
@@ -218,11 +286,35 @@ public final class CaptureBuild
 		}
 	}
 
+	private static JsonObject selectedReference(JsonObject manifest, String version)
+	{
+		JsonElement rows = manifest.get("references");
+		JsonObject selected = new JsonObject();
+		if (rows != null && rows.isJsonArray())
+		{
+			for (JsonElement value : rows.getAsJsonArray())
+			{
+				JsonObject row = object(value);
+				if (version.equals(string(row, "version")))
+				{
+					if (selected.size() != 0)
+					{
+						return null;
+					} // Conflicting declarations never select an arbitrary reference.
+					selected = row;
+				}
+			}
+		}
+		return selected;
+	}
+
 	private static String hex(byte[] values)
 	{
 		StringBuilder out = new StringBuilder(64);
 		for (byte value : values)
+		{
 			out.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
+		}
 		return out.toString();
 	}
 
@@ -238,13 +330,8 @@ public final class CaptureBuild
 			: null;
 	}
 
-	private static String artifactHash(String name)
+	private static String referenceArtifactHash(String name)
 	{
-		return string(object(object(INFO.get("runeLiteArtifacts")).get(name)), "sha256");
-	}
-
-	private static String value(String key)
-	{
-		return string(INFO, key);
+		return string(object(object(RuntimeReference.REFERENCE.get("artifacts")).get(name)), "sha256");
 	}
 }

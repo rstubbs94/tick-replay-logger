@@ -24,20 +24,11 @@
  */
 package com.tickreplaylogger.ui.playback;
 
+import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import net.runelite.client.ui.ColorScheme;
-
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
-import javax.swing.SwingConstants;
-import javax.swing.border.Border;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
 
 /**
  * Reusable stat box showing a label, progress bar, and value.
@@ -76,9 +67,7 @@ public class StatBoxPanel extends JPanel
 		setBorder(NORMAL_BORDER);
 
 		// Label on left
-		JLabel nameLabel = new JLabel(label);
-		nameLabel.setForeground(Color.WHITE);
-		nameLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		JLabel nameLabel = createTextLabel(label, Color.WHITE, Font.BOLD, 13);
 		nameLabel.setPreferredSize(new Dimension(30, 22));
 		add(nameLabel, BorderLayout.WEST);
 
@@ -95,9 +84,7 @@ public class StatBoxPanel extends JPanel
 		rightPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
 		// Value label
-		valueLabel = new JLabel("0/0");
-		valueLabel.setForeground(Color.WHITE);
-		valueLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+		valueLabel = createTextLabel("0/0", Color.WHITE, Font.BOLD, 13);
 		valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
 		rightPanel.add(valueLabel, BorderLayout.CENTER);
 

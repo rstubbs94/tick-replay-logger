@@ -209,12 +209,12 @@ public class EndpointClueReviewTest
 	{
 		ObservedMechanismResolver.Result result = resolve(callbackOrigin(42), hit(), null);
 		assertEquals(1, result.getContributions().size());
-		SourceEvidenceResolver.Hypothesis endpoint = result.getContributions().get(0).getHypothesis();
+		LegacyConstraintOracle.Hypothesis endpoint = result.getContributions().get(0).getHypothesis();
 		assertNull(endpoint.getConstraints());
-		SourceEvidenceResolver.Hypothesis excludedOrdinary = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis excludedOrdinary = LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(endpoint.getCandidate().toBuilder().key("ordinary-component").strength("STRONG").build())
 			.eligibilityExclusions(Collections.singletonList("MAXIMUM_EXCEEDED:ordinary-component:40 > 32")).build();
-		SourceResolution resolution = SourceEvidenceResolver.resolve(Arrays.asList(excludedOrdinary, endpoint), 40,
+		SourceResolution resolution = LegacyConstraintOracle.resolve(Arrays.asList(excludedOrdinary, endpoint), 40,
 			result.isUnidentifiedPossible(), "synthetic-review");
 		assertEquals(1, resolution.getCandidates().size());
 		assertEquals(REF, resolution.getCandidates().get(0).getActorRef());

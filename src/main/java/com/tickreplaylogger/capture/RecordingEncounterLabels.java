@@ -29,14 +29,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.tickreplaylogger.model.TickRecording;
-import com.tickreplaylogger.model.world.NpcState;
-import com.tickreplaylogger.model.world.NpcStateTable;
-import com.tickreplaylogger.model.world.WorldSnapshot;
+import com.tickreplaylogger.model.world.*;
 import java.io.StringReader;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
 
 /** Recorded encounter context for titles. This never changes the fatal source or saved data. */
 public final class RecordingEncounterLabels
@@ -68,7 +64,9 @@ public final class RecordingEncounterLabels
 	public static boolean needsPreparation(TickRecording recording, DamageMap map)
 	{
 		if (!encounterTitleNeeded(recording))
+		{
 			return false;
+		}
 		String scope = catalogId(map);
 		TickRecording.PreparedEncounterTitle cached = recording.preparedEncounterTitle();
 		return scope != null && (cached == null || !cached.matches(recording, scope));
@@ -86,9 +84,13 @@ public final class RecordingEncounterLabels
 	public static String prepareTitle(TickRecording recording, DamageMap map, Gson gson)
 	{
 		if (gson == null || !needsPreparation(recording, map))
+		{
 			return preparedTitle(recording, map);
+		}
 		if (javax.swing.SwingUtilities.isEventDispatchThread())
+		{
 			throw new IllegalStateException("Encounter title preparation must run off the EDT");
+		}
 		TickRecording frozen = recording.toBuilder().build();
 		String scope = catalogId(map);
 		String encounter = observedEncounter(frozen, map, gson);
@@ -96,17 +98,23 @@ public final class RecordingEncounterLabels
 			frozen.getRichExportJson(), frozen.getKillerName(), frozen.getCustomLabel(), scope,
 			encounter == null ? frozen.getKillerName() : encounter);
 		if (cached.matches(recording, catalogId(map)))
+		{
 			recording.rememberEncounterTitle(cached);
+		}
 		return preparedTitle(recording, map);
 	}
 
 	public static String observedEncounter(TickRecording recording, DamageMap map, Gson gson)
 	{
 		if (javax.swing.SwingUtilities.isEventDispatchThread())
+		{
 			throw new IllegalStateException("Rich encounter observations must be read off the EDT");
+		}
 		if (recording == null || gson == null || map == null || map.catalog() == null
 			|| recording.getRichExportJson() == null)
+		{
 			return null;
+		}
 		List<WorldSnapshot> frames = new ArrayList<>();
 		NpcStateTable table = null;
 		String version = null, catalogId = null;
@@ -116,6 +124,7 @@ public final class RecordingEncounterLabels
 		{
 			reader.beginObject();
 			while (reader.hasNext())
+			{
 				switch (reader.nextName())
 				{
 				case "schemaVersion":
@@ -139,10 +148,13 @@ public final class RecordingEncounterLabels
 				default:
 					reader.skipValue();
 				}
+			}
 			reader.endObject();
 			if (reader.peek() != JsonToken.END_DOCUMENT || !deathObserved || !"1.3".equals(version)
 				|| !map.catalog().id().equals(catalogId))
+			{
 				return null;
+			}
 			NpcStateEncoding.Reader rows = table == null ? null : new NpcStateEncoding.Reader(table, gson);
 			Set<String> bosses = new LinkedHashSet<>();
 			for (WorldSnapshot frame : frames)
@@ -151,18 +163,26 @@ public final class RecordingEncounterLabels
 				if (npcs == null && frame.getNpcStateRefs() != null)
 				{
 					if (rows == null)
+					{
 						return null;
+					}
 					npcs = rows.read(frame);
 				}
 				if (npcs == null)
+				{
 					continue;
+				}
 				for (NpcState npc : npcs)
 				{
 					String name = map.catalog().observedBossName(npc);
 					if (name != null)
+					{
 						bosses.add(name);
+					}
 					if (bosses.size() > 1)
+					{
 						return null;
+					}
 				}
 			}
 			return bosses.size() == 1 ? bosses.iterator().next() : null;
@@ -177,7 +197,9 @@ public final class RecordingEncounterLabels
 		throws java.io.IOException
 	{
 		if (depth > 8)
+		{
 			throw new IllegalArgumentException("Nested native frames");
+		}
 		if (reader.peek() == JsonToken.NULL)
 		{
 			reader.nextNull();
@@ -190,6 +212,7 @@ public final class RecordingEncounterLabels
 			List<Integer> refs = null;
 			reader.beginObject();
 			while (reader.hasNext())
+			{
 				switch (reader.nextName())
 				{
 				case "npcs":
@@ -201,7 +224,9 @@ public final class RecordingEncounterLabels
 					npcs = new ArrayList<>();
 					reader.beginArray();
 					while (reader.hasNext())
+					{
 						npcs.add(gson.fromJson(reader, NpcState.class));
+					}
 					reader.endArray();
 					break;
 				case "npcStateRefs":
@@ -213,7 +238,9 @@ public final class RecordingEncounterLabels
 					refs = new ArrayList<>();
 					reader.beginArray();
 					while (reader.hasNext())
+					{
 						refs.add(gson.fromJson(reader, Integer.class));
+					}
 					reader.endArray();
 					break;
 				case "additionalViews":
@@ -222,6 +249,7 @@ public final class RecordingEncounterLabels
 				default:
 					reader.skipValue();
 				}
+			}
 			reader.endObject();
 			frames.add(WorldSnapshot.builder().npcs(npcs).npcStateRefs(refs).build());
 		}

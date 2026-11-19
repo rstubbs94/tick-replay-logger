@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.Map;
 import java.util.List;
 import lombok.Builder;
 import lombok.Value;
@@ -63,7 +64,7 @@ public class ObservedObjectState
 	Integer offsetY2;
 	List<Integer> animationIds;
 	List<Integer> animationFrames;
-	java.util.Map<String, Boolean> fieldAvailability;
-	java.util.Map<String, String> observationIssues;
+	Map<String, Boolean> fieldAvailability;
+	Map<String, String> observationIssues;
 	List<String> nullFields;
 }

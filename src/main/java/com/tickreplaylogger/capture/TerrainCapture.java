@@ -25,21 +25,9 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.TileSurface;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import net.runelite.api.Scene;
-import net.runelite.api.SceneTileModel;
-import net.runelite.api.SceneTilePaint;
-import net.runelite.api.Tile;
+import net.runelite.api.*;
 
 /** Immutable terrain snapshots; no object-name, boss or hazard whitelist. */
 public final class TerrainCapture
@@ -87,7 +75,9 @@ public final class TerrainCapture
 		coverage.put("selectedPlane", plane);
 		coverage.put("nativeGridAvailable", false);
 		if (scene == null || scene.getTiles() == null || plane < 0)
+		{
 			return null;
+		}
 		Tile[][][] all = scene.getTiles();
 		Tile[][] tiles = plane < all.length ? all[plane] : null;
 		nativeGridAvailable = tiles != null;
@@ -98,7 +88,9 @@ public final class TerrainCapture
 		{
 			heights = new ArrayList<>();
 			for (Tile[] column : tiles)
+			{
 				heights.add(column == null ? null : column.length);
+			}
 		}
 		coverage.put("columnHeights", heights == null ? null : Collections.unmodifiableList(heights));
 		if (previousScene != scene || previousPlane != plane)
@@ -115,25 +107,37 @@ public final class TerrainCapture
 		short[][][] underlays = scene.getUnderlayIds(), overlays = scene.getOverlayIds();
 		byte[][][] shapes = scene.getTileShapes();
 		if (tiles != null && tiles.length > 1024)
+		{
 			throw new IllegalStateException("Terrain width exceeds supported bounds");
+		}
 		for (int x = 0; tiles != null && x < tiles.length; x++)
+		{
 			if (tiles[x] != null)
 			{
 				if (tiles[x].length > 1024)
+				{
 					throw new IllegalStateException("Terrain height exceeds supported bounds");
+				}
 				for (int y = 0; y < tiles[x].length; y++)
 				{
 					if (++visited > 32768)
+					{
 						throw new IllegalStateException("Terrain scope exceeds supported tile count");
+					}
 					Tile tile = tiles[x][y];
 					if (tile == null)
+					{
 						continue;
+					}
 					add(tile, x, y, tiles.length, tiles[x].length, false, underlays, overlays, shapes, out, seen);
 					Tile bridge = tile.getBridge();
 					if (bridge != null && bridge != tile)
+					{
 						add(bridge, x, y, tiles.length, tiles[x].length, true, underlays, overlays, shapes, out, seen);
+					}
 				}
 			}
+		}
 		// A bridge link can be the only API route to a tile on another reported plane.
 		// Retain its source path, while treating it as canonical for that plane when no array tile exists.
 		Set<Tile> chain = Collections.newSetFromMap(new IdentityHashMap<>(4));
@@ -141,25 +145,38 @@ public final class TerrainCapture
 		{
 			Tile[][] source = all[sourcePlane];
 			if (source == null)
+			{
 				continue;
+			}
 			if (source.length > 1024)
+			{
 				throw new IllegalStateException("Linked terrain width exceeds bounds");
+			}
 			int inspected = 0;
 			for (int x = 0; x < source.length; x++)
+			{
 				if (source[x] != null)
 				{
 					if (source[x].length > 1024)
+					{
 						throw new IllegalStateException("Linked terrain height exceeds bounds");
+					}
 					for (int y = 0; y < source[x].length; y++)
 					{
 						if (++inspected > 32768)
+						{
 							throw new IllegalStateException("Linked terrain scope exceeds bounds");
+						}
 						if (tiles != null && x < tiles.length && tiles[x] != null && y < tiles[x].length
 							&& tiles[x][y] != null)
+						{
 							continue;
+						}
 						Tile candidate = source[x][y];
 						if (candidate == null)
+						{
 							continue;
+						}
 						boolean linked = false;
 						chain.clear();
 						while (candidate != null && chain.add(candidate))
@@ -175,13 +192,18 @@ public final class TerrainCapture
 						}
 					}
 				}
+			}
 		}
 		coverage.put("samplingCompleted", true);
 		if (!nativeGridAvailable && out.isEmpty())
+		{
 			return null;
+		}
 		previous.keySet().retainAll(seen);
 		if (previousSnapshot != null && out.equals(previousSnapshot))
+		{
 			return previousSnapshot;
+		}
 		previousSnapshot = Collections.unmodifiableList(out);
 		return previousSnapshot;
 	}
@@ -205,10 +227,14 @@ public final class TerrainCapture
 		Integer underlay = at(underlays, plane, x, y, width, height),
 			overlay = at(overlays, plane, x, y, width, height), shape = at(shapes, plane, x, y, width, height);
 		if (paint == null && model == null && (underlay == null || underlay == 0) && (overlay == null || overlay == 0))
+		{
 			return;
+		}
 		String key = coordinateKey(x, y, bridge);
 		if (seen.contains(key))
+		{
 			return;
+		}
 		TileSurface old = previous.get(key);
 		// API models/paints can mutate in place. Compare their current values to our owned
 		// snapshot before allocating a builder and copying every geometry/color array.
@@ -255,11 +281,15 @@ public final class TerrainCapture
 			|| !Objects.equals(old.getSampleEvidence(), evidence)
 			|| !Objects.equals(old.getUnderlayId(), definitionId(underlay))
 			|| !Objects.equals(old.getOverlayId(), definitionId(overlay)) || !Objects.equals(old.getTileShape(), shape))
+		{
 			return false;
+		}
 		if (paint == null)
 		{
 			if (old.getPaintRgb() != null)
+			{
 				return false;
+			}
 		}
 		else
 		{
@@ -268,10 +298,14 @@ public final class TerrainCapture
 				|| !Objects.equals(old.getPaintFlat(), paint.isFlat()) || corners == null || corners.length != 4
 				|| corners[0] != paint.getSwColor() || corners[1] != paint.getSeColor()
 				|| corners[2] != paint.getNwColor() || corners[3] != paint.getNeColor())
+			{
 				return false;
+			}
 		}
 		if (model == null)
+		{
 			return old.getModelUnderlay() == null;
+		}
 		return same(old.getModelUnderlay(), model.getModelUnderlay())
 			&& same(old.getModelOverlay(), model.getModelOverlay()) && same(old.getModelShape(), model.getShape())
 			&& same(old.getModelRotation(), model.getRotation())
@@ -305,7 +339,9 @@ public final class TerrainCapture
 		}
 		String key = column[slot];
 		if (key == null)
+		{
 			column[slot] = key = x + ":" + y + ":" + (bridge ? "bridge" : "surface");
+		}
 		return key;
 	}
 

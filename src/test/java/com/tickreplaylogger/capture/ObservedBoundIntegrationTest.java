@@ -61,13 +61,13 @@ public class ObservedBoundIntegrationTest
 	private static SourceResolution resolve(AttributionConstraint guard, Map<String, Number> numbers, int amount,
 		boolean includeOther)
 	{
-		SourceEvidenceResolver.Hypothesis source = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis source = LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(candidate("Recorded source")).constraints(Arrays.asList(unrelatedReference(), guard))
 			.observations(observations()).numericObservations(numbers)
 			.mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT").worldMode("NORMAL").build();
-		SourceEvidenceResolver.Hypothesis other = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis other = LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(candidate("Other source").toBuilder().familyKey("fixture:other").build()).build();
-		return SourceEvidenceResolver.resolve(includeOther ? Arrays.asList(source, other) : Collections.singletonList(source),
+		return LegacyConstraintOracle.resolve(includeOther ? Arrays.asList(source, other) : Collections.singletonList(source),
 			amount, false, "fixture");
 	}
 

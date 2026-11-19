@@ -24,34 +24,16 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.PlayerAction;
-import com.tickreplaylogger.model.TickData;
-import com.tickreplaylogger.model.TickRecording;
+import static net.runelite.client.util.Text.removeTags;
+import com.google.gson.*;
+import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.DeathRecordingV2;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.io.ByteArrayOutputStream;
-import java.io.BufferedWriter;
-import java.io.FilterOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.io.Writer;
+import java.util.*;
+import java.io.*;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.zip.GZIPOutputStream;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.*;
 import lombok.extern.slf4j.Slf4j;
 
 /** Completes the viewer payload from the original saved journal without rewriting old captures. */
@@ -70,23 +52,29 @@ public final class RecordingExport
 	{
 		String rich = recording.getRichExportJson();
 		if (rich != null && rich.length() >= COMPRESS_AT_BYTES / 3 && latestPayload(rich))
+		{
 			try
 			{
 				Completion completed = prepare(recording, gson);
 				String encoded = compress(out -> writeCompleted(recording, gson, completed, out), gson, rich.length());
 				if (encoded != null)
+				{
 					return encoded;
+				}
 			}
 			catch (IOException | RuntimeException invalid)
 			{
 				/* Preserve the ordinary export fallback below. */ }
+		}
 		return clipboardTransport(forViewer(recording, gson), gson);
 	}
 
 	static String clipboardTransport(String plain, Gson gson)
 	{
 		if (plain.length() < COMPRESS_AT_BYTES / 3 || !latestPayload(plain))
+		{
 			return plain;
+		}
 		String encoded = compress(out -> out.write(plain), gson, plain.length());
 		return encoded == null ? plain : encoded;
 	}
@@ -115,7 +103,9 @@ public final class RecordingExport
 				}
 			}
 			if (counted.bytes < COMPRESS_AT_BYTES)
+			{
 				return null;
+			}
 			JsonObject envelope = new JsonObject();
 			envelope.addProperty("schemaVersion", DeathRecordingV2.LATEST_SCHEMA_VERSION);
 			envelope.addProperty("transportEncoding", "gzip-base64-v1");
@@ -138,7 +128,9 @@ public final class RecordingExport
 			while (reader.hasNext())
 			{
 				if ("schemaVersion".equals(reader.nextName()))
+				{
 					return DeathRecordingV2.LATEST_SCHEMA_VERSION.equals(reader.nextString());
+				}
 				reader.skipValue();
 			}
 		}
@@ -162,7 +154,9 @@ public final class RecordingExport
 		public void write(int value) throws IOException
 		{
 			if (++bytes > MAX_EXPANDED_BYTES)
+			{
 				throw new IOException("Expanded recording limit");
+			}
 			out.write(value);
 		}
 
@@ -171,7 +165,9 @@ public final class RecordingExport
 		{
 			bytes += length;
 			if (bytes > MAX_EXPANDED_BYTES)
+			{
 				throw new IOException("Expanded recording limit");
+			}
 			out.write(values, offset, length);
 		}
 	}
@@ -180,7 +176,9 @@ public final class RecordingExport
 	{
 		String rich = recording.getRichExportJson();
 		if (rich == null || rich.isEmpty())
+		{
 			return gson.toJson(recording);
+		}
 		try
 		{
 			if (!latestPayload(rich))
@@ -188,10 +186,14 @@ public final class RecordingExport
 				try (JsonReader reader = new JsonReader(new StringReader(rich)))
 				{
 					if (reader.peek() != JsonToken.BEGIN_OBJECT)
+					{
 						throw new IOException("Invalid recording object");
+					}
 					reader.skipValue();
 					if (reader.peek() != JsonToken.END_DOCUMENT)
+					{
 						throw new IOException("Trailing export data");
+					}
 				}
 				return rich;
 			}
@@ -223,6 +225,7 @@ public final class RecordingExport
 		{
 			reader.beginObject();
 			while (reader.hasNext())
+			{
 				switch (reader.nextName())
 				{
 				case "journalTicks":
@@ -232,22 +235,29 @@ public final class RecordingExport
 				case "summary":
 					completed.summary = gson.fromJson(reader, JsonObject.class);
 					if (completed.summary == null)
+					{
 						throw new IOException("Null summary");
+					}
 					break;
 				case "events":
 					reader.beginObject();
 					while (reader.hasNext())
+					{
 						switch (reader.nextName())
 						{
 						case "damageEvents":
 							completed.damage = gson.fromJson(reader, JsonArray.class);
 							if (completed.damage == null)
+							{
 								completed.damage = new JsonArray();
+							}
 							break;
 						case "playerActions":
 							completed.actions = gson.fromJson(reader, JsonArray.class);
 							if (completed.actions == null)
+							{
 								completed.actions = new JsonArray();
+							}
 							break;
 						case "observations":
 							completed.observations = true;
@@ -256,24 +266,32 @@ public final class RecordingExport
 						default:
 							reader.skipValue();
 						}
+					}
 					reader.endObject();
 					break;
 				default:
 					reader.skipValue();
 				}
+			}
 			reader.endObject();
 			if (reader.peek() != JsonToken.END_DOCUMENT)
+			{
 				throw new IOException("Trailing export data");
+			}
 		}
 		JsonArray damage = completed.damage, actions = completed.actions;
 		Map<String, Integer> knownActions = new HashMap<>(), knownHits = new HashMap<>();
 		for (JsonElement value : actions)
+		{
 			count(knownActions, actionKey(value.getAsJsonObject()));
+		}
 		for (JsonElement value : damage)
 		{
 			JsonObject hit = value.getAsJsonObject();
 			if ("DEALT".equals(text(hit, "direction")))
+			{
 				count(knownHits, hitKey(hit));
+			}
 		}
 		Map<String, Integer> seenActions = new HashMap<>(), seenHits = new HashMap<>();
 		int totalDealt = 0;
@@ -286,18 +304,26 @@ public final class RecordingExport
 				row.addProperty("type", action.getType().name());
 				row.addProperty("detail", action.getDescription());
 				if (action.getTarget() != null)
+				{
 					row.addProperty("target", action.getTarget());
+				}
 				if (action.getItemName() != null)
+				{
 					row.addProperty("itemName", action.getItemName());
+				}
 				row.addProperty("observationKind", "LEGACY_JOURNAL");
 				String key = actionKey(row);
 				if (count(seenActions, key) > knownActions.getOrDefault(key, 0))
+				{
 					actions.add(row);
+				}
 			}
 			for (DamageEvent hit : tick.getDamageEvents())
 			{
 				if (hit.getDirection() != DamageEvent.DamageDirection.DEALT)
+				{
 					continue;
+				}
 				totalDealt += hit.getAmount();
 				JsonObject row = new JsonObject();
 				row.addProperty("direction", "DEALT");
@@ -317,7 +343,9 @@ public final class RecordingExport
 				row.addProperty("determination", "UNKNOWN");
 				String key = hitKey(row);
 				if (count(seenHits, key) > knownHits.getOrDefault(key, 0))
+				{
 					damage.add(row);
+				}
 			}
 		}
 		completed.journal = gson.toJsonTree(recording.getTicks());
@@ -371,7 +399,9 @@ public final class RecordingExport
 						writeValue(writer, gson, completed.enrichment);
 					}
 					else
+					{
 						copy(reader, writer);
+					}
 					break;
 				default:
 					copy(reader, writer);
@@ -430,7 +460,9 @@ public final class RecordingExport
 				writeValue(writer, gson, completed.actions);
 			}
 			else
+			{
 				copy(reader, writer);
+			}
 		}
 		reader.endObject();
 		if (!damage)
@@ -471,7 +503,9 @@ public final class RecordingExport
 			reader.beginArray();
 			writer.beginArray();
 			while (reader.hasNext())
+			{
 				copy(reader, writer);
+			}
 			reader.endArray();
 			writer.endArray();
 			break;
@@ -506,7 +540,7 @@ public final class RecordingExport
 	private static String hitKey(JsonObject row)
 	{
 		return text(row, "impactTick") + "\t" + text(row, "amount") + "\t"
-			+ text(row, "defenderName").replaceAll("<[^>]*>", "").trim();
+			+ removeTags(text(row, "defenderName")).trim();
 	}
 
 	private static int count(Map<String, Integer> counts, String key)

@@ -26,12 +26,8 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /** Input candidates only: no synthetic hits, amount guesses or claims that a click executed. */
 public final class SelfDamageInputs
@@ -64,18 +60,26 @@ public final class SelfDamageInputs
 	{
 		prune(tick);
 		if (catalog == null || weaponId <= 0)
+		{
 			return;
+		}
 		for (JsonElement element : catalog.selfDamageCombatCandidates())
 		{
 			JsonObject rule = element.getAsJsonObject();
 			boolean matches = false;
 			for (JsonElement item : rule.getAsJsonArray("itemIds"))
+			{
 				if (item.getAsInt() == weaponId)
+				{
 					matches = true;
+				}
+			}
 			if (matches)
 			{
 				if (inputs.size() >= 32)
+				{
 					inputs.remove(0);
+				}
 				inputs.add(new Input(rule, weaponId, tick, sequence, "Special energy decreased"));
 			}
 		}
@@ -85,24 +89,39 @@ public final class SelfDamageInputs
 	{
 		prune(tick);
 		if (catalog == null || itemId <= 0)
+		{
 			return;
+		}
 		for (JsonElement element : catalog.selfDamageInputs())
 		{
 			JsonObject rule = element.getAsJsonObject();
 			boolean id = false, operation = false;
-			JsonElement candidateIds = rule.has("candidateItemIds") ? rule.get("candidateItemIds") : rule.get("itemIds");
+			JsonElement candidateIds = rule.has("candidateItemIds") ? rule.get("candidateItemIds")
+				: rule.get("itemIds");
 			if (candidateIds == null || !candidateIds.isJsonArray())
+			{
 				continue;
+			}
 			for (JsonElement value : candidateIds.getAsJsonArray())
+			{
 				if (value.getAsInt() == itemId)
+				{
 					id = true;
+				}
+			}
 			for (JsonElement value : rule.getAsJsonArray("candidateOperations"))
+			{
 				if (value.getAsString().equalsIgnoreCase(option))
+				{
 					operation = true;
+				}
+			}
 			if (id && operation)
 			{
 				if (inputs.size() >= 32)
+				{
 					inputs.remove(0);
+				}
 				inputs.add(new Input(rule, itemId, tick, sequence, option));
 			}
 		}
@@ -123,9 +142,11 @@ public final class SelfDamageInputs
 			String page = input.rule.get("page").getAsString();
 			// Different operations can have different source constraints. Preserve each
 			// bounded witness; source families merge only after per-witness filtering.
-			if (!seen.add(java.util.Arrays.asList(page, input.itemId, input.tick, input.sequence, input.option,
+			if (!seen.add(Arrays.asList(page, input.itemId, input.tick, input.sequence, input.option,
 				input.rule.get("pageHash").getAsString(), input.rule.has("observationKind"))))
+			{
 				continue;
+			}
 			boolean resource = input.rule.has("observationKind");
 			Map<String, Object> row = new LinkedHashMap<>();
 			row.put("kind", resource ? "SELF_DAMAGE_RESOURCE_CANDIDATE" : "SELF_DAMAGE_INPUT_CANDIDATE");

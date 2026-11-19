@@ -27,12 +27,8 @@ package com.tickreplaylogger.capture;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.tickreplaylogger.model.world.ObservedStatusState;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import net.runelite.api.Client;
 
 /** Independent local status reads. Failure of one variable does not erase another sample. */
@@ -41,10 +37,14 @@ final class ClientStatusCapture
 	static List<ObservedStatusState> capture(Client client, CombatCatalog catalog, List<String> issues)
 	{
 		if (catalog == null)
+		{
 			return null;
+		}
 		JsonElement configured = catalog.contextBindings().get("statusValueRules");
 		if (configured == null || !configured.isJsonArray())
+		{
 			return null;
+		}
 		List<ObservedStatusState> out = new ArrayList<>();
 		Map<String, Integer> values = new HashMap<>();
 		Set<String> failed = new HashSet<>();
@@ -83,14 +83,20 @@ final class ClientStatusCapture
 			{
 				JsonObject range = catalog.localStatusCase(key, value);
 				if (range.size() == 0)
+				{
 					sample.state("unknown").stateLabel("Interpretation unavailable for this client target")
 						.evidence("UNSUPPORTED_CLIENT_STATUS_REFERENCE");
+				}
 				else if (range.get("active").isJsonNull())
+				{
 					sample.state("unknown").stateLabel(range.get("label").getAsString())
 						.evidence("UNESTABLISHED_CLIENT_STATUS_VALUE");
+				}
 				else
+				{
 					sample.state(range.get("state").getAsString()).stateLabel(range.get("label").getAsString())
 						.active(range.get("active").getAsBoolean());
+				}
 			}
 			catch (RuntimeException unavailable)
 			{

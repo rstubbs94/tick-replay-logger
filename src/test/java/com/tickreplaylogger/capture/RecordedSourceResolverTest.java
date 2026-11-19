@@ -25,6 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.tickreplaylogger.model.world.DamageRecord;
 import com.tickreplaylogger.model.world.HazardState;
 import com.tickreplaylogger.model.world.ObservedStatusState;
@@ -117,7 +118,7 @@ public class RecordedSourceResolverTest
 	@Test
 	public void sameTickCureCannotEraseEarlierStatusAndContactDoesNotEstablishCausality()
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		assertTrue("Aligned rule required for this positive status control",
 			map.catalog().localStatusCanRepresentDamage("poison_venom_client_state", "venom"));
 		SourceResolution r = resolver(
@@ -133,7 +134,7 @@ public class RecordedSourceResolverTest
 	@Test
 	public void settledInactiveOrSameTickActivationCannotProveEarlierHitState()
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		SourceResolution inactive = resolver(Collections.singletonList(
 			frame(2, Collections.singletonList(hazard(true, 0)), Collections.singletonList(status(false)))), map)
 			.resolve(hit("venom"));
@@ -152,7 +153,7 @@ public class RecordedSourceResolverTest
 	@Test
 	public void repeatedKnownInactiveStatusDoesNotInventAnUnavailableReadOrRecurringDamage()
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		SourceResolution r = resolver(
 			Arrays.asList(frame(1, Collections.emptyList(), Collections.singletonList(status(false))),
 				frame(2, Collections.singletonList(hazard(true, 0)), Collections.singletonList(status(false)))),
@@ -271,9 +272,10 @@ public class RecordedSourceResolverTest
 
 	private static DamageMap toyEnvelopeMap() throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		java.lang.reflect.Field rootField = CombatCatalog.class.getDeclaredField("root");
 		rootField.setAccessible(true);
+		rootField.set(map.catalog(), ((JsonObject) rootField.get(map.catalog())).deepCopy());
 		com.google.gson.JsonObject root = (com.google.gson.JsonObject) rootField.get(map.catalog());
 		root.getAsJsonObject("npcIdentities").add("900001", GSON.fromJson(
 			"{\"candidates\":[{\"name\":\"Unfamiliar entity\",\"source_ref\":\"wiki:Unfamiliar_entity#infobox-1\",\"combat_level\":\"80\"}]}",
@@ -314,9 +316,9 @@ public class RecordedSourceResolverTest
 			.add(GSON.fromJson(
 				"{\"activity\":\"scaled-test\",\"variable\":\"TEST_SCALING\",\"cases\":[{\"values\":[1]}]}",
 				com.google.gson.JsonObject.class));
-		java.lang.reflect.Field index = CombatCatalog.class.getDeclaredField("attributionConstraintIndex");
+		java.lang.reflect.Field index = LegacyCombatCatalog.class.getDeclaredField("attributionConstraintIndex");
 		index.setAccessible(true);
-		index.set(map.catalog(), null);
+		index.set(LegacyCombatCatalog.from(map.catalog()), null);
 		return map;
 	}
 
@@ -398,12 +400,12 @@ public class RecordedSourceResolverTest
 		field.setAccessible(true);
 		com.google.gson.JsonObject root = (com.google.gson.JsonObject) field.get(map.catalog());
 		root.getAsJsonObject("attributionConstraints").add("version", new com.google.gson.JsonObject());
-		assertTrue(map.catalog().attributionConstraints(900001).isEmpty());
+		assertTrue(LegacyCombatCatalog.from(map.catalog()).attributionConstraints(900001).isEmpty());
 		map = toyEnvelopeMap();
 		root = (com.google.gson.JsonObject) field.get(map.catalog());
 		root.getAsJsonObject("attributionConstraints").getAsJsonArray("rules").get(0).getAsJsonObject()
 			.getAsJsonObject("selector").getAsJsonArray("npcIds").add("malformed");
-		assertTrue(map.catalog().attributionConstraints(900001).isEmpty());
+		assertTrue(LegacyCombatCatalog.from(map.catalog()).attributionConstraints(900001).isEmpty());
 	}
 
 	@Test

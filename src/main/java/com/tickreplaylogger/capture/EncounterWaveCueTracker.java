@@ -24,18 +24,13 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import static net.runelite.client.util.Text.removeTags;
+import com.google.gson.*;
 import com.tickreplaylogger.model.world.EncounterWaveCue;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 
 /** Retains a source-qualified system-message anchor across a trimmed recording window.
@@ -84,7 +79,9 @@ final class EncounterWaveCueTracker
 			if (!Objects.equals(scope, next) || !Objects.equals(sceneKey, scene)
 				|| !Objects.equals(catalogId, catalog.id()) || apiTick == null || tick < apiTick
 				|| (long) tick > (long) apiTick + 1)
+			{
 				cue = null;
+			}
 			scope = next;
 			sceneKey = scene;
 			catalogId = catalog.id();
@@ -103,11 +100,15 @@ final class EncounterWaveCueTracker
 	{
 		Scope observed = refresh(client, catalog, scene, observedState);
 		if (observed == null || channel != ChatMessageType.GAMEMESSAGE || message == null || message.length() > 2048)
+		{
 			return;
-		String clean = message.replaceAll("<[^>]*>", "").trim();
+		}
+		String clean = removeTags(message).trim();
 		JsonArray rules = catalog.contextBindings().getAsJsonArray("waveCueRules");
 		if (rules == null)
+		{
 			return;
+		}
 		EncounterWaveCue selected = null;
 		for (JsonElement value : rules)
 		{
@@ -116,7 +117,9 @@ final class EncounterWaveCueTracker
 				|| !rule.get("requireInstance").getAsBoolean()
 				|| rule.get("templateRegionId").getAsInt() != observed.region
 				|| !"GAMEMESSAGE".equals(rule.get("channel").getAsString()))
+			{
 				continue;
+			}
 			String kind = null;
 			Integer wave = null;
 			Matcher start = Pattern.compile(rule.get("startPattern").getAsString()).matcher(clean);
@@ -137,7 +140,9 @@ final class EncounterWaveCueTracker
 				wave = rule.get("maxWave").getAsInt();
 			}
 			if (wave == null || wave < rule.get("minWave").getAsInt() || wave > rule.get("maxWave").getAsInt())
+			{
 				continue;
+			}
 			// Ambiguous bindings do not select one interpretation.
 			if (selected != null)
 			{
@@ -152,7 +157,9 @@ final class EncounterWaveCueTracker
 				.observedGameCycle(cycle).sequence(sequence).build();
 		}
 		if (selected != null)
+		{
 			cue = selected;
+		}
 	}
 
 	EncounterWaveCue snapshot(Client client, CombatCatalog catalog, String scene)

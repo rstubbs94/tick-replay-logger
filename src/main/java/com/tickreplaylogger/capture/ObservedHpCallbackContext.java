@@ -25,15 +25,8 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.DamageRecord;
 import com.tickreplaylogger.model.world.ObservedEvent;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 /** Binds frozen static world facts to their original local HP callback, never a later tick sample. */
 public final class ObservedHpCallbackContext
@@ -67,12 +60,16 @@ public final class ObservedHpCallbackContext
 	public ObservedHpCallbackContext(List<ObservedEvent> events)
 	{
 		if (events == null || events.size() > MAX_EVENTS)
+		{
 			return;
+		}
 		Set<Long> seen = new HashSet<>();
 		for (ObservedEvent event : events)
 		{
 			if (event == null || event.getSequence() <= 0)
+			{
 				continue;
+			}
 			if (!seen.add(event.getSequence()))
 			{
 				samples.remove(event.getSequence());
@@ -89,7 +86,9 @@ public final class ObservedHpCallbackContext
 				|| !Boolean.TRUE.equals(actor.get("planeKnown")) || view == null || view < 0 || plane == null
 				|| plane < 0 || plane > 3 || amount == null || type == null || scopeIssue(data.get("captureIssues"))
 				|| scopeIssue(actor.get("observationIssues")))
+			{
 				continue;
+			}
 			Map<String, Object> raw = map(data.get("numericContext"));
 			if (!"STATIC_WORLD_AT_HP_CALLBACK".equals(raw.get("observationKind"))
 				|| !Boolean.TRUE.equals(raw.get("localRecipientKnown"))
@@ -115,14 +114,20 @@ public final class ObservedHpCallbackContext
 					names.add((String) value);
 				}
 				if (names != null)
+				{
 					frozen.put("worldTypes", Collections.unmodifiableList(names));
+				}
 			}
 			frozen.put("leagueType", integer(raw.get("leagueType")));
 			Map<String, Object> evidence = new LinkedHashMap<>(), rawEvidence = map(raw.get("evidence"));
 			for (String key : new String[]
 			{ "worldTypes", "LEAGUE_TYPE" })
+			{
 				if (rawEvidence.get(key) instanceof String)
+				{
 					evidence.put(key, rawEvidence.get(key));
+				}
+			}
 			frozen.put("evidence", Collections.unmodifiableMap(evidence));
 			samples.put(event.getSequence(),
 				new Sample(event, view, plane, amount, type, Collections.unmodifiableMap(frozen)));
@@ -140,7 +145,9 @@ public final class ObservedHpCallbackContext
 	{
 		if (hit == null || hit.getObservationSequence() == null || !"player".equals(hit.getDefenderRef())
 			|| !Boolean.TRUE.equals(hit.getHitsplatTypeKnown()))
+		{
 			return null;
+		}
 		Sample sample = samples.get(hit.getObservationSequence());
 		return sample != null && sample.tick == hit.getImpactTick()
 			&& Objects.equals(sample.cycle, hit.getObservedCycle())
@@ -154,7 +161,9 @@ public final class ObservedHpCallbackContext
 	public boolean positionMatches(DamageRecord hit)
 	{
 		if (hit == null || !Boolean.TRUE.equals(hit.getImpactPositionKnown()))
+		{
 			return false;
+		}
 		Sample sample = matching(hit);
 		return sample != null && sample.x != null && sample.y != null && sample.x == hit.getImpactX()
 			&& sample.y == hit.getImpactY();
@@ -166,18 +175,30 @@ public final class ObservedHpCallbackContext
 		Map<String, Object> evidence = map(context == null ? null : context.get("evidence"));
 		if (context == null || zeros == null || excludedTypes == null || !(context.get("worldTypes") instanceof List)
 			|| !"OBSERVED_CLIENT_WORLD_TYPES".equals(evidence.get("worldTypes")))
+		{
 			return false;
+		}
 		for (String variable : zeros)
+		{
 			if (!"LEAGUE_TYPE".equals(variable) || !"OBSERVED_CLIENT_VARBIT".equals(evidence.get(variable))
 				|| !Integer.valueOf(0).equals(integer(context.get("leagueType"))))
+			{
 				return false;
+			}
+		}
 		for (Object type : (List<?>) context.get("worldTypes"))
 		{
 			if (!(type instanceof String))
+			{
 				return false;
+			}
 			for (String excluded : excludedTypes)
+			{
 				if (((String) type).contains(excluded))
+				{
 					return false;
+				}
+			}
 		}
 		return true;
 	}
@@ -185,20 +206,28 @@ public final class ObservedHpCallbackContext
 	private static boolean scopeIssue(Object issues)
 	{
 		if (issues != null && !(issues instanceof Map) && !(issues instanceof List))
+		{
 			return true;
+		}
 		Iterable<?> values = issues instanceof Map ? ((Map<?, ?>) issues).keySet()
 			: issues instanceof List ? (List<?>) issues : Collections.emptyList();
 		for (Object issue : values)
 		{
 			if (!(issue instanceof String))
+			{
 				return true;
+			}
 			String key = (String) issue;
 			for (String relevant : new String[]
 			{ "worldPosition", "worldView", "worldViewId", "callbackGameState", "callbackCycle",
 				"observationActorScope", "observationActorWorld", "observationContext", "primary", "hitsplatType",
 				"hitsplat.type", "impactPositionScope" })
+			{
 				if (key.startsWith(relevant))
+				{
 					return true;
+				}
+			}
 		}
 		return false;
 	}
@@ -212,7 +241,9 @@ public final class ObservedHpCallbackContext
 	private static Integer integer(Object value)
 	{
 		if (!(value instanceof Number))
+		{
 			return null;
+		}
 		try
 		{
 			return new BigDecimal(value.toString()).intValueExact();

@@ -58,11 +58,12 @@ public class NormalContextGuardTest
 	public void cadenceAndSoleStyleRequireContextEvenWithoutConditionalIdentityRecords()
 	{
 		DamageMap map = DamageMap.load(new Gson());
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
 		assertEquals(3, map.attackSpeedForNpc(2042, 725, true));
 		assertEquals(0, map.attackSpeedForNpc(2042, 725, false));
 		assertEquals(0, map.attackSpeedForNpc(2042));
-		assertNotNull(map.soleStyleForNpc(2, 100, true));
-		assertNull(map.soleStyleForNpc(2, 100, false));
+		assertNotNull(legacy.soleStyleForNpc(2, 100, true));
+		assertNull(legacy.soleStyleForNpc(2, 100, false));
 		assertTrue(catalog.baseVariantEstablished(9036, 894, true));
 		assertFalse(catalog.baseVariantEstablished(9036, 999, true));
 		assertFalse(catalog.baseVariantEstablished(9036, null, true));

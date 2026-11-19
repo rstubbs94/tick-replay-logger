@@ -104,11 +104,11 @@ public class ObservedRetainedLifecycleWindowTest
 		{
 			ObservedMechanismResolver.Result result = resolve(rule(), hit(), cue(tick, 100, 50));
 			assertEquals(1, result.getContributions().size());
-			SourceEvidenceResolver.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
 			assertTrue(hypothesis.isCausalAssociationOnly()); assertNull(hypothesis.getConstraints());
 			assertEquals("npc:original", hypothesis.getCandidate().getActorRef());
 			assertTrue(hypothesis.getCandidate().getEvidence().toString().contains("Recorded-tick analysis window 0..6"));
-			SourceResolution finalResult = SourceEvidenceResolver.resolve(Collections.singletonList(hypothesis), 50, false, "fixture");
+			SourceResolution finalResult = LegacyConstraintOracle.resolve(Collections.singletonList(hypothesis), 50, false, "fixture");
 			assertEquals("ALTERNATIVES", finalResult.getStatus()); assertTrue(finalResult.isUnidentifiedPossible());
 		}
 		for (ObservedEvent invalid : Arrays.asList(cue(3, 100, 50), cue(11, 100, 50), cue(-1, 100, 50),
@@ -149,15 +149,15 @@ public class ObservedRetainedLifecycleWindowTest
 	@Test public void optionalMaximumExcludesOnlyThisComponentAndPreservesRawAmountAndRival()
 	{
 		JsonObject rule = rule(); rule.addProperty("perHitMaximum", 50);
-		SourceEvidenceResolver.Hypothesis allowed = resolve(rule, hit(), cue(9, 100, 50)).getContributions().get(0).getHypothesis();
-		assertEquals(1, SourceEvidenceResolver.resolve(Collections.singletonList(allowed), 50, true, "fixture").getCandidates().size());
+		LegacyConstraintOracle.Hypothesis allowed = resolve(rule, hit(), cue(9, 100, 50)).getContributions().get(0).getHypothesis();
+		assertEquals(1, LegacyConstraintOracle.resolve(Collections.singletonList(allowed), 50, true, "fixture").getCandidates().size());
 		DamageRecord hit = hit().toBuilder().amount(51).build();
-		SourceEvidenceResolver.Hypothesis terminal = resolve(rule, hit, cue(9, 100, 50)).getContributions().get(0).getHypothesis();
-		SourceEvidenceResolver.Hypothesis rival = SourceEvidenceResolver.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
+		LegacyConstraintOracle.Hypothesis terminal = resolve(rule, hit, cue(9, 100, 50)).getContributions().get(0).getHypothesis();
+		LegacyConstraintOracle.Hypothesis rival = LegacyConstraintOracle.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
 			.key("other").name("Other recorded cause").actorRef("npc:original").npcId(999941)
 			.sceneKey("room").worldViewId(0).plane(0).strength("POSSIBLE").build())
 			.mechanism("ORDINARY_ATTACK").damageComponent("heldout:independent-attack").causalAssociationOnly(true).build();
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(terminal, rival), 51, true, "fixture");
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(terminal, rival), 51, true, "fixture");
 		assertEquals(51, hit.getAmount()); assertEquals(1, result.getCandidates().size());
 		assertEquals("Other recorded cause", result.getCandidates().get(0).getName()); assertEquals(1, result.getExcludedCandidates().size());
 	}
@@ -196,11 +196,11 @@ public class ObservedRetainedLifecycleWindowTest
 
 	@Test public void retrievalStopsAtWindowBoundaryWithoutCopyingOldUnrelatedCallbacks() throws Exception
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, GSON);
+		LegacyWorldSnapshotRecorder recorder = new LegacyWorldSnapshotRecorder(100, GSON);
 		for (int i = 0; i < 20000; i++) recorder.addObservation(ObservedEvent.builder().tick(1).sequence(i + 1L).type("UNRELATED").build());
 		ObservedEvent death = cue(9, 100, 20050), hp = hp(hit().toBuilder().observationSequence(20100L).build());
 		recorder.addObservation(death); recorder.addObservation(hp);
-		Field raw = WorldSnapshotRecorder.class.getDeclaredField("observations"); raw.setAccessible(true);
+		Field raw = LegacyWorldSnapshotRecorder.class.getDeclaredField("observations"); raw.setAccessible(true);
 		@SuppressWarnings("unchecked") java.util.Deque<ObservedEvent> stored = (java.util.Deque<ObservedEvent>) raw.get(recorder);
 		ArrayDeque<ObservedEvent> bounded = new ArrayDeque<ObservedEvent>(stored)
 		{
@@ -217,16 +217,16 @@ public class ObservedRetainedLifecycleWindowTest
 			}
 		};
 		raw.set(recorder, bounded);
-		WorldSnapshotRecorder.LifecycleObservationBatch batch = recorder.retainedLifecycleObservationsForSourceResolution(10, 6, Collections.singletonList(hp));
+		LegacyWorldSnapshotRecorder.LifecycleObservationBatch batch = recorder.retainedLifecycleObservationsForSourceResolution(10, 6, Collections.singletonList(hp));
 		assertTrue(batch.isComplete()); assertEquals(Arrays.asList(death, hp), batch.getEvents());
 	}
 
 	@Test public void denseAndUnorderedRetainedWindowsFailClosedWithoutDroppingCurrentTail()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, GSON);
+		LegacyWorldSnapshotRecorder recorder = new LegacyWorldSnapshotRecorder(100, GSON);
 		for (int i = 0; i < 9000; i++) recorder.addObservation(ObservedEvent.builder().tick(9).sequence(i + 1L).type("UNRELATED").build());
 		ObservedEvent hp = hp(hit()); recorder.addObservation(hp);
-		WorldSnapshotRecorder.LifecycleObservationBatch batch = recorder.retainedLifecycleObservationsForSourceResolution(10, 6, Collections.singletonList(hp));
+		LegacyWorldSnapshotRecorder.LifecycleObservationBatch batch = recorder.retainedLifecycleObservationsForSourceResolution(10, 6, Collections.singletonList(hp));
 		assertFalse(batch.isComplete()); assertEquals(Collections.singletonList(hp), batch.getEvents());
 		recorder.addObservation(cue(8, 100, 20000));
 		assertFalse(recorder.retainedLifecycleObservationsForSourceResolution(10, 6, Collections.singletonList(hp)).isComplete());

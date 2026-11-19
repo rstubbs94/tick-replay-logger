@@ -69,7 +69,8 @@ public class ProjectileSourceHistory
 		private final Integer sourceNpcIndex, sourceNpcId, sourceBaseNpcId, sourceCombatLevel, sourceWorldViewId,
 			sourcePlane;
 		private final String sourceDefinitionEvidence;
-		private final Boolean sourceDefinitionHasTransforms, sourceNormalWorldContextObserved, sourceModelOverridesPresent;
+		private final Boolean sourceDefinitionHasTransforms, sourceNormalWorldContextObserved,
+			sourceModelOverridesPresent;
 		private final Map<String, String> observationIssues;
 	}
 }

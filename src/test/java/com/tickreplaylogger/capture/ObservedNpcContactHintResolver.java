@@ -49,7 +49,7 @@ public final class ObservedNpcContactHintResolver
 		"observedHitsplatTypes", "unestablishedConditions", "provenance");
 	private static final Set<Integer> ORDINARY_TYPES = new HashSet<>(Arrays.asList(HitsplatID.BLOCK_ME,
 		HitsplatID.BLOCK_OTHER, HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_OTHER, HitsplatID.DAMAGE_MAX_ME));
-	private final CombatCatalog catalog;
+	private final LegacyCombatCatalog catalog;
 	private final Map<Integer, Rule> rules = new HashMap<>();
 	private final Set<Integer> incompleteIds = new HashSet<>();
 	private final Map<Integer, List<Body>> ticks = new HashMap<>();
@@ -121,9 +121,9 @@ public final class ObservedNpcContactHintResolver
 	}
 
 	public ObservedNpcContactHintResolver(JsonObject namespace, Map<Integer, List<WorldSnapshot>> history,
-		CombatCatalog catalog)
+		Object catalog)
 	{
-		this.catalog = catalog;
+		this.catalog = LegacyCombatCatalog.from(catalog);
 		frames = history == null ? Collections.emptyMap() : history;
 		if (namespace == null || namespace.size() == 0)
 			return;
@@ -299,7 +299,7 @@ public final class ObservedNpcContactHintResolver
 				.actorRef(body.ref).npcId(body.id).sceneKey(body.scene).worldViewId(body.view).plane(body.areaPlane)
 				.strength("POSSIBLE").evidence(Collections.unmodifiableList(evidence)).build();
 			output.add(new ObservedMechanismResolver.Contribution(
-				SourceEvidenceResolver.Hypothesis.builder().candidate(candidate)
+				LegacyConstraintOracle.Hypothesis.builder().candidate(candidate)
 					.mechanism(rule.proximity ? "NPC_PROXIMITY_ASSOCIATION" : "NPC_OCCUPIED_BODY_CONTACT")
 					.damageComponent(rule.key).causalAssociationOnly(true).build(),
 				"NPC_BODY", body.id, true));

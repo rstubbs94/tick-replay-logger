@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model;
 
+import java.util.Objects;
 import lombok.Builder;
 import lombok.Data;
 import java.util.List;
@@ -98,9 +99,8 @@ public class TickRecording
 
 		public boolean matches(TickRecording recording, String catalogId)
 		{
-			return payload == recording.richExportJson && java.util.Objects.equals(originalName, recording.killerName)
-				&& java.util.Objects.equals(customLabel, recording.customLabel)
-				&& java.util.Objects.equals(this.catalogId, catalogId);
+			return payload == recording.richExportJson && Objects.equals(originalName, recording.killerName)
+				&& Objects.equals(customLabel, recording.customLabel) && Objects.equals(this.catalogId, catalogId);
 		}
 
 		public String title()

@@ -24,22 +24,12 @@
  */
 package com.tickreplaylogger.capture;
 
+import static net.runelite.client.util.Text.removeTags;
 import com.tickreplaylogger.model.world.ProjectileState;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.function.*;
 import lombok.Getter;
-import net.runelite.api.Actor;
-import net.runelite.api.Animation;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.api.NpcOverrides;
-import net.runelite.api.Player;
-import net.runelite.api.Projectile;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 
@@ -106,7 +96,9 @@ public final class ProjectileObservation
 			destination = read("targetPointConversion",
 				() -> WorldPoint.fromLocal(localView, target.getX(), target.getY(), targetPlane));
 			if (destination != null)
+			{
 				destinationEvidence = "TARGET_LOCAL_COORDINATE_CONVERSION";
+			}
 		}
 		if (sourceActor == null && sourceKnown && origin != null && proximityName != null)
 		{
@@ -127,7 +119,10 @@ public final class ProjectileObservation
 		if (sourceActor instanceof NPC)
 		{
 			NpcOverrides overrides = read("source.modelOverrides", () -> ((NPC) sourceActor).getModelOverrides());
-			if (!issues.containsKey("source.modelOverrides")) modelOverridesPresent = overrides != null;
+			if (!issues.containsKey("source.modelOverrides"))
+			{
+				modelOverridesPresent = overrides != null;
+			}
 			normal = !issues.containsKey("source.modelOverrides")
 				&& NpcIdentityContext.normalWorldObservedWithoutOverrides(client, overrides == null);
 		}
@@ -155,8 +150,8 @@ public final class ProjectileObservation
 			.sourceBaseNpcId(definition == null ? null : definition.getBaseId())
 			.sourceDefinitionEvidence(definition == null ? null : definition.getEvidence())
 			.sourceDefinitionHasTransforms(definition == null ? null : definition.getHasTransforms())
-			.sourceCombatLevel(level).sourceNormalWorldContextObserved(normal).sourceModelOverridesPresent(modelOverridesPresent)
-			.damageType(type).damageTypeRuleKey(rule)
+			.sourceCombatLevel(level).sourceNormalWorldContextObserved(normal)
+			.sourceModelOverridesPresent(modelOverridesPresent).damageType(type).damageTypeRuleKey(rule)
 			.damageTypeEvidence(type == null ? null : "SCOPED_SOURCE_PROJECTILE_REFERENCE")
 			.damageTypeCatalogId(type == null ? null : catalog.id()).worldViewId(sourceViewId)
 			.sourceWorldViewId(sourceViewId).targetWorldViewId(targetViewId).targetActorWorldViewId(actorTargetViewId)
@@ -213,7 +208,7 @@ public final class ProjectileObservation
 
 	private static String clean(String name)
 	{
-		String value = name == null ? "" : name.replaceAll("<[^>]*>", "").trim();
+		String value = name == null ? "" : removeTags(name).trim();
 		return value.isEmpty() || value.equalsIgnoreCase("null") ? "Unknown" : value;
 	}
 }

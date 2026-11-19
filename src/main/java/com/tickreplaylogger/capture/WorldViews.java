@@ -24,32 +24,11 @@
  */
 package com.tickreplaylogger.capture;
 
-import net.runelite.api.Client;
-import net.runelite.api.CollisionData;
-import net.runelite.api.GraphicsObject;
-import net.runelite.api.IndexedObjectSet;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.Scene;
-import net.runelite.api.Tile;
-import net.runelite.api.WorldEntity;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 /** Resolve native coordinate frames explicitly; client convenience getters are top-level only. */
 public final class WorldViews
@@ -80,14 +59,18 @@ public final class WorldViews
 	public static String scope(WorldView view, int plane)
 	{
 		if (view == null)
+		{
 			return null;
+		}
 		return scope(view, plane, view.getId());
 	}
 
 	public static String scope(WorldView view, int plane, int observedViewId)
 	{
 		if (view == null)
+		{
 			return null;
+		}
 		Scene scene = view.getScene();
 		Tile[][][] tiles = scene == null ? null : scene.getTiles();
 		Object grid = tiles != null && plane >= 0 && plane < tiles.length ? tiles[plane] : null;
@@ -101,7 +84,9 @@ public final class WorldViews
 	{
 		if (previous == null || current == null || priorScope == null || !Objects.equals(priorScope, currentScope)
 			|| previous.getPlane() != current.getPlane())
+		{
 			return null;
+		}
 		return previous.distanceTo(current);
 	}
 
@@ -110,7 +95,9 @@ public final class WorldViews
 		WorldView view = player.getWorldView();
 		LocalPoint local = player.getLocalLocation();
 		if (view == null || local == null)
+		{
 			return null;
+		}
 		return view.isInstance() ? WorldPoint.fromLocalInstance(view.getScene(), local, view.getPlane())
 			: WorldPoint.fromLocal(view, local.getX(), local.getY(), view.getPlane());
 	}
@@ -119,26 +106,40 @@ public final class WorldViews
 	public static boolean containsTile(WorldView view, Tile tile)
 	{
 		if (view == null || tile == null)
+		{
 			return false;
+		}
 		LocalPoint point = tile.getLocalLocation();
 		if (point == null || point.getWorldView() != view.getId())
+		{
 			return false;
+		}
 		Scene scene = view.getScene();
 		Tile[][][] all = scene == null ? null : scene.getTiles();
 		if (all == null)
+		{
 			return false;
+		}
 		int x = point.getSceneX(), y = point.getSceneY();
 		if (x < 0 || y < 0)
+		{
 			return false;
+		}
 		for (Tile[][] plane : all)
+		{
 			if (plane != null && x < plane.length && plane[x] != null && y < plane[x].length)
 			{
 				Set<Tile> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 				for (Tile candidate = plane[x][y]; candidate != null
 					&& seen.add(candidate); candidate = candidate.getBridge())
+				{
 					if (candidate == tile)
+					{
 						return true;
+					}
+				}
 			}
+		}
 		return false;
 	}
 
@@ -173,7 +174,9 @@ public final class WorldViews
 			out.put("plane", plane);
 			out.put("discoveryEvidence", new ArrayList<>(evidence.getOrDefault(plane, Collections.emptySet())));
 			if (tileCounts.containsKey(plane))
+			{
 				out.put("sceneArrayNonNullTiles", tileCounts.get(plane));
+			}
 			out.put("actorScope", "API_REPORTED_LOCATION_PLANES; unknown planes retained once, not placed");
 			return out;
 		}
@@ -189,26 +192,38 @@ public final class WorldViews
 	static Planes planes(WorldView view, boolean includePlayers, SceneCaptureTraversal traversal)
 	{
 		if (traversal == null || traversal.view != view)
+		{
 			throw new IllegalArgumentException("Mismatched plane traversal");
+		}
 		Planes out = new Planes();
 		out.add(view.getPlane(), "VIEW_CURRENT_PLANE");
 		if (traversal.arrayIssue != null)
+		{
 			out.issues.add(traversal.arrayIssue);
+		}
 		for (Map.Entry<Integer, Integer> entry : traversal.arrayTileCounts.entrySet())
 		{
 			out.add(entry.getKey(), "SCENE_TILE_ARRAY");
 			out.tileCounts.put(entry.getKey(), entry.getValue());
 		}
 		for (SceneCaptureTraversal.PlaneEvidence evidence : traversal.planeEvidence())
+		{
 			out.add(evidence.plane, evidence.reason);
+		}
 		out.issues.addAll(traversal.planeIssues());
 		try
 		{
 			CollisionData[] collision = view.getCollisionMaps();
 			if (collision != null)
+			{
 				for (int plane = 0; plane < collision.length; plane++)
+				{
 					if (collision[plane] != null)
+					{
 						out.add(plane, "COLLISION_CHANNEL");
+					}
+				}
+			}
 		}
 		catch (RuntimeException error)
 		{
@@ -217,8 +232,11 @@ public final class WorldViews
 		try
 		{
 			if (view.getGraphicsObjects() != null)
+			{
 				for (GraphicsObject graphic : view.getGraphicsObjects())
+				{
 					if (graphic != null)
+					{
 						try
 						{
 							out.add(graphic.getLevel(), "GRAPHICS_LEVEL");
@@ -227,6 +245,9 @@ public final class WorldViews
 						{
 							out.issues.add("worldPlanes: graphics level unavailable");
 						}
+					}
+				}
+			}
 		}
 		catch (RuntimeException error)
 		{
@@ -235,44 +256,62 @@ public final class WorldViews
 		try
 		{
 			if (view.npcs() != null)
+			{
 				for (NPC npc : view.npcs())
+				{
 					if (npc != null)
+					{
 						try
 						{
 							WorldPoint point = npc.getWorldLocation();
 							if (point != null)
+							{
 								out.add(point.getPlane(), "NPC_REPORTED_LOCATION");
+							}
 						}
 						catch (RuntimeException error)
 						{
 							out.issues.add("worldPlanes: NPC plane unavailable");
 						}
+					}
+				}
+			}
 		}
 		catch (RuntimeException error)
 		{
 			out.issues.add("worldPlanes: NPCs " + error.getClass().getSimpleName());
 		}
 		if (includePlayers)
+		{
 			try
 			{
 				if (view.players() != null)
+				{
 					for (Player player : view.players())
+					{
 						if (player != null)
+						{
 							try
 							{
 								WorldPoint point = player.getWorldLocation();
 								if (point != null)
+								{
 									out.add(point.getPlane(), "PLAYER_REPORTED_LOCATION");
+								}
 							}
 							catch (RuntimeException error)
 							{
 								out.issues.add("worldPlanes: player plane unavailable");
 							}
+						}
+					}
+				}
 			}
 			catch (RuntimeException error)
 			{
 				out.issues.add("worldPlanes: players " + error.getClass().getSimpleName());
 			}
+		}
 		return out;
 	}
 
@@ -299,26 +338,42 @@ public final class WorldViews
 			result.issues.add("worldViews: top-level getter failed");
 		}
 		if (top != null)
+		{
 			pending.add(top);
+		}
 		else
+		{
 			result.issues.add("worldViews: top-level view unavailable");
+		}
 		if (active != null)
+		{
 			pending.add(active);
+		}
 		while (!pending.isEmpty())
 		{
 			WorldView view = pending.removeFirst();
 			if (!seen.add(view))
+			{
 				continue;
+			}
 			result.views.add(view);
 			try
 			{
 				IndexedObjectSet<? extends WorldView> children = view.worldViews();
 				if (children == null)
+				{
 					result.issues.add("worldViews: child enumeration unavailable for view " + view.getId());
+				}
 				else
+				{
 					for (WorldView child : children)
+					{
 						if (child != null && !seen.contains(child))
+						{
 							pending.addLast(child);
+						}
+					}
+				}
 			}
 			catch (RuntimeException error)
 			{
@@ -329,20 +384,30 @@ public final class WorldViews
 			{
 				IndexedObjectSet<? extends WorldEntity> entities = view.worldEntities();
 				if (entities == null)
+				{
 					result.issues.add("worldViews: carrier enumeration unavailable for view " + view.getId());
+				}
 				else
+				{
 					for (WorldEntity entity : entities)
+					{
 						if (entity != null)
+						{
 							try
 							{
 								WorldView child = entity.getWorldView();
 								if (child != null && !seen.contains(child))
+								{
 									pending.addLast(child);
+								}
 							}
 							catch (RuntimeException error)
 							{
 								result.issues.add("worldViews: carrier " + error.getClass().getSimpleName());
 							}
+						}
+					}
+				}
 			}
 			catch (RuntimeException error)
 			{

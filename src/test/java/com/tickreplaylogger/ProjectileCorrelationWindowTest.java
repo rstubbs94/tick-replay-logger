@@ -24,7 +24,9 @@
  */
 package com.tickreplaylogger;
 
-import com.tickreplaylogger.model.DamageEvent;
+import com.google.gson.Gson;
+import com.tickreplaylogger.capture.ResolverV1Recording;
+import com.tickreplaylogger.model.world.*;
 import java.lang.reflect.*;
 import java.util.*;
 import net.runelite.api.*;
@@ -32,7 +34,7 @@ import net.runelite.api.coords.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-/** Bounded controls for large-actor origins and independently observed client cycles. */
+/** Original API footprint controls for weak projectile-origin proximity observations. */
 public class ProjectileCorrelationWindowTest
 {
 	@Test
@@ -67,31 +69,77 @@ public class ProjectileCorrelationWindowTest
 	}
 
 	@Test
-	public void observedCyclesCanMatchDespiteRoundedArrivalTickDisagreement() throws Exception
+	public void actualCyclesRetainTheOwnerDespiteADifferentRoundedArrivalTick()
 	{
-		// Same relationship as the observed hit: cycle4750, visual end4773,
-		// event-derived arrival102 while the captured hit belongs to tick100.
-		assertTrue(matches(4750, 4773, 102, 7L, 1));
+		DamageRecord hit = projected(4750, 4773, 102, "original-scene", 0);
+		assertTrue(hit.getSourceResolution().getCandidates().stream()
+			.anyMatch(source -> "Observed projectile owner".equals(source.getName())));
+		assertEquals(43, hit.getAmount());
+		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
 	}
 
 	@Test
-	public void closeTickEstimateCannotOverrideIncompatibleObservedCycles() throws Exception
+	public void damageDuringObservedFlightDoesNotRequireVisualArrival()
 	{
-		assertFalse(matches(4700, 4773, 100, 7L, 1));
+		// The old producer's arrival-only filter lost this legitimate observation.
+		DamageRecord hit = projected(4700, 4773, 100, "original-scene", 0);
+		assertTrue(hit.getSourceResolution().getCandidates().stream()
+			.anyMatch(source -> "Observed projectile owner".equals(source.getName())));
+		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
 	}
 
 	@Test
-	public void missingCycleRetainsTheExistingTickWindow() throws Exception
+	public void missingImpactClockPreservesTheCallbackWithoutClaimingAnArrival()
 	{
-		assertFalse(matches(null, 4773, 102, 7L, 1));
-		assertTrue(matches(null, 4773, 101, 7L, 1));
+		DamageRecord hit = projected(null, 4773, 101, "original-scene", 0);
+		assertEquals(43, hit.getAmount());
+		assertNull(hit.getObservedCycle());
+		assertNotNull(hit.getSourceResolution());
+		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
+		assertNotEquals("CONFIRMED", hit.getAttribution());
 	}
 
 	@Test
-	public void matchingCyclesDoNotCrossEpochOrPlane() throws Exception
+	public void foreignSceneAndPlaneCannotBecomeAQualifiedLocalHpCause()
 	{
-		assertFalse(matches(4750, 4773, 102, 8L, 1));
-		assertFalse(matches(4750, 4773, 102, 7L, 0));
+		for (DamageRecord hit : Arrays.asList(projected(4750, 4773, 102, "different-scene", 0),
+			projected(4750, 4773, 102, "original-scene", 1)))
+		{
+			assertEquals(43, hit.getAmount());
+			assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
+			assertNotEquals("CONFIRMED", hit.getAttribution());
+			for (SourceResolution.Candidate candidate : hit.getSourceResolution().getCandidates())
+				assertFalse(candidate.getEvidence().stream()
+					.anyMatch(evidence -> evidence.startsWith("SOURCE_BOUND:") || evidence.startsWith("QUALIFIED_MAXIMUM:")));
+		}
+	}
+
+	private static DamageRecord projected(Integer hitCycle, int endCycle, int estimatedArrival, String scene, int plane)
+	{
+		ProjectileSourceHistory.SourceObservation source = ProjectileSourceHistory.SourceObservation.builder()
+			.actorKind("NPC").sourceRef("npc:original:g1").sourceNpcId(990001).sourceActorKnown(true)
+			.sourceName("Observed projectile owner").sourceObservedName("Observed projectile owner").sourceNameKnown(true)
+			.sourceEvidence("ACTOR").sourceWorldViewId(0).sourcePlane(0).sourceSceneKey("original-scene")
+			.observedTick(99).observedCycle(4690).build();
+		ProjectileState projectile = ProjectileState.builder().observationId(5L).projectileId(990002).spawnTick(99)
+			.observedTick(99).observedCycle(4690).endCycle(endCycle).estimatedImpactTick(estimatedArrival)
+			.sourceActorKnown(true).sourceRef(source.getSourceRef()).sourceNpcId(source.getSourceNpcId())
+			.sourceWorldViewId(0).sourcePlane(0).sourceSceneKey("original-scene").worldViewId(0).plane(0)
+			.targetRef("player").targetsPlayer(true).targetWorldViewId(0).targetPlane(0)
+			.sourceHistory(ProjectileSourceHistory.builder().version(1).firstObservedSource(source).build()).build();
+		ObservedEvent launch = ObservedEvent.builder().tick(99).gameCycle(4690).sequence(10).type("PROJECTILE_FIRST_SEEN")
+			.sceneKey("original-scene").data(Collections.singletonMap("projectile", projectile)).build();
+		Map<String, Object> facts = new LinkedHashMap<>();
+		facts.put("amount", 43); facts.put("hitsplatType", 16);
+		ObservedEvent impact = ObservedEvent.builder().tick(100).gameCycle(hitCycle).sequence(20).type("HITSPLAT")
+			.actorRef("player").sceneKey(scene).data(facts).build();
+		DamageRecord hit = DamageRecord.builder().direction("RECEIVED").defenderRef("player").amount(43)
+			.hitsplatType(16).hitsplatTypeKnown(true).impactTick(100).observedCycle(hitCycle).observationSequence(20L)
+			.impactSceneKey(scene).impactWorldViewId(0).impactPlane(plane).attackerName("Unknown").attribution("UNKNOWN").build();
+		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(Collections.emptyList(),
+			Collections.emptyList(), Arrays.asList(launch, impact), Collections.singletonList(hit), Collections.emptyList(),
+			99, 100, 20, 1);
+		return new ResolverV1Recording(window, new Gson(), null).resolveHit(hit);
 	}
 
 	private static NPC actor(WorldPoint point, WorldArea area)
@@ -120,27 +168,6 @@ public class ProjectileCorrelationWindowTest
 			Actor.class);
 		method.setAccessible(true);
 		return (NPC) method.invoke(plugin, origin, target);
-	}
-
-	private static boolean matches(Integer observedCycle, int endCycle, int estimatedArrival, long hitEpoch,
-		int hitPlane) throws Exception
-	{
-		TickReplayLoggerPlugin plugin = new TickReplayLoggerPlugin();
-		set(plugin, "currentGameTick", 100);
-		Class<?> shot = Class.forName(TickReplayLoggerPlugin.class.getName() + "$PendingProjectile");
-		Constructor<?> shotConstructor = shot.getDeclaredConstructors()[0];
-		shotConstructor.setAccessible(true);
-		Object projectile = shotConstructor.newInstance("Observed actor", 1708, 99, estimatedArrival, 2, false, false,
-			-1, null, null, endCycle, null, null, false, 7L, 1, true, null, 5L);
-		Class<?> hit = Class.forName(TickReplayLoggerPlugin.class.getName() + "$PendingHit");
-		Constructor<?> hitConstructor = hit.getDeclaredConstructors()[0];
-		hitConstructor.setAccessible(true);
-		Object impact = hitConstructor.newInstance(43, HitsplatID.DAMAGE_ME, DamageEvent.DamageType.UNKNOWN,
-			Collections.emptyList(), new WorldPoint(1000, 1000, hitPlane), null, Collections.emptyList(), 0, 0,
-			observedCycle, 1L, null, null, null, Collections.emptyList(), hitEpoch, hitPlane, null);
-		Method method = TickReplayLoggerPlugin.class.getDeclaredMethod("projectileCouldMatch", shot, hit);
-		method.setAccessible(true);
-		return (Boolean) method.invoke(plugin, projectile, impact);
 	}
 
 	private static void set(Object instance, String name, Object value) throws Exception

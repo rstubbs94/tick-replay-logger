@@ -55,7 +55,7 @@ public final class ObservedMechanismResolver
 	@Value
 	public static class Contribution
 	{
-		SourceEvidenceResolver.Hypothesis hypothesis;
+		LegacyConstraintOracle.Hypothesis hypothesis;
 		String sourceKind;
 		int sourceId;
 		boolean definitionBound;
@@ -312,7 +312,7 @@ public final class ObservedMechanismResolver
 			.key("mechanism-history:" + rule.getKey() + ":" + contact.getTick() + ":" + source.evidence)
 			.name(rule.getLabel()).familyKey(family).sceneKey(source.scene).worldViewId(source.view).plane(source.plane)
 			.strength("POSSIBLE").evidence(Collections.unmodifiableList(evidence)).build();
-		output.add(new Contribution(SourceEvidenceResolver.Hypothesis.builder().candidate(candidate)
+		output.add(new Contribution(LegacyConstraintOracle.Hypothesis.builder().candidate(candidate)
 			.mechanism("CONTACT").causalAssociationOnly(true).build(), source.kind, source.id, true));
 	}
 
@@ -450,7 +450,7 @@ public final class ObservedMechanismResolver
 				.key("mechanism:" + rule.getKey() + ":" + source.evidence).name(rule.getLabel()).familyKey(family)
 				.sceneKey(source.scene).worldViewId(source.view).plane(source.plane).strength("POSSIBLE")
 				.evidence(Collections.unmodifiableList(evidence)).build();
-			output.add(new Contribution(SourceEvidenceResolver.Hypothesis.builder().candidate(candidate)
+			output.add(new Contribution(LegacyConstraintOracle.Hypothesis.builder().candidate(candidate)
 				.mechanism(rule.getDelivery()).causalAssociationOnly(true).build(), source.kind, source.id,
 				definitionBound));
 			if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)

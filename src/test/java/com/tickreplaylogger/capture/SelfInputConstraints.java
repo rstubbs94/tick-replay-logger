@@ -44,7 +44,7 @@ public final class SelfInputConstraints
 {
 	private static final int LIMIT = 4096;
 	private final Map<Integer, List<Rule>> byItem = new HashMap<>();
-	private final CombatCatalog catalog;
+	private final LegacyCombatCatalog catalog;
 	private boolean unavailable;
 
 	private static final class Rule
@@ -66,9 +66,9 @@ public final class SelfInputConstraints
 		}
 	}
 
-	public SelfInputConstraints(JsonObject namespace, CombatCatalog catalog)
+	public SelfInputConstraints(JsonObject namespace, Object catalog)
 	{
-		this.catalog = catalog;
+		this.catalog = LegacyCombatCatalog.from(catalog);
 		if (namespace == null || namespace.size() == 0)
 			return;
 		if (!namespace.keySet().equals(set("version", "rules"))
@@ -119,13 +119,13 @@ public final class SelfInputConstraints
 		byItem.replaceAll((id, rules) -> Collections.unmodifiableList(rules));
 	}
 
-	public SourceEvidenceResolver.Hypothesis apply(SourceEvidenceResolver.Hypothesis hypothesis, DamageRecord hit,
+	public LegacyConstraintOracle.Hypothesis apply(LegacyConstraintOracle.Hypothesis hypothesis, DamageRecord hit,
 		WorldSnapshot impact, Map<String, Object> input, BiPredicate<String, List<String>> qualifiedInput)
 	{
 		return apply(hypothesis, hit, impact, input, qualifiedInput, Collections.emptyMap());
 	}
 
-	public SourceEvidenceResolver.Hypothesis apply(SourceEvidenceResolver.Hypothesis hypothesis, DamageRecord hit,
+	public LegacyConstraintOracle.Hypothesis apply(LegacyConstraintOracle.Hypothesis hypothesis, DamageRecord hit,
 		WorldSnapshot impact, Map<String, Object> input, BiPredicate<String, List<String>> qualifiedInput,
 		Map<String, Object> originalCallbackContext)
 	{

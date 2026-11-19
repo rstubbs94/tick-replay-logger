@@ -27,10 +27,7 @@ package com.tickreplaylogger.capture;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
-import net.runelite.api.Actor;
-import net.runelite.api.HeadIcon;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 
@@ -55,7 +52,9 @@ final class PlayerSnapshotObservation
 	{
 		world = observedWorld;
 		if (worldIssue != null)
+		{
 			issues.put("worldPosition", worldIssue);
+		}
 		local = read("localPosition", actor::getLocalLocation);
 		view = read("worldView", actor::getWorldView);
 		viewId = view == null ? null : read("worldViewId", view::getId);
@@ -76,7 +75,9 @@ final class PlayerSnapshotObservation
 		graphics = observedGraphics.getIds();
 		graphicsKnown = observedGraphics.isIdsKnown();
 		if (graphicsState.getObservationIssues() != null)
+		{
 			issues.putAll(graphicsState.getObservationIssues());
+		}
 	}
 
 	<T> T read(String field, Supplier<T> getter)

@@ -65,12 +65,12 @@ public class ObservedMechanismResolverTest
 
 	private static void reset(DamageMap map, String name) throws Exception
 	{
-		Field field = CombatCatalog.class.getDeclaredField(name); field.setAccessible(true); field.set(map.catalog(), null);
+		Field field = LegacyCombatCatalog.class.getDeclaredField(name); field.setAccessible(true); field.set(LegacyCombatCatalog.from(map.catalog()), null);
 	}
 
 	private static DamageMap map(JsonObject rule) throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		JsonObject namespace = new JsonObject(); namespace.addProperty("version", 1);
 		JsonArray rules = new JsonArray(); rules.add(rule); namespace.add("rules", rules);
 		root(map).add("mechanismRules", namespace); reset(map, "mechanismRuleIndex");
@@ -184,7 +184,7 @@ public class ObservedMechanismResolverTest
 		assertEquals("Declared patch", result.getCandidates().get(0).getName());
 		assertTrue("A valid primary reference establishes the possible component, not causality", result.isUnidentifiedPossible());
 		rule.add("sourceRefs", new JsonArray());
-		assertFalse(map(rule).catalog().mechanismRules().sourceClassified("GRAPHIC", ID));
+		assertFalse(LegacyCombatCatalog.from(map(rule).catalog()).mechanismRules().sourceClassified("GRAPHIC", ID));
 	}
 
 	@Test
@@ -258,7 +258,7 @@ public class ObservedMechanismResolverTest
 		{
 			JsonObject declared = rule("GRAPHIC", "TILE", null);
 			declared.getAsJsonObject(section).addProperty("unsupportedCondition", 3);
-			assertFalse(map(declared).catalog().mechanismRules().sourceClassified("GRAPHIC", ID));
+			assertFalse(LegacyCombatCatalog.from(map(declared).catalog()).mechanismRules().sourceClassified("GRAPHIC", ID));
 		}
 	}
 
@@ -336,7 +336,7 @@ public class ObservedMechanismResolverTest
 	@Test
 	public void everyCompiledPrimitiveDeclarationHasAConsumerRoute() throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		JsonArray declarations = root(map).getAsJsonObject("mechanismRules").getAsJsonArray("rules");
 		assertFalse("Current compiler must emit its reviewed primitive declarations", declarations.size() == 0);
 		for (JsonElement value : declarations)
@@ -346,8 +346,8 @@ public class ObservedMechanismResolverTest
 			{
 				String kind = selector.get("kind").getAsString(), key = declared.get("key").getAsString();
 				int id = valueId.getAsInt();
-				assertTrue(key, map.catalog().mechanismRules().sourceClassified(kind, id));
-				assertTrue(key, map.catalog().mechanismRules().matching(kind, id).stream().anyMatch(rule -> key.equals(rule.getKey())));
+				assertTrue(key, LegacyCombatCatalog.from(map.catalog()).mechanismRules().sourceClassified(kind, id));
+				assertTrue(key, LegacyCombatCatalog.from(map.catalog()).mechanismRules().matching(kind, id).stream().anyMatch(rule -> key.equals(rule.getKey())));
 			}
 		}
 	}

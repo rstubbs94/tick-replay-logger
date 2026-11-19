@@ -57,14 +57,14 @@ public class DamageOutcomeCompatibilityTest
 
 	private static void reset(DamageMap map) throws Exception
 	{
-		java.lang.reflect.Field field = CombatCatalog.class.getDeclaredField("damageCompatibilityIndex");
+		java.lang.reflect.Field field = LegacyCombatCatalog.class.getDeclaredField("damageCompatibilityIndex");
 		field.setAccessible(true);
-		field.set(map.catalog(), null);
+		field.set(LegacyCombatCatalog.from(map.catalog()), null);
 	}
 
 	private static DamageMap map() throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		JsonObject root = root(map);
 		root.getAsJsonObject("npcIdentities").add("900001", GSON.fromJson(
 			"{\"candidates\":[{\"name\":\"Unfamiliar entity\",\"source_ref\":\"wiki:Unfamiliar_entity#infobox-1\",\"combat_level\":\"80\"}]}",

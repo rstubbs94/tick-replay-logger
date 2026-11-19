@@ -25,21 +25,10 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.NpcState;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.NPC;
-import net.runelite.api.NPCComposition;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldArea;
-import net.runelite.api.coords.WorldPoint;
+import java.util.*;
+import java.util.function.*;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
 
 /** Callback-time actor fields. Optional reads cannot erase an independently observed field. */
 public final class ActorCallbackObservation
@@ -89,7 +78,9 @@ public final class ActorCallbackObservation
 	public static Map<String, Object> oldComposition(NPCComposition composition)
 	{
 		if (composition == null)
+		{
 			return null;
+		}
 		Map<String, Object> result = new LinkedHashMap<>();
 		Map<String, String> issues = new LinkedHashMap<>();
 		result.put("evidence", "NPC_CHANGED_OLD_COMPOSITION_EVENT_PAYLOAD");
@@ -105,7 +96,9 @@ public final class ActorCallbackObservation
 		result.put("transformIds", configs);
 		result.put("hasTransforms", issues.containsKey("transformIds") ? null : configs != null);
 		if (!issues.isEmpty())
+		{
 			result.put("observationIssues", Collections.unmodifiableMap(new LinkedHashMap<>(issues)));
+		}
 		return Collections.unmodifiableMap(result);
 	}
 
@@ -125,7 +118,9 @@ public final class ActorCallbackObservation
 		Function<Actor, String> refs, BiFunction<Actor, Map<String, Object>, String> observedRefs)
 	{
 		if (actor == null || actor instanceof Player && actor != local && !includeOthers)
+		{
 			return new Sample(Collections.emptyMap(), null, null, null);
+		}
 		Map<String, Object> result = new LinkedHashMap<>();
 		Map<String, String> issues = new LinkedHashMap<>();
 		WorldPoint world = read(issues, "worldPosition", actor::getWorldLocation);
@@ -172,7 +167,9 @@ public final class ActorCallbackObservation
 			result.put("graphicsKnown", state.getGraphicsKnown());
 			result.put("graphicsState", state.getGraphicsState());
 			if (observedRefs != null && sample.target == actor)
+			{
 				observedRefs.apply(actor, result);
+			}
 			result.put("interaction",
 				ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
 					!issues.containsKey("interactionTarget"), local, includeOthers, refs,
@@ -200,7 +197,9 @@ public final class ActorCallbackObservation
 			result.put("graphicsState", sample.graphicsState);
 			result.put("appearance", PlayerAppearance.capture(player));
 			if (observedRefs != null && sample.target == actor)
+			{
 				observedRefs.apply(actor, result);
+			}
 			result.put("interaction",
 				ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
 					!issues.containsKey("interactionTarget"), local, includeOthers, refs,
@@ -231,11 +230,15 @@ public final class ActorCallbackObservation
 			result.put("graphicsKnown", graphics.isIdsKnown());
 			result.put("graphicsState", graphics.getState());
 			if (graphics.getState().getObservationIssues() != null)
+			{
 				issues.putAll(graphics.getState().getObservationIssues());
+			}
 			Boolean interactionFlag = read(issues, "reportedInteracting", actor::isInteracting);
 			Actor target = read(issues, "interactionTarget", actor::getInteracting);
 			if (observedRefs != null && target == actor)
+			{
 				observedRefs.apply(actor, result);
+			}
 			result.put("interaction",
 				ActorInteractions.captureObserved(target, interactionFlag, !issues.containsKey("interactionTarget"),
 					local, includeOthers, refs, target == actor ? result : null, issues));
@@ -262,8 +265,8 @@ public final class ActorCallbackObservation
 	}
 
 	/** Direct API occupied bounds; not a server damage footprint or activation claim. */
-	private static void worldArea(Map<String, Object> result, Map<String, String> issues, Actor actor,
-		WorldView view, Integer viewId)
+	private static void worldArea(Map<String, Object> result, Map<String, String> issues, Actor actor, WorldView view,
+		Integer viewId)
 	{
 		result.put("worldAreaKnown", false);
 		result.put("worldArea", null);

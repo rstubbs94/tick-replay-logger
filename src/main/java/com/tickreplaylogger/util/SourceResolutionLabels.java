@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.util;
 
+import static net.runelite.client.util.Text.removeTags;
 import com.tickreplaylogger.model.world.SourceResolution;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -40,16 +41,22 @@ public final class SourceResolutionLabels
 		if (resolution == null || resolution.getVersion() != 1 || resolution.getCandidates() == null
 			|| resolution.getCandidates().size() > 256 || !("IDENTIFIED".equals(resolution.getStatus())
 				|| "ALTERNATIVES".equals(resolution.getStatus()) || "UNIDENTIFIED".equals(resolution.getStatus())))
+		{
 			return null;
+		}
 		Set<String> names = new LinkedHashSet<>();
 		for (SourceResolution.Candidate candidate : resolution.getCandidates())
 		{
 			String name = candidate == null ? null : usableName(candidate.getName());
 			if (name != null)
+			{
 				names.add(name);
+			}
 		}
 		if (names.isEmpty())
+		{
 			return "Unknown";
+		}
 		return String.join(" or ", names);
 	}
 
@@ -57,8 +64,10 @@ public final class SourceResolutionLabels
 	public static String usableName(String raw)
 	{
 		if (raw == null)
+		{
 			return null;
-		String name = raw.replaceAll("<[^>]*>", "").trim();
+		}
+		String name = removeTags(raw).trim();
 		return name.isEmpty() || name.matches("(?i)^(unknown(?: source)?|unavailable|null)$") ? null : name;
 	}
 

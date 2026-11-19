@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "artifactIdentityScope": "REVIEWED_RUNTIME_REFERENCE",
+  "runtimeReferencePolicy": "SELECTED_CLASSES_AND_VERSION_V1",
+  "references": [
+    {
+      "id": "runelite-1.13.6",
+      "version": "1.13.6",
+      "artifacts": {
+        "client": {
+          "sha256": "a1384091c034f14b74a1ac7a22261b03ae9915f95b75f21071236f27c55fb3fe",
+          "referenceClassSha256s": {
+            "net/runelite/client/RuneLiteProperties.class": "2123ef8c8f29551f96ffbe913a0ae2d3fe88b2f531635441286dc27582c21921",
+            "net/runelite/client/plugins/poison/PoisonPlugin.class": "6430a1bdf93608466be3c04c2f259c05d3c11ee536aa9ba2429a747a7b02cc48",
+            "net/runelite/client/plugins/timersandbuffs/GameTimer.class": "867903d9edcfc2496bf82fe4d674db8d844348bee9cd048cca931d53879ace09",
+            "net/runelite/client/plugins/timersandbuffs/TimersAndBuffsPlugin.class": "b0be531de13e99670b010b17e28b7092c38b0613e04b3d8f3dc0935b743936b2"
+          }
+        },
+        "runelite-api": {
+          "sha256": "2c3899c109fe3ceea33baa96f277914ef869e387981a9c2d49c46cc78bea8be4",
+          "referenceClassSha256s": {
+            "net/runelite/api/Client.class": "caf86ef4b9d359bb0ea2a5fb03c1d99f4407e7be4eb760b3feb5383f33f11b7e",
+            "net/runelite/api/VarbitComposition.class": "8556ba3461f8c1f895c6931ed3f47cdefb62d6a9ff5be88ae3aa6bb8ffdb97b1"
+          }
+        }
+      },
+      "provenance": {
+        "source": "Verified RuneLite release artifacts used by the reviewed client bindings",
+        "artifactRepository": "https://repo.runelite.net",
+        "scope": "Reference artifact identities and selected class witnesses; not actual compiler provenance or a whole loaded-JAR hash"
+      }
+    },
+    {
+      "id": "runelite-1.13.7",
+      "version": "1.13.7",
+      "artifacts": {
+        "client": {
+          "sha256": "1abfe7ba42e200b1e609979c31d2c4cab6ea2f0fac901288223c517aa19074bc",
+          "referenceClassSha256s": {
+            "net/runelite/client/RuneLiteProperties.class": "2123ef8c8f29551f96ffbe913a0ae2d3fe88b2f531635441286dc27582c21921",
+            "net/runelite/client/plugins/poison/PoisonPlugin.class": "6430a1bdf93608466be3c04c2f259c05d3c11ee536aa9ba2429a747a7b02cc48",
+            "net/runelite/client/plugins/timersandbuffs/GameTimer.class": "867903d9edcfc2496bf82fe4d674db8d844348bee9cd048cca931d53879ace09",
+            "net/runelite/client/plugins/timersandbuffs/TimersAndBuffsPlugin.class": "b0be531de13e99670b010b17e28b7092c38b0613e04b3d8f3dc0935b743936b2"
+          }
+        },
+        "runelite-api": {
+          "sha256": "1bdd29c0809db6011b9abd21fa273d562b76385e4d3ed6f4b161ffa58a93effd",
+          "referenceClassSha256s": {
+            "net/runelite/api/Client.class": "1de65d6c613d548b7cb83d58059281e988849be2c4c7b97c4f77b11fd7fe2e5c",
+            "net/runelite/api/VarbitComposition.class": "8556ba3461f8c1f895c6931ed3f47cdefb62d6a9ff5be88ae3aa6bb8ffdb97b1"
+          }
+        }
+      },
+      "semanticReferenceAliases": [
+        {
+          "version": "1.13.6",
+          "clientArtifactSha256": "a1384091c034f14b74a1ac7a22261b03ae9915f95b75f21071236f27c55fb3fe",
+          "scope": "EXACT_REVIEWED_CLIENT_REFERENCE_PAIR_V1",
+          "reviewedConsumerSetSha256": "9d94ac30a4b358159d2a23ee0640effcf78dc7a4986149480bb359902bd009a2",
+          "reviewedConsumerCount": 18,
+          "reviewedBindings": [
+            "poison_venom_client_state",
+            "disease_client_state",
+            "antifire_client_state",
+            "super_antifire_client_state",
+            "stamina_client_state",
+            "teleblock_client_state",
+            "poison_protection_client_state",
+            "bind_local_graphic_reference",
+            "snare_local_graphic_reference",
+            "entangle_local_graphic_reference",
+            "ice_rush_local_graphic_reference",
+            "ice_burst_local_graphic_reference",
+            "ice_blitz_local_graphic_reference",
+            "ice_barrage_local_graphic_reference",
+            "toa_mode_by_observed_raid_level"
+          ],
+          "basis": "All seven local status, seven local graphic and one ToA level interpretation retain identical referenced client bytecode/used constants. Hitsplat constants and two embedded status witnesses are unchanged. Existing Client methods/default code are unchanged; only two ambient-sound methods were added."
+        }
+      ],
+      "provenance": {
+        "source": "Official RuneLite 1.13.7 release client/API artifacts; exact comparison with the existing reviewed 1.13.6 reference",
+        "artifactRepository": "https://repo.runelite.net",
+        "scope": "Reference artifact identities and selected class witnesses; not actual compiler provenance or a whole loaded-JAR hash"
+      }
+    }
+  ]
+}

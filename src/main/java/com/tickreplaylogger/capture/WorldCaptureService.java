@@ -24,42 +24,20 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ContextBlock;
-import com.tickreplaylogger.model.world.HazardState;
-import com.tickreplaylogger.model.world.NpcState;
-import com.tickreplaylogger.model.world.OtherPlayerState;
-import com.tickreplaylogger.model.world.PlayerState;
-import com.tickreplaylogger.model.world.ProjectileState;
-import com.tickreplaylogger.model.world.SceneData;
-import com.tickreplaylogger.model.world.WorldSnapshot;
-import java.util.ArrayList;
-import java.util.List;
-import net.runelite.api.Actor;
-import net.runelite.api.Animation;
-import net.runelite.api.ActorSpotAnim;
-import net.runelite.api.Client;
-import net.runelite.api.CollisionData;
-import net.runelite.api.EquipmentInventorySlot;
-import net.runelite.api.GameObject;
-import net.runelite.api.GraphicsObject;
-import net.runelite.api.GroundObject;
-import net.runelite.api.InventoryID;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.Prayer;
-import net.runelite.api.Skill;
-import net.runelite.api.VarPlayer;
-import net.runelite.api.Varbits;
-import net.runelite.api.WorldView;
+import static net.runelite.client.util.Text.removeTags;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
+import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 
 /**
  * Builds a {@link WorldSnapshot} from the live client each tick, and a {@link SceneData} collision
- * grid on each scene load. Pure reads of the RuneLite API — no mutation, no network. The damage/
- * effect labelling and attribution confidence are applied by the plugin/{@code DamageMap}; this
+ * grid on each scene load. Pure reads of the RuneLite API — no mutation, no network.
+ * Source interpretation is applied by the shared retrospective interpreter; this
  * service captures the raw observed world.
  */
 public class WorldCaptureService
@@ -74,8 +52,8 @@ public class WorldCaptureService
 		encounterWaveCues.reset();
 	}
 
-	public void observeEncounterWaveCue(Client client, String sceneKey, net.runelite.api.GameState state,
-		net.runelite.api.ChatMessageType channel, String message, int tick, Integer cycle, long sequence)
+	public void observeEncounterWaveCue(Client client, String sceneKey, GameState state, ChatMessageType channel,
+		String message, int tick, Integer cycle, long sequence)
 	{
 		encounterWaveCues.observe(client, damageMap == null ? null : damageMap.catalog(), sceneKey, state, channel,
 			message, tick, cycle, sequence);
@@ -84,11 +62,11 @@ public class WorldCaptureService
 	private final TerrainCapture terrainCapture = new TerrainCapture();
 	private final ActorIdentity actorIdentity;
 	private final ObjectHazards.ObservationIdentities surfaceObservationIds;
-	private final net.runelite.api.WorldView fixedView;
+	private final WorldView fixedView;
 	private final Integer fixedPlane;
-	private final java.util.IdentityHashMap<net.runelite.api.WorldView, java.util.Map<Integer, WorldCaptureService>> additionalServices = new java.util.IdentityHashMap<>();
-	private final java.util.IdentityHashMap<net.runelite.api.WorldView, java.util.Set<Integer>> callbackPlanes = new java.util.IdentityHashMap<>();
-	private final java.util.IdentityHashMap<net.runelite.api.WorldEntity, Long> entityIdentities = new java.util.IdentityHashMap<>();
+	private final IdentityHashMap<WorldView, Map<Integer, WorldCaptureService>> additionalServices = new IdentityHashMap<>();
+	private final IdentityHashMap<WorldView, Set<Integer>> callbackPlanes = new IdentityHashMap<>();
+	private final IdentityHashMap<WorldEntity, Long> entityIdentities = new IdentityHashMap<>();
 	private long entitySequence, additionalSceneSequence;
 	private String additionalScope, additionalSceneKey;
 	private SceneData additionalScene;
@@ -104,11 +82,11 @@ public class WorldCaptureService
 		this(new ActorIdentity(), new ObservedMechanics(), null, null, observations);
 	}
 
-	private WorldCaptureService(ActorIdentity identities, ObservedMechanics observedMechanics,
-		net.runelite.api.WorldView view, Integer plane, ObjectHazards.ObservationIdentities observations)
+	private WorldCaptureService(ActorIdentity identities, ObservedMechanics observedMechanics, WorldView view,
+		Integer plane, ObjectHazards.ObservationIdentities observations)
 	{
 		actorIdentity = identities;
-		surfaceObservationIds = java.util.Objects.requireNonNull(observations, "observations");
+		surfaceObservationIds = Objects.requireNonNull(observations, "observations");
 		mechanics = observedMechanics;
 		fixedView = view;
 		fixedPlane = plane;
@@ -155,11 +133,13 @@ public class WorldCaptureService
 		callbackPlanes.clear();
 	}
 
-	public void worldViewLifecycle(Client client, net.runelite.api.WorldView nativeView)
+	public void worldViewLifecycle(Client client, WorldView nativeView)
 	{
 		encounterWaveCues.reset();
 		if (nativeView == null)
+		{
 			return;
+		}
 		WorldViews.invalidate(nativeView);
 		actorIdentity.forgetView(nativeView);
 		mechanics.clearView(nativeView);
@@ -172,7 +152,7 @@ public class WorldCaptureService
 		}
 	}
 
-	private net.runelite.api.WorldView view(Client client)
+	private WorldView view(Client client)
 	{
 		return fixedView == null ? WorldViews.active(client) : fixedView;
 	}
@@ -192,7 +172,7 @@ public class WorldCaptureService
 		return view(client) == null ? client.getPlayers() : view(client).players();
 	}
 
-	private net.runelite.api.Scene scene(Client client)
+	private Scene scene(Client client)
 	{
 		return view(client) == null ? client.getScene() : view(client).getScene();
 	}
@@ -209,11 +189,11 @@ public class WorldCaptureService
 	}
 
 	private final List<String> captureIssues = new ArrayList<>();
-	private java.util.Map<String, Object> hazardCoverage = new java.util.LinkedHashMap<>();
+	private Map<String, Object> hazardCoverage = new LinkedHashMap<>();
 	private int mappedObjectReadFailures;
 	private final GroundItemTracker groundItemTracker = new GroundItemTracker();
 
-	public GroundItemTracker groundItems(Client client, net.runelite.api.WorldView view, int plane)
+	public GroundItemTracker groundItems(Client client, WorldView view, int plane)
 	{
 		notePlane(view, plane);
 		return serviceFor(client, view, plane).groundItemTracker;
@@ -226,32 +206,34 @@ public class WorldCaptureService
 		return objectTracker;
 	}
 
-	public ObjectStateTracker objects(Client client, net.runelite.api.WorldView view)
+	public ObjectStateTracker objects(Client client, WorldView view)
 	{
 		return objects(client, view, view == null ? client.getPlane() : view.getPlane());
 	}
 
-	public ObjectStateTracker objects(Client client, net.runelite.api.WorldView view, int plane)
+	public ObjectStateTracker objects(Client client, WorldView view, int plane)
 	{
 		notePlane(view, plane);
 		return serviceFor(client, view, plane).objectTracker;
 	}
 
-	public ObservedMechanics mechanics(Client client, net.runelite.api.WorldView view)
+	public ObservedMechanics mechanics(Client client, WorldView view)
 	{
 		return mechanics(client, view, view == null ? client.getPlane() : view.getPlane());
 	}
 
-	public ObservedMechanics mechanics(Client client, net.runelite.api.WorldView view, int plane)
+	public ObservedMechanics mechanics(Client client, WorldView view, int plane)
 	{
 		notePlane(view, plane);
 		return serviceFor(client, view, plane).mechanics;
 	}
 
-	private void notePlane(net.runelite.api.WorldView view, int plane)
+	private void notePlane(WorldView view, int plane)
 	{
 		if (view != null && plane >= 0)
-			callbackPlanes.computeIfAbsent(view, value -> new java.util.TreeSet<>()).add(plane);
+		{
+			callbackPlanes.computeIfAbsent(view, value -> new TreeSet<>()).add(plane);
+		}
 	}
 
 	public void clearMechanics(NPC npc)
@@ -259,37 +241,49 @@ public class WorldCaptureService
 		mechanics.clear(npc);
 	}
 
-	private WorldCaptureService serviceFor(Client client, net.runelite.api.WorldView nativeView)
+	private WorldCaptureService serviceFor(Client client, WorldView nativeView)
 	{
 		return serviceFor(client, nativeView, nativeView == null ? client.getPlane() : nativeView.getPlane());
 	}
 
-	private WorldCaptureService serviceFor(Client client, net.runelite.api.WorldView nativeView, int plane)
+	private WorldCaptureService serviceFor(Client client, WorldView nativeView, int plane)
 	{
 		if (nativeView == null || nativeView == WorldViews.active(client) && plane == nativeView.getPlane())
+		{
 			return this;
-		WorldCaptureService service = additionalServices.computeIfAbsent(nativeView, value -> new java.util.TreeMap<>())
-			.computeIfAbsent(plane, value -> new WorldCaptureService(actorIdentity, mechanics, nativeView, value, surfaceObservationIds));
+		}
+		return additionalService(nativeView, plane, null);
+	}
+
+	/** A supplied ID is an original callback observation, not permission to reread it. */
+	private WorldCaptureService additionalService(WorldView nativeView, int plane, Integer originalViewId)
+	{
+		WorldCaptureService service = additionalServices.computeIfAbsent(nativeView, value -> new TreeMap<>())
+			.computeIfAbsent(plane,
+				value -> new WorldCaptureService(actorIdentity, mechanics, nativeView, value, surfaceObservationIds));
 		service.damageMap = damageMap;
-		String scope = WorldViews.scope(nativeView, plane);
-		if (!java.util.Objects.equals(scope, service.additionalScope))
+		String scope = originalViewId == null ? WorldViews.scope(nativeView, plane)
+			: WorldViews.scope(nativeView, plane, originalViewId);
+		if (!Objects.equals(scope, service.additionalScope))
 		{
 			if (service.additionalScope != null)
+			{
 				service.resetTiming();
+			}
 			service.additionalScope = scope;
 			service.additionalScene = null;
-			service.additionalSceneKey = "native:" + nativeView.getId() + ":p" + plane + ":"
-				+ (++additionalSceneSequence);
+			service.additionalSceneKey = "native:" + (originalViewId == null ? nativeView.getId() : originalViewId)
+				+ ":p" + plane + ":" + (++additionalSceneSequence);
 		}
 		return service;
 	}
 
-	public String additionalSceneKey(Client client, net.runelite.api.WorldView nativeView)
+	public String additionalSceneKey(Client client, WorldView nativeView)
 	{
 		return additionalSceneKey(client, nativeView, nativeView == null ? client.getPlane() : nativeView.getPlane());
 	}
 
-	public String additionalSceneKey(Client client, net.runelite.api.WorldView nativeView, int plane)
+	public String additionalSceneKey(Client client, WorldView nativeView, int plane)
 	{
 		notePlane(nativeView, plane);
 		WorldCaptureService service = serviceFor(client, nativeView, plane);
@@ -297,34 +291,24 @@ public class WorldCaptureService
 	}
 
 	/** Lookup only: the caller has already observed the original native scope signature. */
-	public String cachedAdditionalSceneKey(net.runelite.api.WorldView nativeView, int plane, String observedScope)
+	public String cachedAdditionalSceneKey(WorldView nativeView, int plane, String observedScope)
 	{
-		java.util.Map<Integer, WorldCaptureService> planes = additionalServices.get(nativeView);
+		Map<Integer, WorldCaptureService> planes = additionalServices.get(nativeView);
 		WorldCaptureService service = planes == null ? null : planes.get(plane);
 		return service != null && observedScope != null && observedScope.equals(service.additionalScope)
-			? service.additionalSceneKey : null;
+			? service.additionalSceneKey
+			: null;
 	}
 
 	/** Use the callback's original native view/id and separately observed primary frame. */
-	public String observedSceneKey(net.runelite.api.WorldView nativeView, int plane, int viewId,
-		net.runelite.api.WorldView primaryView, int primaryPlane)
+	public String observedSceneKey(WorldView nativeView, int plane, int viewId, WorldView primaryView, int primaryPlane)
 	{
 		if (nativeView == primaryView && plane == primaryPlane)
-			return null;
-		notePlane(nativeView, plane);
-		WorldCaptureService service = additionalServices.computeIfAbsent(nativeView, value -> new java.util.TreeMap<>())
-			.computeIfAbsent(plane, value -> new WorldCaptureService(actorIdentity, mechanics, nativeView, value, surfaceObservationIds));
-		service.damageMap = damageMap;
-		String scope = WorldViews.scope(nativeView, plane, viewId);
-		if (!java.util.Objects.equals(scope, service.additionalScope))
 		{
-			if (service.additionalScope != null)
-				service.resetTiming();
-			service.additionalScope = scope;
-			service.additionalScene = null;
-			service.additionalSceneKey = "native:" + viewId + ":p" + plane + ":" + (++additionalSceneSequence);
+			return null;
 		}
-		return service.additionalSceneKey;
+		notePlane(nativeView, plane);
+		return additionalService(nativeView, plane, viewId).additionalSceneKey;
 	}
 
 	private final ObservedMechanics mechanics;
@@ -335,13 +319,17 @@ public class WorldCaptureService
 	}
 
 	// Per-NPC timing state (by scene index), for the action + attack-cooldown model.
-	private final java.util.Map<Integer, Integer> npcLastAnim = new java.util.HashMap<>();
-	private final java.util.Map<Integer, Integer> npcLastAnimationFrame = new java.util.HashMap<>();
-	private final java.util.Map<Integer, Integer> npcLastAttackTick = new java.util.HashMap<>();
-	private final java.util.Map<Integer, LocalPoint> npcLastLocal = new java.util.HashMap<>();
-	private final java.util.Map<Integer, NPC> npcIdentities = new java.util.HashMap<>();
-	private final java.util.Map<Integer, Integer> npcDefinitions = new java.util.HashMap<>();
-	private final java.util.Map<Integer, String> npcCycleContexts = new java.util.HashMap<>();
+	private final Map<Integer, NpcTiming> npcTimings = new HashMap<>();
+
+	@RequiredArgsConstructor
+	private static final class NpcTiming
+	{
+		final NPC actor;
+		final Integer definition;
+		Integer animation, frame, attackTick;
+		LocalPoint position;
+		String context;
+	}
 
 	/** Provide the bundled map so observed hazard graphics get a human name. */
 	public void setDamageMap(DamageMap damageMap)
@@ -363,25 +351,19 @@ public class WorldCaptureService
 	public void invalidateActorTiming()
 	{
 		clearActorTiming();
-		for (java.util.Map<Integer, WorldCaptureService> levels : additionalServices.values())
+		for (Map<Integer, WorldCaptureService> levels : additionalServices.values())
+		{
 			for (WorldCaptureService service : levels.values())
+			{
 				service.clearActorTiming();
+			}
+		}
 	}
 
 	private void clearActorTiming()
 	{
-		npcLastAnim.clear();
-		npcLastAnimationFrame.clear();
-		npcLastAttackTick.clear();
-		npcLastLocal.clear();
-		npcIdentities.clear();
-		npcDefinitions.clear();
-		npcCycleContexts.clear();
+		npcTimings.clear();
 	}
-
-	/** Overhead protection/offensive-prayer names, to derive the player's single active overhead. */
-	private static final java.util.Set<String> OVERHEADS = java.util.Set.of("PROTECT_FROM_MELEE",
-		"PROTECT_FROM_MISSILES", "PROTECT_FROM_MAGIC", "RETRIBUTION", "REDEMPTION", "SMITE");
 
 	/**
 	 * Capture the collision grid for the current scene (once per load). Sparse: only non-zero tiles.
@@ -393,10 +375,12 @@ public class WorldCaptureService
 
 	public SceneData captureScene(Client client, String sceneKey, int loadSeq, boolean includeCollision)
 	{
-		net.runelite.api.WorldView nativeView = view(client);
+		WorldView nativeView = view(client);
 		if (nativeView != null && (nativeView.getScene() == null || nativeView.getSizeX() <= 0
 			|| nativeView.getSizeY() <= 0 || nativeView.getSizeX() > 1024 || nativeView.getSizeY() > 1024))
+		{
 			return null;
+		}
 		int plane = plane(client);
 		CollisionData[] maps = includeCollision ? collisions(client) : null;
 		List<SceneData.CollisionTile> tiles = new ArrayList<>();
@@ -452,7 +436,7 @@ public class WorldCaptureService
 		List<ProjectileState> projectilesThisTick, WorldPoint lastPlayerWorld, boolean includeOtherPlayers,
 		boolean includeCollision, boolean includeTerrain)
 	{
-		net.runelite.api.WorldView sampledView;
+		WorldView sampledView;
 		try
 		{
 			sampledView = WorldViews.active(client);
@@ -462,50 +446,63 @@ public class WorldCaptureService
 			return captureWithoutNativeContext(client, tick, projectilesThisTick, lastPlayerWorld, includeOtherPlayers,
 				unavailable);
 		}
-		java.util.IdentityHashMap<net.runelite.api.WorldView, SceneCaptureTraversal> traversals = new java.util.IdentityHashMap<>();
+		IdentityHashMap<WorldView, SceneCaptureTraversal> traversals = new IdentityHashMap<>();
 		SceneCaptureTraversal primaryTraversal = SceneCaptureTraversal.capture(client, sampledView);
 		traversals.put(sampledView, primaryTraversal);
 		WorldSnapshot primary = captureNativeTick(client, tick, sceneKey, projectilesThisTick, lastPlayerWorld,
 			includeOtherPlayers, includeCollision, includeTerrain, true, primaryTraversal);
 		if (primary == null)
+		{
 			return null;
-		net.runelite.api.WorldView primaryView = WorldViews.active(client);
+		}
+		WorldView primaryView = WorldViews.active(client);
 		WorldViews.Discovery discovered = WorldViews.discover(client);
 		List<WorldSnapshot> additional = new ArrayList<>();
 		List<String> issues = new ArrayList<>(primary.getCaptureIssues());
 		issues.addAll(discovered.issues);
-		for (net.runelite.api.WorldView nativeView : discovered.views)
+		for (WorldView nativeView : discovered.views)
 		{
 			try
 			{
 				SceneCaptureTraversal nativeTraversal = traversals.computeIfAbsent(nativeView,
 					value -> SceneCaptureTraversal.capture(client, value));
 				WorldViews.Planes planes = WorldViews.planes(nativeView, includeOtherPlayers, nativeTraversal);
-				for (Integer observed : callbackPlanes.getOrDefault(nativeView, java.util.Collections.emptySet()))
+				for (Integer observed : callbackPlanes.getOrDefault(nativeView, Collections.emptySet()))
+				{
 					planes.add(observed, "CALLBACK_SINCE_PREVIOUS_CAPTURE");
+				}
 				if (projectilesThisTick != null)
+				{
 					for (ProjectileState projectile : projectilesThisTick)
 					{
 						Integer sourceLevel = projectile.getSourcePlane() == null ? projectile.getPlane()
 							: projectile.getSourcePlane();
-						if (java.util.Objects.equals(projectile.getWorldViewId(), nativeView.getId())
-							&& sourceLevel != null)
+						if (Objects.equals(projectile.getWorldViewId(), nativeView.getId()) && sourceLevel != null)
+						{
 							planes.add(sourceLevel, "PROJECTILE_SOURCE_LEVEL");
-						if (java.util.Objects.equals(projectile.getTargetWorldViewId(), nativeView.getId())
+						}
+						if (Objects.equals(projectile.getTargetWorldViewId(), nativeView.getId())
 							&& projectile.getTargetPlane() != null)
+						{
 							planes.add(projectile.getTargetPlane(), "PROJECTILE_TARGET_LEVEL");
+						}
 					}
+				}
 				issues.addAll(planes.issues);
 				if (nativeView == primaryView)
+				{
 					primary = primary.toBuilder().planeCoverage(planes.coverage(primary.getPlane())).build();
+				}
 				for (Integer plane : planes.planes)
 				{
 					if (nativeView == primaryView && plane == primary.getPlane())
 					{
 						// A secondary cache cannot observe callbacks while this scope is primary.
-						java.util.Map<Integer, WorldCaptureService> cached = additionalServices.get(nativeView);
+						Map<Integer, WorldCaptureService> cached = additionalServices.get(nativeView);
 						if (cached != null)
+						{
 							cached.remove(plane);
+						}
 						continue;
 					}
 					try
@@ -515,13 +512,21 @@ public class WorldCaptureService
 						{
 							SceneData metadata = service.captureScene(client, service.additionalSceneKey, 0, false);
 							if (metadata != null)
+							{
 								service.additionalScene = metadata.toBuilder().collision(null).build();
+							}
 						}
 						List<ProjectileState> projectiles = new ArrayList<>();
 						if (projectilesThisTick != null)
+						{
 							for (ProjectileState projectile : projectilesThisTick)
+							{
 								if (projectileMatches(projectile, nativeView.getId(), plane))
+								{
 									projectiles.add(projectile);
+								}
+							}
+						}
 						SceneCaptureTraversal traversal = traversals.computeIfAbsent(nativeView,
 							value -> SceneCaptureTraversal.capture(client, value));
 						WorldSnapshot observed = service.captureNativeTick(client, tick, service.additionalSceneKey,
@@ -530,8 +535,7 @@ public class WorldCaptureService
 						{
 							if (service.additionalScene == null)
 							{
-								java.util.Map<String, String> status = new java.util.LinkedHashMap<>(
-									observed.getCaptureCoverage());
+								Map<String, String> status = new LinkedHashMap<>(observed.getCaptureCoverage());
 								status.put("sceneMetadata", "unavailable");
 								observed = observed.toBuilder().captureCoverage(status).build();
 							}
@@ -546,7 +550,9 @@ public class WorldCaptureService
 					}
 				}
 				if (planes.issues.isEmpty() && additionalServices.containsKey(nativeView))
+				{
 					additionalServices.get(nativeView).keySet().retainAll(planes.planes);
+				}
 			}
 			catch (RuntimeException error)
 			{
@@ -556,11 +562,12 @@ public class WorldCaptureService
 		callbackPlanes.clear();
 		// Per-plane pruning would erase cues for actors sampled on another plane.
 		if (discovered.issues.isEmpty())
+		{
 			try
 			{
-				java.util.Set<NPC> loaded = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+				Set<NPC> loaded = Collections.newSetFromMap(new IdentityHashMap<>());
 				boolean complete = true;
-				for (net.runelite.api.WorldView nativeView : discovered.views)
+				for (WorldView nativeView : discovered.views)
 				{
 					if (nativeView.npcs() == null)
 					{
@@ -568,41 +575,56 @@ public class WorldCaptureService
 						break;
 					}
 					for (NPC npc : nativeView.npcs())
+					{
 						if (npc != null)
+						{
 							loaded.add(npc);
+						}
+					}
 				}
 				if (complete)
+				{
 					mechanics.prune(loaded);
+				}
 			}
 			catch (RuntimeException unavailable)
 			{
 				issues.add("npcs: phase membership reconciliation unavailable");
 			}
+		}
 		if (discovered.issues.isEmpty())
+		{
 			additionalServices.keySet().retainAll(discovered.views);
-		java.util.Map<String, String> coverage = new java.util.LinkedHashMap<>(primary.getCaptureCoverage());
+		}
+		Map<String, String> coverage = new LinkedHashMap<>(primary.getCaptureCoverage());
 		coverage.put("worldViews",
 			issues.stream().anyMatch(value -> value.startsWith("worldViews:") || value.startsWith("worldPlanes:"))
 				? "PARTIAL_LOADED_NATIVE_PLANE_CHANNELS"
 				: "ALL_DISCOVERED_NATIVE_PLANE_CHANNELS");
 		List<ProjectileState> primaryProjectiles = new ArrayList<>();
 		if (projectilesThisTick != null)
+		{
 			for (ProjectileState projectile : projectilesThisTick)
 			{
 				boolean assigned = false;
 				for (WorldSnapshot child : additional)
+				{
 					if (projectileMatches(projectile, child.getWorldViewId(), child.getPlane()))
 					{
 						assigned = true;
 						break;
 					}
+				}
 				if (projectileMatches(projectile, primary.getWorldViewId(), primary.getPlane()) || !assigned)
+				{
 					primaryProjectiles.add(projectile);
+				}
 			}
+		}
 		return primary.toBuilder().projectiles(primaryProjectiles)
-			.additionalViews(java.util.Collections.unmodifiableList(additional))
-			.captureCoverage(java.util.Collections.unmodifiableMap(coverage))
-			.captureIssues(java.util.Collections.unmodifiableList(issues)).build();
+			.additionalViews(Collections.unmodifiableList(additional))
+			.captureCoverage(Collections.unmodifiableMap(coverage)).captureIssues(Collections.unmodifiableList(issues))
+			.build();
 	}
 
 	/** Do not substitute a top-level or historical scene when the player's native view read fails. */
@@ -611,7 +633,9 @@ public class WorldCaptureService
 	{
 		Player local = client.getLocalPlayer();
 		if (local == null)
+		{
 			return null;
+		}
 		return captureUnscopedTick(client, local, tick, projectiles, includeOthers,
 			"native context unavailable " + failure.getClass().getSimpleName());
 	}
@@ -621,16 +645,20 @@ public class WorldCaptureService
 		boolean includeOthers, String reason)
 	{
 		if (local == null)
+		{
 			return null;
+		}
 		captureIssues.clear();
 		invalidateActorTiming();
 		mechanics.reset();
 		captureIssues.add("worldViews: " + reason);
-		java.util.Map<String, String> coverage = new java.util.LinkedHashMap<>();
-		for (String channel : java.util.List.of("worldViews", "graphicsAndMappedHazards", "sceneObjects", "groundItems",
+		Map<String, String> coverage = new LinkedHashMap<>();
+		for (String channel : List.of("worldViews", "graphicsAndMappedHazards", "sceneObjects", "groundItems",
 			"collision", "terrain", "worldEntities", "context", "variables", "serverVariables", "longVariables",
 			"serverLongVariables", "clientIntegers", "localStatuses"))
+		{
 			coverage.put(channel, "unavailable");
+		}
 		PlayerState player = captureChannel("player", coverage, () -> capturePlayer(client, local, null, includeOthers),
 			null);
 		List<NpcState> npcs = captureChannel("npcs", coverage, () -> captureUnscopedNpcs(client, local, includeOthers),
@@ -641,13 +669,17 @@ public class WorldCaptureService
 				new ArrayList<>())
 			: new ArrayList<>();
 		if (!includeOthers)
+		{
 			coverage.put("otherPlayers", "disabled");
+		}
 		coverage.put("otherPlayersScope", "TOP_LEVEL_API_COLLECTION_WITHOUT_REPLAY_FRAME_ASSIGNMENT");
 		Integer cycle = captureChannel("gameCycle", coverage, client::getGameCycle, null);
 		Integer apiTick = captureChannel("apiTickCount", coverage, client::getTickCount, null);
 		for (String issue : captureIssues)
+		{
 			coverage.compute(issue.split(":", 2)[0],
 				(key, status) -> "unavailable".equals(status) ? status : "partial");
+		}
 		return WorldSnapshot.builder().tick(tick).wallClockMs(System.currentTimeMillis())
 			.gameCycle(cycle == null ? 0 : cycle).gameCycleKnown(cycle != null).apiTickCount(apiTick)
 			.nativeContextKnown(false).player(player).players(others).npcs(npcs).hazards(new ArrayList<>())
@@ -667,6 +699,7 @@ public class WorldCaptureService
 				return rows;
 			}
 			for (NPC npc : actors)
+			{
 				if (npc != null)
 				{
 					WorldPoint point = null;
@@ -692,14 +725,16 @@ public class WorldCaptureService
 							sample.issues.containsKey("interactionTarget") ? null : sample.target == local);
 					if (!sample.issues.isEmpty())
 					{
-						sample.state.observationIssues(
-							java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(sample.issues)));
-						for (java.util.Map.Entry<String, String> item : sample.issues.entrySet())
+						sample.state.observationIssues(Collections.unmodifiableMap(new LinkedHashMap<>(sample.issues)));
+						for (Map.Entry<String, String> item : sample.issues.entrySet())
+						{
 							captureIssues
 								.add("npcs: " + item.getKey() + " (index " + sample.index + "): " + item.getValue());
+						}
 					}
 					rows.add(sample.state.build());
 				}
+			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -710,11 +745,11 @@ public class WorldCaptureService
 
 	private static boolean projectileMatches(ProjectileState projectile, Integer view, int plane)
 	{
-		return java.util.Objects.equals(projectile.getWorldViewId(), view)
-			&& java.util.Objects.equals(
-				projectile.getSourcePlane() == null ? projectile.getPlane() : projectile.getSourcePlane(), plane)
-			|| java.util.Objects.equals(projectile.getTargetWorldViewId(), view)
-				&& java.util.Objects.equals(projectile.getTargetPlane(), plane);
+		return Objects.equals(projectile.getWorldViewId(), view)
+			&& Objects.equals(projectile.getSourcePlane() == null ? projectile.getPlane() : projectile.getSourcePlane(),
+				plane)
+			|| Objects.equals(projectile.getTargetWorldViewId(), view)
+				&& Objects.equals(projectile.getTargetPlane(), plane);
 	}
 
 	private WorldSnapshot captureNativeTick(Client client, int tick, String sceneKey,
@@ -728,10 +763,10 @@ public class WorldCaptureService
 		}
 
 		captureIssues.clear();
-		java.util.Map<String, String> coverage = new java.util.LinkedHashMap<>();
+		Map<String, String> coverage = new LinkedHashMap<>();
 		coverage.put("worldViews", "NATIVE_VIEW_PLANE_CHANNEL");
 		coverage.put("projectiles", "SUPPLIED_TICK_AND_CALLBACK_OBSERVATIONS");
-		net.runelite.api.WorldView sampledNativeView = captureChannel("nativeView", coverage, () -> view(client), null);
+		WorldView sampledNativeView = captureChannel("nativeView", coverage, () -> view(client), null);
 		Integer sampledNativeViewId = sampledNativeView == null ? null
 			: captureChannel("nativeViewId", coverage, sampledNativeView::getId, null);
 		Integer sampledNativePlane = captureChannel("nativePlane", coverage, () -> plane(client), null);
@@ -740,41 +775,51 @@ public class WorldCaptureService
 				null)
 			: null;
 		if (player != null && captureIssues.stream().anyMatch(issue -> issue.startsWith("player.")))
+		{
 			coverage.put("player", "partial");
+		}
 		List<NpcState> npcs = captureChannel("npcs", coverage, () -> captureNpcs(client, lp, tick, includeOtherPlayers),
 			new ArrayList<>());
 		List<OtherPlayerState> others = includeOtherPlayers
 			? captureChannel("otherPlayers", coverage, () -> captureOtherPlayers(client, lp), new ArrayList<>())
 			: new ArrayList<>();
 		if (!includeOtherPlayers)
+		{
 			coverage.put("otherPlayers", "disabled");
+		}
 		objectTracker.enterScene(sceneKey);
 		List<HazardState> hazards = captureChannel("graphicsAndMappedHazards", coverage,
 			() -> captureHazards(client, lp), new ArrayList<>());
 		if (!"available".equals(hazardCoverage.get("graphicsStatus"))
 			|| !"available".equals(hazardCoverage.get("mappedObjectsStatus")))
+		{
 			coverage.put("graphicsAndMappedHazards", "partial");
-		java.util.List<com.tickreplaylogger.model.world.ObservedObjectState> objects = captureChannel("sceneObjects",
-			coverage, () -> objectTracker.snapshot(client, sceneKey, view(client), plane(client), traversal), null);
+		}
+		List<ObservedObjectState> objects = captureChannel("sceneObjects", coverage,
+			() -> objectTracker.snapshot(client, sceneKey, view(client), plane(client), traversal), null);
 		if (objects != null && !Boolean.TRUE.equals(objectTracker.coverage().get("complete")))
+		{
 			coverage.put("sceneObjects", "partial");
-		java.util.List<com.tickreplaylogger.model.world.GroundItemState> groundItems = captureChannel("groundItems",
-			coverage, () -> groundItemTracker.snapshot(client, sceneKey, view(client), plane(client), traversal), null);
+		}
+		List<GroundItemState> groundItems = captureChannel("groundItems", coverage,
+			() -> groundItemTracker.snapshot(client, sceneKey, view(client), plane(client), traversal), null);
 		if (groundItems != null && !Boolean.TRUE.equals(groundItemTracker.coverage().get("complete")))
+		{
 			coverage.put("groundItems", "partial");
+		}
 		Integer apiTick = captureChannel("apiTickCount", coverage, client::getTickCount, null);
 		int[] varps = includeLocalContext ? captureChannel("variables", coverage, () ->
 		{
 			int[] raw = client.getVarps();
 			return raw == null ? null : raw.clone();
 		}, null) : null;
-		java.util.Map<Integer, Integer> clientIntegers = includeLocalContext
+		Map<Integer, Integer> clientIntegers = includeLocalContext
 			? captureChannel("clientIntegers", coverage, () -> captureClientIntegers(client), null)
 			: null;
 		int[] serverVarps = includeLocalContext ? captureChannel("serverVariables", coverage, () ->
 		{
 			int[] raw = client.getServerVarps();
-			return raw == null ? null : java.util.Arrays.equals(raw, varps) ? varps : raw.clone();
+			return raw == null ? null : Arrays.equals(raw, varps) ? varps : raw.clone();
 		}, null) : null;
 		long[] longVarps = includeLocalContext ? captureChannel("longVariables", coverage, () ->
 		{
@@ -784,49 +829,62 @@ public class WorldCaptureService
 		long[] serverLongVarps = includeLocalContext ? captureChannel("serverLongVariables", coverage, () ->
 		{
 			long[] raw = client.getServerVarpsLong();
-			return raw == null ? null : java.util.Arrays.equals(raw, longVarps) ? longVarps : raw.clone();
+			return raw == null ? null : Arrays.equals(raw, longVarps) ? longVarps : raw.clone();
 		}, null) : null;
 		ContextBlock context = includeLocalContext
 			? captureChannel("context", coverage, () -> captureContext(client, lp, sceneKey), null)
 			: null;
-		List<com.tickreplaylogger.model.world.ObservedStatusState> statuses = includeLocalContext
+		List<ObservedStatusState> statuses = includeLocalContext
 			? captureChannel("localStatuses", coverage,
 				() -> ClientStatusCapture.capture(client, damageMap == null ? null : damageMap.catalog(),
 					captureIssues),
 				null)
 			: null;
 		if (!includeLocalContext)
+		{
 			coverage.put("localStatuses", "disabled");
-		java.util.Map<Integer, com.tickreplaylogger.model.world.ObservedVarbitLayout> layouts = includeLocalContext
+		}
+		Map<Integer, ObservedVarbitLayout> layouts = includeLocalContext
 			? captureChannel("varbitLayouts", coverage, () -> captureVarbitLayouts(client), null)
 			: null;
 		if (!includeLocalContext)
+		{
 			coverage.put("varbitLayouts", "disabled");
+		}
 		else if (layouts != null && layouts.isEmpty()
 			&& captureIssues.stream().anyMatch(issue -> issue.startsWith("varbitLayouts:")))
+		{
 			coverage.put("varbitLayouts", "unavailable");
-		List<com.tickreplaylogger.model.world.WorldEntityState> entities = view(client) == null
-			|| plane(client) == view(client).getPlane()
-				? captureChannel("worldEntities", coverage, () -> captureWorldEntities(client), null)
-				: null;
+		}
+		List<WorldEntityState> entities = view(client) == null || plane(client) == view(client).getPlane()
+			? captureChannel("worldEntities", coverage, () -> captureWorldEntities(client), null)
+			: null;
 		if (view(client) != null && plane(client) != view(client).getPlane())
+		{
 			coverage.put("worldEntities", "VIEW_WIDE_POSES_ON_CURRENT_PLANE_FRAME");
+		}
 		int[][] collision = includeCollision ? captureChannel("collision", coverage, () -> copyCollision(client), null)
 			: null;
 		terrainCapture.clearCoverage();
-		java.util.List<com.tickreplaylogger.model.world.TileSurface> terrain = includeTerrain
+		List<TileSurface> terrain = includeTerrain
 			? captureChannel("terrain", coverage, () -> terrainCapture.capture(scene(client), plane(client)), null)
 			: null;
 		if (!includeTerrain)
+		{
 			coverage.put("terrain", "disabled");
+		}
 		if (includeTerrain && terrain != null && !terrainCapture.isNativeGridAvailable())
+		{
 			captureIssues.add("terrain: plane array unavailable; linked samples retained");
+		}
 		if (!includeCollision)
+		{
 			coverage.put("collision", "disabled");
+		}
 		Integer gameCycle = captureChannel("gameCycle", coverage, client::getGameCycle, null);
 		boolean nativeContextKnown = sampledNativeView != null && sampledNativeViewId != null
-			&& sampledNativePlane != null && sampledNativePlane >= 0 && sampledNativePlane <= 3
-			&& sceneKey != null && !sceneKey.trim().isEmpty();
+			&& sampledNativePlane != null && sampledNativePlane >= 0 && sampledNativePlane <= 3 && sceneKey != null
+			&& !sceneKey.trim().isEmpty();
 		Boolean nativeContextWitness = nativeContextKnown ? Boolean.TRUE : null;
 		if (nativeContextKnown)
 		{
@@ -834,7 +892,10 @@ public class WorldCaptureService
 			{
 				nativeContextKnown = view(client) == sampledNativeView
 					&& sampledNativeView.getId() == sampledNativeViewId && plane(client) == sampledNativePlane;
-				if (!nativeContextKnown) captureIssues.add("nativeContext: CHANGED_DURING_SAMPLE");
+				if (!nativeContextKnown)
+				{
+					captureIssues.add("nativeContext: CHANGED_DURING_SAMPLE");
+				}
 				nativeContextWitness = nativeContextKnown;
 			}
 			catch (RuntimeException unavailable)
@@ -846,55 +907,62 @@ public class WorldCaptureService
 		}
 		coverage.put("nativeContext", nativeContextKnown ? "available" : "unavailable");
 		for (String issue : captureIssues)
+		{
 			coverage.compute(issue.split(":", 2)[0],
 				(key, status) -> "unavailable".equals(status) ? status : "partial");
+		}
 		return WorldSnapshot.builder().tick(tick).gameCycle(gameCycle == null ? 0 : gameCycle)
 			.gameCycleKnown(gameCycle != null).wallClockMs(System.currentTimeMillis()).sceneKey(sceneKey)
 			.nativeContextKnown(nativeContextWitness).worldViewId(sampledNativeViewId)
-			.plane(sampledNativePlane == null ? 0 : sampledNativePlane).player(player)
-			.npcs(npcs).players(others)
+			.plane(sampledNativePlane == null ? 0 : sampledNativePlane).player(player).npcs(npcs).players(others)
 			.projectiles(projectilesThisTick != null ? projectilesThisTick : new ArrayList<>()).hazards(hazards)
-			.hazardCoverage(java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(hazardCoverage)))
-			.worldEntities(entities).observedObjects(objects).objectCoverage(objectTracker.coverage())
-			.observedGroundItems(groundItems).groundItemCoverage(groundItemTracker.coverage()).apiTickCount(apiTick)
-			.observedVarps(varps).context(context).localStatuses(statuses).varbitLayouts(layouts)
-			.observedNumericVariables(
-				com.tickreplaylogger.model.world.NumericVariableState.builder().clientIntegers(clientIntegers)
-					.serverVarps(serverVarps).varpsLong(longVarps).serverVarpsLong(serverLongVarps).build())
+			.hazardCoverage(Collections.unmodifiableMap(new LinkedHashMap<>(hazardCoverage))).worldEntities(entities)
+			.observedObjects(objects).objectCoverage(objectTracker.coverage()).observedGroundItems(groundItems)
+			.groundItemCoverage(groundItemTracker.coverage()).apiTickCount(apiTick).observedVarps(varps)
+			.context(context).localStatuses(statuses).varbitLayouts(layouts)
+			.observedNumericVariables(NumericVariableState.builder().clientIntegers(clientIntegers)
+				.serverVarps(serverVarps).varpsLong(longVarps).serverVarpsLong(serverLongVarps).build())
 			.observedCollision(collision).observedTerrain(terrain)
-			.terrainCoverage(
-				includeTerrain ? terrainCapture.coverage() : java.util.Collections.singletonMap("scope", "DISABLED"))
-			.captureCoverage(java.util.Collections.unmodifiableMap(coverage))
-			.captureIssues(new ArrayList<>(captureIssues)).build();
+			.terrainCoverage(includeTerrain ? terrainCapture.coverage() : Collections.singletonMap("scope", "DISABLED"))
+			.captureCoverage(Collections.unmodifiableMap(coverage)).captureIssues(new ArrayList<>(captureIssues))
+			.build();
 	}
 
-	private java.util.Map<Integer, com.tickreplaylogger.model.world.ObservedVarbitLayout> captureVarbitLayouts(
-		Client client)
+	private Map<Integer, ObservedVarbitLayout> captureVarbitLayouts(Client client)
 	{
 		if (damageMap == null || damageMap.catalog() == null)
-			return null;
-		com.google.gson.JsonElement configured = damageMap.catalog().contextBindings().get("observedVarbits");
-		java.util.Set<Integer> ids = new java.util.TreeSet<>();
-		if (configured != null && configured.isJsonObject())
-			for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : configured.getAsJsonObject()
-				.entrySet())
-				ids.add(entry.getValue().getAsInt());
-		for (String family : java.util.Arrays.asList("statusValueRules", "encounterModeRules"))
 		{
-			com.google.gson.JsonElement rules = damageMap.catalog().contextBindings().get(family);
-			if (rules != null && rules.isJsonArray())
-				for (com.google.gson.JsonElement value : rules.getAsJsonArray())
-				{
-					com.google.gson.JsonObject row = value.getAsJsonObject();
-					if (row.has("namespace") && "varbit".equals(row.get("namespace").getAsString()) && row.has("id"))
-						ids.add(row.get("id").getAsInt());
-				}
+			return null;
 		}
-		java.util.Map<Integer, com.tickreplaylogger.model.world.ObservedVarbitLayout> values = new java.util.LinkedHashMap<>();
+		JsonElement configured = damageMap.catalog().contextBindings().get("observedVarbits");
+		Set<Integer> ids = new TreeSet<>();
+		if (configured != null && configured.isJsonObject())
+		{
+			for (Map.Entry<String, JsonElement> entry : configured.getAsJsonObject().entrySet())
+			{
+				ids.add(entry.getValue().getAsInt());
+			}
+		}
+		for (String family : Arrays.asList("statusValueRules", "encounterModeRules"))
+		{
+			JsonElement rules = damageMap.catalog().contextBindings().get(family);
+			if (rules != null && rules.isJsonArray())
+			{
+				for (JsonElement value : rules.getAsJsonArray())
+				{
+					JsonObject row = value.getAsJsonObject();
+					if (row.has("namespace") && "varbit".equals(row.get("namespace").getAsString()) && row.has("id"))
+					{
+						ids.add(row.get("id").getAsInt());
+					}
+				}
+			}
+		}
+		Map<Integer, ObservedVarbitLayout> values = new LinkedHashMap<>();
 		int missing = 0, partial = 0;
 		for (Integer id : ids)
 		{
-			com.tickreplaylogger.model.world.ObservedVarbitLayout sample = VarbitLayoutCapture.capture(client, id);
+			ObservedVarbitLayout sample = VarbitLayoutCapture.capture(client, id);
 			if (sample == null || !"CLIENT_VARBIT_COMPOSITION".equals(sample.getEvidence()))
 			{
 				missing++;
@@ -902,48 +970,61 @@ public class WorldCaptureService
 			}
 			values.put(id, sample);
 			if (!sample.isLayoutKnown())
+			{
 				partial++;
+			}
 		}
 		if (missing > 0 || partial > 0)
+		{
 			captureIssues.add(
 				"varbitLayouts: " + missing + " requested compositions unavailable; " + partial + " partial layouts");
-		return java.util.Collections.unmodifiableMap(values);
+		}
+		return Collections.unmodifiableMap(values);
 	}
 
-	private java.util.Map<Integer, Integer> captureClientIntegers(Client client)
+	private Map<Integer, Integer> captureClientIntegers(Client client)
 	{
-		java.util.Map<Integer, Object> raw = client.getVarcMap();
+		Map<Integer, Object> raw = client.getVarcMap();
 		if (raw == null)
+		{
 			return null;
+		}
 		if (raw.size() > 32768)
+		{
 			throw new IllegalStateException("Client variable map exceeds capture bound");
-		java.util.Map<Integer, Integer> out = new java.util.TreeMap<>();
-		for (java.util.Map.Entry<Integer, Object> entry : raw.entrySet())
+		}
+		Map<Integer, Integer> out = new TreeMap<>();
+		for (Map.Entry<Integer, Object> entry : raw.entrySet())
 		{
 			if (entry.getKey() != null && entry.getKey() >= 0 && entry.getValue() instanceof Integer)
+			{
 				out.put(entry.getKey(), (Integer) entry.getValue());
+			}
 		}
-		return java.util.Collections.unmodifiableMap(out);
+		return Collections.unmodifiableMap(out);
 	}
 
-	private List<com.tickreplaylogger.model.world.WorldEntityState> captureWorldEntities(Client client)
+	private List<WorldEntityState> captureWorldEntities(Client client)
 	{
-		net.runelite.api.WorldView parent = view(client);
+		WorldView parent = view(client);
 		if (parent == null || parent.worldEntities() == null)
+		{
 			return null;
-		List<com.tickreplaylogger.model.world.WorldEntityState> out = new ArrayList<>();
-		java.util.Set<net.runelite.api.WorldEntity> seen = java.util.Collections
-			.newSetFromMap(new java.util.IdentityHashMap<>());
-		for (net.runelite.api.WorldEntity entity : parent.worldEntities())
+		}
+		List<WorldEntityState> out = new ArrayList<>();
+		Set<WorldEntity> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+		for (WorldEntity entity : parent.worldEntities())
+		{
 			if (entity != null)
+			{
 				try
 				{
 					seen.add(entity);
 					long key = entityIdentities.computeIfAbsent(entity, value -> ++entitySequence);
 					LocalPoint current = entity.getLocalLocation(), target = entity.getTargetLocation();
-					net.runelite.api.WorldView child = entity.getWorldView();
-					out.add(com.tickreplaylogger.model.world.WorldEntityState.builder().entityKey(key)
-						.parentWorldViewId(parent.getId()).worldViewId(child == null ? null : child.getId())
+					WorldView child = entity.getWorldView();
+					out.add(WorldEntityState.builder().entityKey(key).parentWorldViewId(parent.getId())
+						.worldViewId(child == null ? null : child.getId())
 						.mainLocalX(current == null ? null : current.getX())
 						.mainLocalY(current == null ? null : current.getY()).orientation(entity.getOrientation())
 						.targetMainLocalX(target == null ? null : target.getX())
@@ -956,13 +1037,15 @@ public class WorldCaptureService
 				{
 					captureIssues.add("worldEntities: " + error.getClass().getSimpleName());
 				}
+			}
+		}
 		entityIdentities.keySet().retainAll(seen);
-		return java.util.Collections.unmodifiableList(out);
+		return Collections.unmodifiableList(out);
 	}
 
-	private java.util.List<NPC> npcList(Client client)
+	private List<NPC> npcList(Client client)
 	{
-		java.util.List<NPC> result = new ArrayList<>();
+		List<NPC> result = new ArrayList<>();
 		try
 		{
 			Iterable<? extends NPC> values = npcs(client);
@@ -972,8 +1055,12 @@ public class WorldCaptureService
 				return result;
 			}
 			for (NPC npc : values)
+			{
 				if (npc != null)
+				{
 					result.add(npc);
+				}
+			}
 		}
 		catch (RuntimeException error)
 		{
@@ -990,15 +1077,21 @@ public class WorldCaptureService
 	private int[][][] copyChunks(int[][][] chunks)
 	{
 		if (chunks == null)
+		{
 			return null;
+		}
 		int[][][] copy = new int[chunks.length][][];
 		for (int z = 0; z < chunks.length; z++)
 		{
 			if (chunks[z] == null)
+			{
 				continue;
+			}
 			copy[z] = new int[chunks[z].length][];
 			for (int x = 0; x < chunks[z].length; x++)
+			{
 				copy[z][x] = chunks[z][x] == null ? null : chunks[z][x].clone();
+			}
 		}
 		return copy;
 	}
@@ -1008,33 +1101,46 @@ public class WorldCaptureService
 		CollisionData[] maps = collisions(client);
 		int plane = plane(client);
 		if (maps == null || plane < 0 || plane >= maps.length || maps[plane] == null)
+		{
 			return null;
+		}
 		int[][] flags = maps[plane].getFlags();
 		if (flags == null || flags.length == 0)
+		{
 			return null;
+		}
 		int height = flags[0] == null ? 0 : flags[0].length;
 		if (height == 0)
+		{
 			return null;
+		}
 		boolean compatible = lastCollision != null && lastCollision.length == flags.length
 			&& lastCollision[0].length == height;
 		int[][] copy = compatible ? null : new int[flags.length][];
 		for (int x = 0; x < flags.length; x++)
 		{
 			if (flags[x] == null || flags[x].length != height)
+			{
 				throw new IllegalStateException("Partial collision grid");
-			if (compatible && java.util.Arrays.equals(flags[x], lastCollision[x]))
+			}
+			if (compatible && Arrays.equals(flags[x], lastCollision[x]))
+			{
 				continue;
+			}
 			if (copy == null)
+			{
 				copy = lastCollision.clone();
+			}
 			copy[x] = flags[x].clone();
 		}
 		if (copy != null)
+		{
 			lastCollision = copy;
+		}
 		return lastCollision;
 	}
 
-	private <T> T captureChannel(String name, java.util.Map<String, String> coverage,
-		java.util.function.Supplier<T> read, T fallback)
+	private <T> T captureChannel(String name, Map<String, String> coverage, Supplier<T> read, T fallback)
 	{
 		try
 		{
@@ -1064,41 +1170,47 @@ public class WorldCaptureService
 		PlayerSnapshotObservation sample = new PlayerSnapshotObservation(lp, w, worldIssue);
 		LocalPoint l = sample.local;
 		if (w == null)
+		{
 			captureIssues.add("player: actor plane unavailable");
+		}
 		SnapshotPrayerObservation prayer = new SnapshotPrayerObservation(client, sample);
-		java.util.Map<String, Integer> baseSkills = new java.util.LinkedHashMap<>(),
-			boostedSkills = new java.util.LinkedHashMap<>();
+		Map<String, Integer> baseSkills = new LinkedHashMap<>(), boostedSkills = new LinkedHashMap<>();
 		for (Skill skill : Skill.values())
+		{
 			if (skill != Skill.OVERALL)
 			{
 				Integer base = sample.read("baseSkillLevels." + skill.name(), () -> client.getRealSkillLevel(skill));
 				Integer boosted = sample.read("boostedSkillLevels." + skill.name(),
 					() -> client.getBoostedSkillLevel(skill));
 				if (base != null)
+				{
 					baseSkills.put(skill.name(), base);
+				}
 				if (boosted != null)
+				{
 					boostedSkills.put(skill.name(), boosted);
+				}
 			}
+		}
 		Integer poisonValue = sample.read("poisonValue", () -> client.getVarpValue(VarPlayer.POISON));
 		Integer runEnergy = sample.read("runEnergy", client::getEnergy);
 		Integer specEnergy = sample.read("specEnergy", () -> client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT));
 		ContainerObservation equipment = container(client, InventoryID.EQUIPMENT, sample, true);
 		ContainerObservation inventory = container(client, InventoryID.INVENTORY, sample, false);
-		com.tickreplaylogger.model.world.ActorInteractionState interaction = sample.read("interaction",
+		ActorInteractionState interaction = sample.read("interaction",
 			() -> ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
 				!sample.issues.containsKey("interactionTarget"), lp, includeOthers, target -> actorRef(target, lp)));
 		Integer targetIndex = sample.target instanceof NPC
 			? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())
 			: null;
-		com.tickreplaylogger.model.world.PlayerAppearanceState appearance = sample.read("appearance",
-			() -> PlayerAppearance.capture(lp));
+		PlayerAppearanceState appearance = sample.read("appearance", () -> PlayerAppearance.capture(lp));
 		Integer fromX = lastWorld != null ? Integer.valueOf(lastWorld.getX())
 			: w == null ? null : Integer.valueOf(w.getX());
 		Integer fromY = lastWorld != null ? Integer.valueOf(lastWorld.getY())
 			: w == null ? null : Integer.valueOf(w.getY());
 		recordPlayerIssues("player", sample);
 		return PlayerState.builder().worldViewId(sample.viewId).combatLevel(sample.level).interaction(interaction)
-			.observationIssues(sample.issues.isEmpty() ? null : new java.util.LinkedHashMap<>(sample.issues))
+			.observationIssues(sample.issues.isEmpty() ? null : new LinkedHashMap<>(sample.issues))
 			.localPositionKnown(l != null).worldPositionKnown(w != null).planeKnown(w != null)
 			.worldX(w == null ? 0 : w.getX()).worldY(w == null ? 0 : w.getY()).plane(w == null ? 0 : w.getPlane())
 			.localX(l == null ? 0 : l.getX()).localY(l == null ? 0 : l.getY()).orientation(sample.orientation)
@@ -1127,8 +1239,10 @@ public class WorldCaptureService
 
 	private void recordPlayerIssues(String channel, PlayerSnapshotObservation sample)
 	{
-		for (java.util.Map.Entry<String, String> issue : sample.issues.entrySet())
+		for (Map.Entry<String, String> issue : sample.issues.entrySet())
+		{
 			captureIssues.add(channel + ": " + issue.getKey() + " " + issue.getValue());
+		}
 	}
 
 	private static final class ContainerObservation
@@ -1144,13 +1258,15 @@ public class WorldCaptureService
 		String prefix = equipment ? "equipment" : "inventory";
 		ItemContainer observed = sample.read(prefix + "Container", () -> client.getItemContainer(id));
 		if (observed == null)
+		{
 			return out;
+		}
 		int size = equipment
-			? java.util.Arrays.stream(EquipmentInventorySlot.values()).mapToInt(EquipmentInventorySlot::getSlotIdx)
-				.max().orElse(-1) + 1
+			? Arrays.stream(EquipmentInventorySlot.values()).mapToInt(EquipmentInventorySlot::getSlotIdx).max()
+				.orElse(-1) + 1
 			: 28;
 		out.ids = new int[size];
-		java.util.Arrays.fill(out.ids, -1);
+		Arrays.fill(out.ids, -1);
 		out.known = new boolean[size];
 		if (!equipment)
 		{
@@ -1163,7 +1279,9 @@ public class WorldCaptureService
 			final int index = slot;
 			Item item = sample.read(prefix + "Slot." + index, () -> observed.getItem(index));
 			if (sample.issues.containsKey(prefix + "Slot." + index))
+			{
 				continue;
+			}
 			Integer itemId = item == null ? -1 : sample.read(prefix + "ItemId." + index, item::getId);
 			if (itemId != null)
 			{
@@ -1186,10 +1304,10 @@ public class WorldCaptureService
 	private List<NpcState> captureNpcs(Client client, Player lp, int tick, boolean includeOthers)
 	{
 		List<NpcState> out = new ArrayList<>();
-		java.util.Set<Integer> seen = new java.util.HashSet<>();
+		Set<Integer> seen = new HashSet<>();
 		List<NPC> currentNpcs = npcList(client);
 		int reportedPlane = plane(client);
-		net.runelite.api.WorldView nativeView = view(client);
+		WorldView nativeView = view(client);
 		boolean retainUnknownPlane = nativeView == null || reportedPlane == nativeView.getPlane();
 		for (NPC npc : currentNpcs)
 		{
@@ -1204,24 +1322,33 @@ public class WorldCaptureService
 				worldIssue = unavailable.getClass().getSimpleName();
 			}
 			if (w != null && w.getPlane() != reportedPlane)
+			{
 				continue;
+			}
 			if (w == null)
+			{
 				captureIssues.add("npcs: actor plane unavailable");
+			}
 			if (w == null && !retainUnknownPlane)
+			{
 				continue;
+			}
 			NpcSnapshotObservation sample = new NpcSnapshotObservation(npc, w, worldIssue);
 			LocalPoint l = sample.local;
 			Integer idx = sample.index;
 			if (idx != null)
+			{
 				seen.add(idx);
-			NPC previousNpc = idx == null ? null : npcIdentities.get(idx);
-			Integer previousDefinition = idx == null ? null : npcDefinitions.get(idx);
-			if (previousNpc != npc || !java.util.Objects.equals(previousDefinition, sample.id))
+			}
+			NpcTiming timing = idx == null ? null : npcTimings.get(idx);
+			if (timing == null || timing.actor != npc || !Objects.equals(timing.definition, sample.id))
+			{
 				forgetNpcTiming(npc, idx);
+				timing = new NpcTiming(npc, sample.id);
+			}
 			if (idx != null)
 			{
-				npcIdentities.put(idx, npc);
-				npcDefinitions.put(idx, sample.id);
+				npcTimings.put(idx, timing);
 			}
 			CombatCatalog catalog = damageMap == null ? null : damageMap.catalog();
 			boolean normalContext = NpcIdentityContext.normalWorldObservedWithoutOverrides(client,
@@ -1230,25 +1357,33 @@ public class WorldCaptureService
 				&& catalog.observedNameCompatible(sample.id, sample.name, !sample.issues.containsKey("name"));
 			ObservedMechanics.Phase phase = null;
 			if (sample.id == null || sample.level == null || !referenceContext)
+			{
 				mechanics.clear(npc);
+			}
 			else
 			{
 				phase = sample.read("phaseEvaluation", () ->
 				{
 					mechanics.validateIdentity(catalog, npc, sample.id, true);
 					if (!sample.issues.containsKey("overheadText"))
+					{
 						mechanics.observe(catalog, npc, sample.id, "overheadEquals", sample.speech,
 							sample.animation == null ? -1 : sample.animation, currentNpcs, tick,
 							"OVERHEAD_TEXT_SNAPSHOT");
+					}
 					if (sample.animation != null)
+					{
 						mechanics.observe(catalog, npc, sample.id, "animationIn", null, sample.animation, currentNpcs,
 							tick, "ANIMATION_SNAPSHOT");
+					}
 					mechanics.observe(catalog, npc, sample.id, "npcPresent", null,
 						sample.animation == null ? -1 : sample.animation, currentNpcs, tick, "RELATED_NPC_OBSERVED");
 					return mechanics.phase(npc);
 				});
 				if (sample.issues.containsKey("phaseEvaluation"))
+				{
 					mechanics.clear(npc);
+				}
 			}
 			String animationKind = catalog != null && sample.id != null && sample.animation != null
 				? sample.read("animationMeaning",
@@ -1262,34 +1397,42 @@ public class WorldCaptureService
 			{
 				String context = sample.level + ":" + normalContext + ":" + referenceContext + ":" + sample.name + ":"
 					+ (phase == null ? "" : phase.getRule() + ":" + phase.getLabel());
-				String previousContext = npcCycleContexts.put(idx, context);
-				if (!java.util.Objects.equals(previousContext, context))
+				if (!Objects.equals(timing.context, context))
 				{
-					npcLastAnim.remove(idx);
-					npcLastAnimationFrame.remove(idx);
-					npcLastAttackTick.remove(idx);
+					timing.animation = null;
+					timing.frame = null;
+					timing.attackTick = null;
 				}
-				Integer lastAnim = npcLastAnim.put(idx, sample.animation),
-					lastFrame = npcLastAnimationFrame.put(idx, sample.animationFrame);
+				timing.context = context;
+				Integer lastAnim = timing.animation, lastFrame = timing.frame;
+				timing.animation = sample.animation;
+				timing.frame = sample.animationFrame;
 				frameReset = lastAnim != null && lastAnim.equals(sample.animation) && sample.animationFrame != null
 					&& lastFrame != null && sample.animationFrame >= 0 && lastFrame >= 0
 					&& sample.animationFrame < lastFrame;
 				attackStart = sample.animation != -1 && lastAnim != null
 					&& (!lastAnim.equals(sample.animation) || frameReset) && "attack".equals(animationKind);
 				if (!"attack".equals(animationKind) && sample.animation != -1)
-					npcLastAttackTick.remove(idx);
+				{
+					timing.attackTick = null;
+				}
 				if (attackStart)
-					npcLastAttackTick.put(idx, tick);
+				{
+					timing.attackTick = tick;
+				}
 				Integer speed = damageMap == null ? 0
 					: sample.read("attackSpeedReference",
 						() -> damageMap.attackSpeedForNpc(sample.id, sample.level, referenceContext));
-				Integer lastAttack = npcLastAttackTick.get(idx);
+				Integer lastAttack = timing.attackTick;
 				cooldown = speed == null ? null
 					: speed > 0 && lastAttack != null ? Math.max(0, speed - (tick - lastAttack)) : 0;
-				priorPosition = npcLastLocal.put(idx, l);
+				priorPosition = timing.position;
+				timing.position = l;
 			}
 			else
+			{
 				forgetNpcTiming(npc, idx);
+			}
 			boolean moved = priorPosition != null && l != null && !priorPosition.equals(l);
 			String action = sample.animation == null ? (moved ? "MOVING" : null)
 				: deriveAction(moved, attackStart, cooldown == null ? 0 : cooldown, sample.animation != -1,
@@ -1330,41 +1473,22 @@ public class WorldCaptureService
 				.attackCooldownTicksRemaining(cooldown);
 			if (!sample.issues.isEmpty())
 			{
-				sample.state.observationIssues(
-					java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(sample.issues)));
-				for (java.util.Map.Entry<String, String> issue : sample.issues.entrySet())
+				sample.state.observationIssues(Collections.unmodifiableMap(new LinkedHashMap<>(sample.issues)));
+				for (Map.Entry<String, String> issue : sample.issues.entrySet())
+				{
 					captureIssues.add("npcs: " + issue.getKey() + " (index " + idx + "): " + issue.getValue());
+				}
 			}
 			out.add(sample.state.build());
 		}
-		npcLastAnim.keySet().retainAll(seen);
-		npcLastAnimationFrame.keySet().retainAll(seen);
-		npcLastAttackTick.keySet().retainAll(seen);
-		npcLastLocal.keySet().retainAll(seen);
-		npcIdentities.keySet().retainAll(seen);
-		npcDefinitions.keySet().retainAll(seen);
-		npcCycleContexts.keySet().retainAll(seen);
+		npcTimings.keySet().retainAll(seen);
 		return out;
 	}
 
 	private void forgetNpcTiming(NPC npc, Integer index)
 	{
-		java.util.Set<Integer> slots = new java.util.HashSet<>();
-		if (index != null)
-			slots.add(index);
-		for (java.util.Map.Entry<Integer, NPC> entry : npcIdentities.entrySet())
-			if (entry.getValue() == npc)
-				slots.add(entry.getKey());
-		for (Integer slot : slots)
-		{
-			npcLastAnim.remove(slot);
-			npcLastAnimationFrame.remove(slot);
-			npcLastAttackTick.remove(slot);
-			npcLastLocal.remove(slot);
-			npcIdentities.remove(slot);
-			npcDefinitions.remove(slot);
-			npcCycleContexts.remove(slot);
-		}
+		npcTimings.entrySet()
+			.removeIf(entry -> entry.getValue().actor == npc || index != null && index.equals(entry.getKey()));
 	}
 
 	private List<OtherPlayerState> captureOtherPlayers(Client client, Player lp)
@@ -1376,7 +1500,7 @@ public class WorldCaptureService
 	{
 		List<OtherPlayerState> out = new ArrayList<>();
 		int reportedPlane = unscoped ? -1 : plane(client);
-		net.runelite.api.WorldView nativeView = unscoped ? null : view(client);
+		WorldView nativeView = unscoped ? null : view(client);
 		boolean retainUnknownPlane = nativeView == null || reportedPlane == nativeView.getPlane();
 		try
 		{
@@ -1389,7 +1513,9 @@ public class WorldCaptureService
 			for (Player p : actors)
 			{
 				if (p == null || p == lp)
+				{
 					continue;
+				}
 				WorldPoint w = null;
 				String worldIssue = null;
 				try
@@ -1401,12 +1527,16 @@ public class WorldCaptureService
 					worldIssue = unavailable.getClass().getSimpleName();
 				}
 				if (!unscoped && w != null && w.getPlane() != reportedPlane)
+				{
 					continue;
+				}
 				if (w == null)
 				{
 					captureIssues.add("otherPlayers: actor plane unavailable");
 					if (!retainUnknownPlane)
+					{
 						continue;
+					}
 				}
 				PlayerSnapshotObservation sample = new PlayerSnapshotObservation(p, w, worldIssue);
 				LocalPoint l = sample.local;
@@ -1434,15 +1564,15 @@ public class WorldCaptureService
 						: null)
 					.interactingWithPlayer(sample.issues.containsKey("interactionTarget") ? null : sample.target == lp)
 					.team(sample.read("team", p::getTeam));
-				com.tickreplaylogger.model.world.PlayerAppearanceState appearance = sample.read("appearance",
-					() -> PlayerAppearance.capture(p));
+				PlayerAppearanceState appearance = sample.read("appearance", () -> PlayerAppearance.capture(p));
 				if (appearance != null)
+				{
 					row.equipmentItemIds(appearance.getEquipmentItemIds()).equipmentEvidence(appearance.getEvidence())
 						.appearance(appearance);
+				}
 				recordPlayerIssues("otherPlayers", sample);
 				out.add(
-					row.observationIssues(sample.issues.isEmpty() ? null : new java.util.LinkedHashMap<>(sample.issues))
-						.build());
+					row.observationIssues(sample.issues.isEmpty() ? null : new LinkedHashMap<>(sample.issues)).build());
 			}
 		}
 		catch (RuntimeException unavailable)
@@ -1455,15 +1585,14 @@ public class WorldCaptureService
 	List<HazardState> captureHazards(Client client, Player lp)
 	{
 		List<HazardState> out = new ArrayList<>();
-		hazardCoverage = new java.util.LinkedHashMap<>();
+		hazardCoverage = new LinkedHashMap<>();
 		mappedObjectReadFailures = 0;
 		hazardCoverage.put("version", 1);
 		hazardCoverage.put("graphicsScope", "EXPOSED_NATIVE_PLANE_GRAPHICS");
 		hazardCoverage.put("graphicsStatus", "unavailable");
 		hazardCoverage.put("mappedObjectsStatus", "unavailable");
 		hazardCoverage.put("objectScanCompleted", false);
-		hazardCoverage.put("objectKinds",
-			java.util.List.of("gameObject", "groundObject", "wallObject", "decorativeObject"));
+		hazardCoverage.put("objectKinds", List.of("gameObject", "groundObject", "wallObject", "decorativeObject"));
 		hazardCoverage.put("definitionPolicy",
 			"MAPPED_DEFINITIONS_ONLY; unmapped objects remain in the scene-object channel");
 		int graphicsFailures = 0, unpositionedGraphics = 0;
@@ -1472,7 +1601,9 @@ public class WorldCaptureService
 			Iterable<GraphicsObject> graphics = view(client) == null ? client.getGraphicsObjects()
 				: view(client).getGraphicsObjects();
 			if (graphics == null)
+			{
 				throw new IllegalStateException("Graphics collection unavailable");
+			}
 			hazardCoverage.put("graphicsStatus", "available");
 			for (GraphicsObject go : graphics)
 			{
@@ -1484,7 +1615,9 @@ public class WorldCaptureService
 				{
 					int level = go.getLevel();
 					if (level != plane(client))
+					{
 						continue;
+					}
 					int id = go.getId();
 					SceneFieldObservation fields = new SceneFieldObservation();
 					long graphicObservationId = surfaceObservationIds.id(go);
@@ -1493,7 +1626,9 @@ public class WorldCaptureService
 					{
 						unpositionedGraphics++;
 						if (fields.known("location"))
+						{
 							graphicsFailures++;
+						}
 						captureIssues.add("graphicsAndMappedHazards: graphic position unavailable");
 					}
 					WorldView nativeView = fields.read("worldView", go::getWorldView);
@@ -1501,7 +1636,9 @@ public class WorldCaptureService
 					WorldPoint w = loc == null || !fields.known("worldView") ? null
 						: fields.read("worldLocation", () -> nativePoint(client, loc, level));
 					if (loc != null && fields.known("worldView") && !fields.known("worldLocation"))
+					{
 						captureIssues.add("graphicsAndMappedHazards: graphic world coordinates unavailable");
+					}
 					Integer start = fields.read("startCycle", go::getStartCycle), z = fields.read("z", go::getZ);
 					Animation animation = fields.read("animation", go::getAnimation);
 					Integer animationId = animation == null ? null : fields.read("animationId", animation::getId);
@@ -1516,19 +1653,22 @@ public class WorldCaptureService
 						graphicsFailures++;
 						captureIssues.add("graphicsAndMappedHazards: graphic fields " + fields.issues());
 					}
-					out.add(HazardState.builder().kind("graphicsObject").id(id).graphicObservationId(graphicObservationId)
-						.localPositionKnown(loc != null)
+					out.add(HazardState.builder().kind("graphicsObject").id(id)
+						.graphicObservationId(graphicObservationId).localPositionKnown(loc != null)
 						.worldPositionKnown(w != null).worldX(w == null ? 0 : w.getX()).worldY(w == null ? 0 : w.getY())
 						.plane(level).localX(loc == null ? 0 : loc.getX()).localY(loc == null ? 0 : loc.getY())
 						.mappedName(surface != null && surface.getName() != null ? surface.getName() : mappedName)
-						.state(surface == null ? null : surface.getState()).damaging(surface == null ? null : surface.getDamaging())
+						.state(surface == null ? null : surface.getState())
+						.damaging(surface == null ? null : surface.getDamaging())
 						.stateEvidence(surface == null ? null : "REVIEWED_GRAPHIC_DEFINITION")
-						.sourceEligibility(surface == null || surface.getDamaging() == null ? "UNCLASSIFIED_GRAPHIC_SURFACE"
-							: surface.getDamaging() ? "ELIGIBLE_REFERENCE_SURFACE" : "NOT_DAMAGE_SURFACE")
-						.surfaceRuleKey(surface == null ? null : surface.getRuleKey()).mapRef(surface == null ? null : surface.getMapRef())
-						.startCycle(start).worldViewId(viewId).z(z).animationId(animationId)
-						.animationFrame(animationFrame).finished(finished).fieldAvailability(fields.availability())
-						.observationIssues(fields.issues()).nullFields(fields.nulls()).build());
+						.sourceEligibility(
+							surface == null || surface.getDamaging() == null ? "UNCLASSIFIED_GRAPHIC_SURFACE"
+								: surface.getDamaging() ? "ELIGIBLE_REFERENCE_SURFACE" : "NOT_DAMAGE_SURFACE")
+						.surfaceRuleKey(surface == null ? null : surface.getRuleKey())
+						.mapRef(surface == null ? null : surface.getMapRef()).startCycle(start).worldViewId(viewId).z(z)
+						.animationId(animationId).animationFrame(animationFrame).finished(finished)
+						.fieldAvailability(fields.availability()).observationIssues(fields.issues())
+						.nullFields(fields.nulls()).build());
 				}
 				catch (RuntimeException error)
 				{
@@ -1543,8 +1683,10 @@ public class WorldCaptureService
 			captureIssues.add("graphicsAndMappedHazards: graphics collection " + error.getClass().getSimpleName());
 		}
 		if (graphicsFailures > 0)
+		{
 			hazardCoverage.put("graphicsStatus",
 				"available".equals(hazardCoverage.get("graphicsStatus")) ? "partial" : "unavailable");
+		}
 		hazardCoverage.put("graphicsReadFailures", graphicsFailures);
 		hazardCoverage.put("unpositionedGraphics", unpositionedGraphics);
 		LocalPoint pl = null;
@@ -1571,6 +1713,7 @@ public class WorldCaptureService
 			hazardCoverage.put("mappedObjectsUnavailableReason", "LOCAL_POSITION_UNAVAILABLE");
 		}
 		else
+		{
 			try
 			{
 				captureObjectHazards(client, pl, out);
@@ -1581,6 +1724,7 @@ public class WorldCaptureService
 				hazardCoverage.put("mappedObjectsStatus", "partial");
 				captureIssues.add("graphicsAndMappedHazards: object scan " + error.getClass().getSimpleName());
 			}
+		}
 		hazardCoverage.put("mappedObjectReadFailures", mappedObjectReadFailures);
 		return out;
 	}
@@ -1592,7 +1736,7 @@ public class WorldCaptureService
 	 */
 	private void captureObjectHazards(Client client, LocalPoint pl, List<HazardState> out)
 	{
-		net.runelite.api.Scene observedScene = scene(client);
+		Scene observedScene = scene(client);
 		if (damageMap == null || observedScene == null)
 		{
 			hazardCoverage.put("mappedObjectsUnavailableReason",
@@ -1600,7 +1744,7 @@ public class WorldCaptureService
 			return;
 		}
 		int plane = plane(client);
-		net.runelite.api.Tile[][][] tiles = observedScene.getTiles();
+		Tile[][][] tiles = observedScene.getTiles();
 		hazardCoverage.put("sampledPlane", plane);
 		if (tiles == null || plane < 0 || plane >= tiles.length)
 		{
@@ -1609,7 +1753,7 @@ public class WorldCaptureService
 		}
 		int cx = pl == null ? 0 : pl.getSceneX();
 		int cy = pl == null ? 0 : pl.getSceneY();
-		net.runelite.api.Tile[][] plane0 = tiles[plane];
+		Tile[][] plane0 = tiles[plane];
 		if (plane0 == null)
 		{
 			hazardCoverage.put("mappedObjectsUnavailableReason", "PLANE_ARRAY_UNAVAILABLE");
@@ -1618,8 +1762,7 @@ public class WorldCaptureService
 		hazardCoverage.put("tileArrayWidth", plane0.length);
 		hazardCoverage.put("boundsPolicy", "REQUESTED_SCOPE_CLIPPED_TO_EXPOSED_COLUMNS");
 		int visitedSlots = 0, exposedTiles = 0, unavailableColumns = 0;
-		java.util.Set<net.runelite.api.TileObject> seen = java.util.Collections
-			.newSetFromMap(new java.util.IdentityHashMap<>());
+		Set<TileObject> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (int sx = pl == null ? 0 : Math.max(0, cx - HAZARD_RADIUS_TILES); sx <= (pl == null ? plane0.length - 1
 			: Math.min(plane0.length - 1, cx + HAZARD_RADIUS_TILES)); sx++)
 		{
@@ -1641,7 +1784,7 @@ public class WorldCaptureService
 					continue;
 				}
 				visitedSlots++;
-				net.runelite.api.Tile tile = plane0[sx][sy];
+				Tile tile = plane0[sx][sy];
 				if (tile == null)
 				{
 					continue;
@@ -1679,14 +1822,15 @@ public class WorldCaptureService
 	}
 
 	private void captureObjectSlot(Client client, List<HazardState> out, String kind,
-		java.util.function.Supplier<? extends net.runelite.api.TileObject> read, int plane,
-		java.util.Set<net.runelite.api.TileObject> seen)
+		Supplier<? extends TileObject> read, int plane, Set<TileObject> seen)
 	{
 		try
 		{
-			net.runelite.api.TileObject value = read.get();
+			TileObject value = read.get();
 			if (value != null && seen.add(value))
+			{
 				addObjectHazard(client, out, kind, value, plane);
+			}
 		}
 		catch (RuntimeException error)
 		{
@@ -1700,8 +1844,7 @@ public class WorldCaptureService
 		captureIssues.add("graphicsAndMappedHazards: object " + error.getClass().getSimpleName());
 	}
 
-	private void addObjectHazard(Client client, List<HazardState> out, String kind, net.runelite.api.TileObject object,
-		int plane)
+	private void addObjectHazard(Client client, List<HazardState> out, String kind, TileObject object, int plane)
 	{
 		try
 		{
@@ -1713,8 +1856,7 @@ public class WorldCaptureService
 		}
 	}
 
-	private void readObjectHazard(Client client, List<HazardState> out, String kind, net.runelite.api.TileObject object,
-		int plane)
+	private void readObjectHazard(Client client, List<HazardState> out, String kind, TileObject object, int plane)
 	{
 		int baseId = object.getId();
 		SceneFieldObservation fields = new SceneFieldObservation();
@@ -1726,19 +1868,25 @@ public class WorldCaptureService
 			DamageMap.ObjectHazardRule rule = damageMap.objectHazardRule(baseId);
 			String name = rule == null ? damageMap.hazardName("object", baseId) : rule.getName();
 			if (name != null)
+			{
 				observed = new ObjectHazards.Resolved(baseId, baseId, name, "unknown", null, "DEFINITION_UNAVAILABLE",
 					rule == null ? null : rule.getMapRef(), "STATE_UNAVAILABLE", rule == null ? null : rule.getKey(),
 					false);
+			}
 		}
 		if (observed == null)
-			return; // Unmapped scenery still belongs to the independent scene-object channel.
+		{
+			return;
+		} // Unmapped scenery still belongs to the independent scene-object channel.
 		WorldPoint w = loc == null ? null : fields.read("worldLocation", () -> nativePoint(client, loc, plane));
 		if (loc != null && !fields.known("worldLocation"))
+		{
 			captureIssues.add("graphicsAndMappedHazards: object world coordinates unavailable");
-		net.runelite.api.Point min = object instanceof GameObject
+		}
+		Point min = object instanceof GameObject
 			? fields.read("minSceneLocation", ((GameObject) object)::getSceneMinLocation)
 			: null;
-		net.runelite.api.Point max = object instanceof GameObject
+		Point max = object instanceof GameObject
 			? fields.read("maxSceneLocation", ((GameObject) object)::getSceneMaxLocation)
 			: null;
 		WorldView objectView = fields.read("objectWorldView", object::getWorldView);
@@ -1753,8 +1901,8 @@ public class WorldCaptureService
 		}
 		out.add(HazardState.builder().kind(kind).startCycle(0).worldViewId(viewId).localPositionKnown(loc != null)
 			.objectNativeScopeKnown(objectViewId != null && objectPlane != null && objectPlane >= 0 && objectPlane <= 3)
-			.objectWorldViewId(objectViewId).objectPlane(objectPlane)
-			.worldPositionKnown(w != null).id(observed.getId()).objectKey(objectTracker.reference(kind, object))
+			.objectWorldViewId(objectViewId).objectPlane(objectPlane).worldPositionKnown(w != null).id(observed.getId())
+			.objectKey(objectTracker.reference(kind, object)).objectObservationId(surfaceObservationIds.id(object))
 			.baseId(observed.getBaseId()).state(observed.getState()).damaging(observed.getDamaging())
 			.stateEvidence(observed.getEvidence()).mapRef(observed.getMapRef())
 			.sourceEligibility(observed.getSourceEligibility()).surfaceRuleKey(observed.getRuleKey())
@@ -1790,10 +1938,14 @@ public class WorldCaptureService
 				encounterWaveCues.snapshot(client, damageMap == null ? null : damageMap.catalog(), sceneKey))
 			.build();
 		if (bossHpUnavailable)
+		{
 			context.getEvidence().put("bossHpRatio", "UNAVAILABLE");
+		}
 		if (context.getEvidence().values().stream()
 			.anyMatch(value -> "UNAVAILABLE".equals(value) || "UNRECOGNIZED_VALUE".equals(value)))
+		{
 			captureIssues.add("context: some independent observations unavailable or uninterpreted");
+		}
 		return context;
 	}
 
@@ -1801,11 +1953,11 @@ public class WorldCaptureService
 	private Integer interactingBossHpRatio(Client client, Player lp)
 	{
 		Actor target = lp.getInteracting();
-		if (!(target instanceof net.runelite.api.NPC))
+		if (!(target instanceof NPC))
 		{
 			return null;
 		}
-		net.runelite.api.NPC npc = (net.runelite.api.NPC) target;
+		NPC npc = (NPC) target;
 		int ratio = npc.getHealthRatio();
 		int scale = npc.getHealthScale();
 		if (ratio < 0 || scale <= 0)
@@ -1813,89 +1965,6 @@ public class WorldCaptureService
 			return null;
 		}
 		return Math.round(ratio * 100f / scale);
-	}
-
-	private int safeVarbit(Client client, int id)
-	{
-		try
-		{
-			return client.getVarbitValue(id);
-		}
-		catch (Exception e)
-		{
-			return 0;
-		}
-	}
-
-	// ---- helpers ----
-
-	public int[] captureGraphics(Actor actor)
-	{
-		return spotAnims(actor);
-	}
-
-	private int[] spotAnims(Actor actor)
-	{
-		List<Integer> ids = new ArrayList<>();
-		try
-		{
-			if (actor.getSpotAnims() != null)
-			{
-				for (ActorSpotAnim sa : actor.getSpotAnims())
-				{
-					if (sa != null)
-					{
-						ids.add(sa.getId());
-					}
-				}
-			}
-		}
-		catch (Exception ignored)
-		{
-			// older behaviour: fall back to the single graphic
-		}
-		int g = actor.getGraphic();
-		if (g != -1 && !ids.contains(g))
-		{
-			ids.add(g);
-		}
-		int[] arr = new int[ids.size()];
-		for (int i = 0; i < arr.length; i++)
-		{
-			arr[i] = ids.get(i);
-		}
-		return arr;
-	}
-
-	private Integer interactingIndex(Actor actor)
-	{
-		Actor i = actor.getInteracting();
-		return i instanceof NPC ? ((NPC) i).getIndex() : null;
-	}
-
-	private List<String> activePrayers(Client client)
-	{
-		List<String> out = new ArrayList<>();
-		for (Prayer p : Prayer.values())
-		{
-			if (client.isPrayerActive(p))
-			{
-				out.add(p.name());
-			}
-		}
-		return out;
-	}
-
-	private String overheadOf(List<String> prayers)
-	{
-		for (String p : prayers)
-		{
-			if (OVERHEADS.contains(p))
-			{
-				return p;
-			}
-		}
-		return null;
 	}
 
 	private String deriveAction(boolean moving, boolean attacking, int cooldown, boolean animating,
@@ -1926,6 +1995,6 @@ public class WorldCaptureService
 		{
 			return null;
 		}
-		return name.replaceAll("<[^>]*>", "").trim();
+		return removeTags(name).trim();
 	}
 }

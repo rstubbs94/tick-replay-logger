@@ -53,7 +53,7 @@ public class ResolverV1Test
 		for (JsonElement value : fixture.getAsJsonArray("cases"))
 		{
 			JsonObject test = value.getAsJsonObject(), expected = test.getAsJsonObject("expected");
-			JsonObject result = new ResolverV1(test.getAsJsonObject("catalog")).resolve(test.getAsJsonObject("input"));
+			JsonObject result = ResolverTestCatalog.resolve(new ResolverV1(ResolverTestCatalog.lower(test.getAsJsonObject("catalog"))),test.getAsJsonObject("input"));
 			String id = test.get("id").getAsString(); JsonObject match = null;
 			for (JsonElement row : result.getAsJsonArray("candidates"))
 				if (expected.has("ruleId") && expected.get("ruleId").equals(row.getAsJsonObject().get("ruleId"))) match = row.getAsJsonObject();
@@ -96,12 +96,13 @@ public class ResolverV1Test
 		{ fixture = gson.fromJson(reader,JsonObject.class); }
 		ResolverV1 engine = ResolverV1.load(gson);
 		assertEquals("synthetic_qualification_witnesses_not_gameplay_proof",fixture.get("purpose").getAsString());
-		assertEquals("resolver-v1:sha256:"+fixture.get("rulesSha256").getAsString(),engine.id());
+		assertEquals(fixture.get("rulesSha256"), RuntimeCatalog.load(gson).section("sourceSnapshots").get("resolverSha256"));
+		assertEquals(fixture.get("sourceBoundCount").getAsInt(), ResolverTestCatalog.rows(RuntimeCatalog.load(gson).section("resolver"),"source_bound").size());
 		assertTrue(fixture.get("sourceBoundCount").getAsInt()>0); assertTrue(fixture.getAsJsonArray("cases").size()>0);
 		for (JsonElement value : fixture.getAsJsonArray("cases"))
 		{
 			JsonObject test = value.getAsJsonObject(); String id = test.get("id").getAsString();
-			JsonObject result = engine.resolve(test.getAsJsonObject("input"));
+			JsonObject result = ResolverTestCatalog.resolve(engine,test.getAsJsonObject("input"));
 			assertTrue(id,result.getAsJsonArray("candidates").size()>0);
 			boolean possible = false;
 			for (JsonElement candidate : result.getAsJsonArray("candidates"))
@@ -139,7 +140,7 @@ public class ResolverV1Test
 		assertTrue(actual.isUnidentifiedPossible());
 		DeathRecordingV2 foreign = recording(2045,90,"Snakeling",16,20,true,false,17);
 		JsonObject normalized = new ResolverV1Recording(engine,gson,foreign).normalize(foreign.getEvents().getDamageEvents().get(0));
-		JsonObject result = engine.resolve(normalized);
+		JsonObject result = ResolverTestCatalog.resolve(engine,normalized);
 		assertTrue(result.getAsJsonArray("candidates").size() > 0);
 		for (JsonElement row : result.getAsJsonArray("candidates")) assertEquals("EXCLUDED",row.getAsJsonObject().get("status").getAsString());
 	}
@@ -148,7 +149,7 @@ public class ResolverV1Test
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class);
 		JsonObject input = gson.fromJson("{hit:{amount:9,recipientRef:'player'},cues:[{key:'one',pattern:'projectile_impact',source:{kind:'npc',id:123,actorRef:'actual'}}]}",JsonObject.class);
-		java.util.List<JsonObject> results = new ResolverV1(catalog).resolveBatch(Arrays.asList(input,input));
+		java.util.List<JsonObject> results = ResolverTestCatalog.resolveBatch(new ResolverV1(ResolverTestCatalog.lower(catalog)),Arrays.asList(input,input));
 		assertEquals(2,results.size());
 		for (JsonObject result : results)
 		{
@@ -177,7 +178,7 @@ public class ResolverV1Test
 	@Test public void originalContactMasksLegacyDefinitionFamilyWithoutBorrowingReceiverAsEmitter()
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact',label:'Synthetic cloud',pattern:'contact_hazard',source:{kind:'object',ids:[900301]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',hitsplatTypeIds:[5],signatureComplete:true,signatureAuthority:'verified'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class);
-		ResolverV1 engine = new ResolverV1(catalog);
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(catalog));
 		DeathRecordingV2 input = recording(900201,90,"Rival",12,0,true,false,0);
 		DamageRecord original = input.getEvents().getDamageEvents().get(0);
 		SourceResolution.Candidate cloud = SourceResolution.Candidate.builder().key("old-cloud").familyKey("object-definition:900301")
@@ -198,7 +199,7 @@ public class ResolverV1Test
 
 	@Test public void graphicCreatedThenGoneStillHasExactOriginalNativeAnchor()
 	{
-		ResolverV1 engine = new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'graphic',label:'Transient impact',pattern:'area_impact',source:{kind:'graphic',ids:[900401]},signals:{graphicIds:[900401]},timing:{anchor:'effect_event',authority:'unknown'},geometry:{shape:'point',anchor:'effect_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class));
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'graphic',label:'Transient impact',pattern:'area_impact',source:{kind:'graphic',ids:[900401]},signals:{graphicIds:[900401]},timing:{anchor:'effect_event',authority:'unknown'},geometry:{shape:'point',anchor:'effect_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Rival",16,9,true,false,0);
 		ObservedEvent creation = ObservedEvent.builder().type("GRAPHICS_OBJECT_CREATED").sequence(18).tick(10).gameCycle(299).sceneKey("room")
 			.data(map("id",900401,"scopeKnown",true,"positionScopeKnown",true,"worldViewId",0,"localWorldViewId",0,"plane",0,"localX",1280,"localY",1280)).build();
@@ -212,17 +213,17 @@ public class ResolverV1Test
 
 	@Test public void retainedDeclaredDeathUsesOriginalClockAndDoesNotCreateUnlistedExplosions()
 	{
-		ResolverV1 engine = new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'death',label:'Terminal clue',pattern:'delayed_effect',source:{kind:'npc',ids:[900201]},signals:{lifecycleEvents:['actor_death']},timing:{anchor:'lifecycle_event',clock:'game_tick',minimumOffset:0,maximumOffset:3,authority:'correlation_window'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class));
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'death',label:'Terminal clue',pattern:'delayed_effect',source:{kind:'npc',ids:[900201]},signals:{lifecycleEvents:['actor_death']},timing:{anchor:'lifecycle_event',clock:'game_tick',minimumOffset:0,maximumOffset:3,authority:'correlation_window'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Terminal source",16,9,true,false,0);
 		Map<String,Object> originalActor = input.getEvents().getObservations().get(0).getData();
 		ObservedEvent death = ObservedEvent.builder().type("ACTOR_DEATH").actorRef("terminal:actual").sequence(10).tick(8).gameCycle(240).sceneKey("room").data(originalActor).build();
 		java.util.List<ObservedEvent> observations = new java.util.ArrayList<>(input.getEvents().getObservations()); observations.add(death);
 		input = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(input.getEvents().getDamageEvents()).observations(observations).build()).build();
-		JsonObject result = engine.resolve(new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		JsonObject result = ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
 		assertTrue(result.getAsJsonArray("candidates").toString().contains("\"ruleId\":\"death\""));
 		assertTrue(result.get("unidentifiedPossible").getAsBoolean());
 		JsonObject absentCatalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class);
-		JsonObject unlisted = new ResolverV1(absentCatalog).resolve(new ResolverV1Recording(new ResolverV1(absentCatalog),gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		JsonObject unlisted = ResolverTestCatalog.resolve(new ResolverV1(ResolverTestCatalog.lower(absentCatalog)),new ResolverV1Recording(new ResolverV1(ResolverTestCatalog.lower(absentCatalog)),gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
 		for (JsonElement row : unlisted.getAsJsonArray("candidates")) assertNotEquals("observed:delayed_effect",row.getAsJsonObject().get("ruleId").getAsString());
 	}
 
@@ -231,7 +232,7 @@ public class ResolverV1Test
 
 	@Test public void exactNpcContactUsesOriginalSourceAnchorAndDoesNotBorrowLaterPose()
 	{
-		ResolverV1 engine = new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact.synthetic',label:'Contact component',pattern:'contact_hazard',source:{kind:'npc',ids:[900201],combatLevels:[77]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified',when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'}]}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class));
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact.synthetic',label:'Contact component',pattern:'contact_hazard',source:{kind:'npc',ids:[900201],combatLevels:[77]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified',when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'}]}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		for (boolean original : new boolean[] {false,true})
 		{
 			DeathRecordingV2 input = recording(900201,77,"Synthetic hazard",16,9,true,false,0);
@@ -241,6 +242,9 @@ public class ResolverV1Test
 				"contactPredicate","SAME_SERVER_TILE","footprintWidth",1,"footprintHeight",1,"worldViewId",0,"sceneKey","room",
 				"scopeEvidence","NPC_WORLD_VIEW_READ","observedCycle",301,"observationStage",original ? "HITSPLAT_CALLBACK" : "DEFERRED_RESOLUTION",
 				"defenderPositionEvidence","SERVER_REPORTED_TILE","sourceEligibility","ELIGIBLE_REFERENCE_SURFACE","damaging",true);
+			contact.put("originalActorState",map("npcId",900201,"name","Synthetic hazard","combatLevel",77,
+				"worldViewId",0,"plane",0,"planeKnown",true,"worldPositionKnown",true,"worldX",3200,"worldY",3200,
+				"normalWorldContextObserved",true,"modelOverridesPresent",false,"worldAreaKnown",false));
 			hit = hit.toBuilder().observedHazardContacts(Collections.singletonList(contact)).sourceResolution(hit.getSourceResolution().toBuilder().candidates(Collections.emptyList()).build()).build();
 			NpcState later = NpcState.builder().actorRef("actual:minion").npcId(900201).name("Synthetic hazard").combatLevel(77)
 				.worldViewId(0).planeKnown(true).plane(0).worldPositionKnown(true).worldX(3210).worldY(3210).worldAreaKnown(true)
@@ -257,7 +261,7 @@ public class ResolverV1Test
 				if (cue.get("key").getAsString().startsWith("body:")) assertFalse(cue.get("componentBound").getAsBoolean());
 			}
 			assertEquals(original,found);
-			JsonObject results = engine.resolve(normalized);
+			JsonObject results = ResolverTestCatalog.resolve(engine,normalized);
 			assertEquals(original,results.getAsJsonArray("candidates").toString().contains("MAXIMUM_EXCEEDED"));
 			assertSame(input.getEvents().getObservations(),new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getObservations());
 		}
@@ -278,8 +282,8 @@ public class ResolverV1Test
 				JsonObject cue = value.getAsJsonObject();
 				if ("callback:19".equals(cue.get("key").getAsString()))
 				{
-					assertEquals(frameCycle==300,cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_activity"));
-					assertFalse(cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_mode"));
+					assertEquals(frameCycle==300,cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_activity"));
+					assertFalse(cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_mode"));
 				}
 			}
 		}
@@ -287,15 +291,15 @@ public class ResolverV1Test
 
 	@Test public void ownedApiProjectileKeepsItsSourceWhenNoNpcSnapshotExists()
 	{
-		ResolverV1 engine = new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class));
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Rival",16,9,true,false,0); DamageRecord hit = input.getEvents().getDamageEvents().get(0);
 		com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation owner = com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation.builder()
-			.sourceEvidence("ACTOR").sourceActorKnown(true).sourceNameKnown(true).sourceObservedName("Ephemeral actor").sourceRef("owned:ephemeral")
+			.actorKind("NPC").sourceEvidence("ACTOR").sourceActorKnown(true).sourceNameKnown(true).sourceObservedName("Ephemeral actor").sourceRef("owned:ephemeral")
 			.sourceNpcId(900202).sourceCombatLevel(77).sourceWorldViewId(0).sourcePlane(0).sourceNormalWorldContextObserved(true).observedTick(9).observedCycle(270).build();
 		com.tickreplaylogger.model.world.ProjectileState projectile = com.tickreplaylogger.model.world.ProjectileState.builder().observationId(7L).projectileId(900501)
 			.targetRef("player").endCycle(301).estimatedImpactTick(10).worldViewId(0).plane(0).samplePlaneKnown(true).destinationKnown(true)
 			.endWorldX(3200).endWorldY(3200).targetWorldViewId(0).destinationPlane(0)
-			.sourceHistory(com.tickreplaylogger.model.world.ProjectileSourceHistory.builder().firstObservedSource(owner).build()).build();
+			.sourceHistory(com.tickreplaylogger.model.world.ProjectileSourceHistory.builder().version(1).firstObservedSource(owner).build()).build();
 		ObservedEvent observed = ObservedEvent.builder().type("PROJECTILE_MOVED").sceneKey("room").tick(10).gameCycle(300).sequence(19).data(map("projectile",projectile)).build();
 		hit = hit.toBuilder().sourceResolution(hit.getSourceResolution().toBuilder().candidates(Collections.emptyList()).build()).build();
 		input = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(hit))
@@ -304,7 +308,9 @@ public class ResolverV1Test
 		for (JsonElement value : normalized.getAsJsonArray("cues"))
 		{
 			JsonObject cue = value.getAsJsonObject(); if (!cue.has("apiSourceObserved")) continue;
-			assertTrue(cue.get("identityOnly").getAsBoolean()); assertFalse(cue.get("numericEligible").getAsBoolean()); assertFalse(cue.has("endpoint"));
+			assertFalse(cue.has("endpoint"));
+			assertFalse(cue.getAsJsonObject("originalSourceObservation").has("sourceSceneKey"));
+			assertFalse(cue.getAsJsonObject("originalSourceObservation").has("sourceModelOverridesPresent"));
 			assertFalse(cue.getAsJsonObject("source").getAsJsonObject("scope").has("sceneKey"));
 		}
 		SourceResolution resolution = new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
@@ -325,10 +331,11 @@ public class ResolverV1Test
 				assertEquals("HP_DURING_OBSERVED_FLIGHT",cue.get("clockEvidence").getAsString());
 				assertEquals("room",cue.getAsJsonObject("source").getAsJsonObject("scope").get("sceneKey").getAsString());
 				assertFalse(cue.has("identityOnly"));
-				assertEquals(!knownOverride,cue.has("numericEligible") && !cue.get("numericEligible").getAsBoolean());
-				assertEquals(knownOverride,cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("source_model_overrides"));
+				assertEquals(knownOverride,cue.getAsJsonObject("originalSourceObservation").has("sourceModelOverridesPresent"));
+				if(knownOverride) assertFalse(cue.getAsJsonObject("originalSourceObservation").get("sourceModelOverridesPresent").getAsBoolean());
+				assertFalse(cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("source_model_overrides"));
 			}
-			assertEquals(2,count); assertEquals(9,hit.getAmount());
+			assertEquals(1,count); assertEquals(9,hit.getAmount());
 		}
 	}
 
@@ -341,10 +348,10 @@ public class ResolverV1Test
 		{
 			JsonObject cue=value.getAsJsonObject(); if (!cue.has("apiSourceObserved")) continue; count++;
 			assertEquals("owned:original",cue.getAsJsonObject("source").get("actorRef").getAsString());
-			assertTrue(cue.get("identityOnly").getAsBoolean()); assertFalse(cue.get("componentBound").getAsBoolean());
-			assertFalse(cue.get("numericEligible").getAsBoolean()); assertFalse(cue.has("endpoint"));
+			assertFalse(cue.getAsJsonObject("source").has("numericEligible"));
+			assertTrue(cue.get("unstableOriginalSource").getAsBoolean()); assertFalse(cue.has("endpoint"));
 		}
-		assertEquals(2,count);
+		assertEquals(1,count);
 		SourceResolution resolution=new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertTrue(resolution.getCandidates().stream().anyMatch(c -> "owned:original".equals(c.getActorRef())));
 		assertFalse(resolution.getCandidates().stream().anyMatch(c -> "owned:later".equals(c.getActorRef())));
@@ -355,13 +362,13 @@ public class ResolverV1Test
 	{
 		DeathRecordingV2 base=recording(900201,77,"Rival",16,9,true,false,0);
 		com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation first=com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation.builder()
-			.sourceEvidence("ACTOR").sourceActorKnown(true).sourceRef("owned:original").sourceObservedName("Original actor").sourceNameKnown(true)
+			.actorKind("NPC").sourceEvidence("ACTOR").sourceActorKnown(true).sourceRef("owned:original").sourceObservedName("Original actor").sourceNameKnown(true)
 			.sourceNpcId(900202).sourceCombatLevel(77).sourceSceneKey("room").sourceWorldViewId(0).sourcePlane(0)
 			.sourceNormalWorldContextObserved(true).sourceModelOverridesPresent(knownOverride ? false : null).observedTick(9).observedCycle(270).build();
 		com.tickreplaylogger.model.world.ProjectileState projectile=com.tickreplaylogger.model.world.ProjectileState.builder()
 			.observationId(77L).projectileId(900501).sourceRef("owned:later").sourceNpcId(900203).targetRef("player").endCycle(400)
 			.estimatedImpactTick(14).worldViewId(0).plane(0).samplePlaneKnown(true).destinationKnown(true).endWorldX(3200).endWorldY(3200)
-			.targetWorldViewId(0).destinationPlane(0).sourceHistory(com.tickreplaylogger.model.world.ProjectileSourceHistory.builder()
+			.targetWorldViewId(0).destinationPlane(0).sourceHistory(com.tickreplaylogger.model.world.ProjectileSourceHistory.builder().version(1)
 				.firstObservedSource(first).definitionChanged(unstable).referenceChanged(unstable).build()).build();
 		DamageRecord hit=base.getEvents().getDamageEvents().get(0).toBuilder().sourceResolution(base.getEvents().getDamageEvents().get(0)
 			.getSourceResolution().toBuilder().candidates(Collections.emptyList()).build()).build();
@@ -374,8 +381,8 @@ public class ResolverV1Test
 
 	@Test public void identifiedComponentRejectedByVerifiedTimingCannotReviveAsUnclassifiedActivity()
 	{
-		ResolverV1 engine=new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'timed',pattern:'projectile_impact',source:{kind:'npc',ids:[900202]},signals:{projectileIds:[900501]},timing:{anchor:'projectile_event',clock:'game_tick',minimumOffset:0,maximumOffset:0,authority:'verified'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',outcome:{surface:'hp_or_block'},scopePolicy:'same_native_scope'}]}",JsonObject.class));
-		DeathRecordingV2 input=apiRecording(false,false,true); JsonObject result=engine.resolve(new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		ResolverV1 engine=new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'timed',pattern:'projectile_impact',source:{kind:'npc',ids:[900202]},signals:{projectileIds:[900501]},timing:{anchor:'projectile_event',clock:'game_tick',minimumOffset:0,maximumOffset:0,authority:'verified'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',outcome:{surface:'hp_or_block'},scopePolicy:'same_native_scope'}]}",JsonObject.class)));
+		DeathRecordingV2 input=apiRecording(false,false,true); JsonObject result=ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
 		boolean rejected=false;
 		for (JsonElement value : result.getAsJsonArray("candidates"))
 		{
@@ -393,7 +400,7 @@ public class ResolverV1Test
 			DeathRecordingV2 input = emitterRecording(variation, null);
 			DamageRecord hit = input.getEvents().getDamageEvents().get(0);
 			JsonObject normalized = new ResolverV1Recording(engine, gson, input).normalize(hit);
-			JsonObject result = engine.resolve(normalized);
+			JsonObject result = ResolverTestCatalog.resolve(engine,normalized);
 			assertEquals(variation, "original".equals(variation) ? 1 : 0, result.getAsJsonArray("candidates").size());
 			for (JsonElement value : result.getAsJsonArray("candidates"))
 			{
@@ -409,12 +416,15 @@ public class ResolverV1Test
 		}
 	}
 
-	@Test public void independentPassivePresenceSurvivesOrdinaryOnlyButNotQualifiedWholeSourceExclusion()
+	@Test public void independentPassivePresenceSurvivesCurrentOrdinaryButNotCurrentWholeSourceExclusion()
 	{
-		ResolverV1 engine = presenceEngine();
 		for (String scope : Arrays.asList("ORDINARY_ATTACK", "ALL_DIRECT_HP_COMPONENTS"))
 		{
-			DeathRecordingV2 input = emitterRecording("original", scope);
+			ResolverV1 engine="ALL_DIRECT_HP_COMPONENTS".equals(scope)?presenceEngine(true):referenceEngine(false,false,scope);
+			DeathRecordingV2 input=emitterRecording("original",null,20);
+			ObservedEvent attack=recording(900201,77,"Synthetic actor",16,20,true,false,0).getEvents().getObservations().get(0);
+			input=input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(input.getEvents().getDamageEvents())
+				.observations(Arrays.asList(attack,input.getEvents().getObservations().get(0))).build()).build();
 			SourceResolution resolution = new ResolverV1Recording(engine, gson, input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 			assertEquals(scope, "ORDINARY_ATTACK".equals(scope), !resolution.getCandidates().isEmpty());
 			assertTrue(resolution.isUnidentifiedPossible());
@@ -462,7 +472,14 @@ public class ResolverV1Test
 		{
 			index = gson.fromJson(reader, JsonObject.class);
 		}
-		assertEquals("resolver-v1:sha256:" + index.get("rulesSha256").getAsString(), ResolverV1.load(gson).id());
+		assertEquals(index.get("rulesSha256"), RuntimeCatalog.load(gson).section("sourceSnapshots").get("resolverSha256"));
+		java.util.Set<Integer> expectedIds = new java.util.TreeSet<>();
+		for (JsonElement association : ResolverTestCatalog.rows(RuntimeCatalog.load(gson).section("resolver"),"presence"))
+			for (JsonElement id : association.getAsJsonObject().getAsJsonObject("source").getAsJsonArray("ids"))
+				expectedIds.add(id.getAsInt());
+		java.util.Set<Integer> capturedIds = new java.util.TreeSet<>();
+		for (JsonElement id : index.getAsJsonArray("npcIds")) capturedIds.add(id.getAsInt());
+		assertEquals(expectedIds, capturedIds);
 	}
 
 	private ResolverV1 presenceEngine()
@@ -477,12 +494,14 @@ public class ResolverV1Test
 		{
 			catalog.add("sourceBounds", gson.fromJson("[{id:'whole.synthetic',source:{kind:'npc',ids:[900201]},when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'},{fact:'source_model_overrides',op:'equals',value:false,at:'source_event'}],maximum:{kind:'fixed_max',value:1,authority:'verified'},outcome:{surface:'hp_or_block',signatureComplete:true,signatureAuthority:'verified',hitsplatTypeIds:[16]}}]", com.google.gson.JsonArray.class));
 		}
-		return new ResolverV1(catalog);
+		return new ResolverV1(ResolverTestCatalog.lower(catalog));
 	}
 
-	private DeathRecordingV2 emitterRecording(String variation, String priorScope)
+	private DeathRecordingV2 emitterRecording(String variation, String priorScope) { return emitterRecording(variation,priorScope,9); }
+
+	private DeathRecordingV2 emitterRecording(String variation, String priorScope, int amount)
 	{
-		DeathRecordingV2 input = recording(900201, 77, "Synthetic actor", 16, 9, true, false, 0);
+		DeathRecordingV2 input = recording(900201, 77, "Synthetic actor", 16, amount, true, false, 0);
 		if (priorScope != null)
 		{
 			input = priorExcluded(input, priorScope);
@@ -497,7 +516,7 @@ public class ResolverV1Test
 			.observations(Collections.singletonList(input.getEvents().getObservations().get(1))).build()).build();
 	}
 
-	@Test public void priorQualifiedExclusionsCannotBeRevivedByReferenceOnlyActivity()
+	@Test public void stalePriorExclusionsCannotOverrideCurrentRawEvidence()
 	{
 		ResolverV1 engine = referenceEngine(false,false);
 		for (String scope : Arrays.asList("ALL_DIRECT_HP_COMPONENTS","ORDINARY_ATTACK",null))
@@ -505,18 +524,18 @@ public class ResolverV1Test
 			DeathRecordingV2 input = priorExcluded(recording(900201,77,"Synthetic actor",16,20,true,false,0),scope);
 			DeathRecordingV2 output = new ResolverV1Recording(engine,gson,input).enrich(input);
 			SourceResolution resolution = output.getEvents().getDamageEvents().get(0).getSourceResolution();
-			assertTrue(resolution.getCandidates().isEmpty()); assertTrue(resolution.isUnidentifiedPossible());
+			assertFalse(resolution.getCandidates().isEmpty()); assertTrue(resolution.isUnidentifiedPossible());
 			assertEquals(20,output.getEvents().getDamageEvents().get(0).getAmount());
 			assertSame(input.getEvents().getObservations(),output.getEvents().getObservations());
-			assertEquals(scope,resolution.getExcludedCandidates().get(0).getExclusionScope());
+			assertTrue(resolution.getExcludedCandidates()==null || resolution.getExcludedCandidates().isEmpty());
 		}
 	}
 
-	@Test public void wholeActorExclusionSurvivesSignatureOnlySpecialButOrdinaryExclusionAllowsIndependentSpecial()
+	@Test public void currentWholeActorExclusionSurvivesSpecialButCurrentOrdinaryExclusionAllowsIndependentSpecial()
 	{
-		ResolverV1 engine = referenceEngine(true,false);
 		for (String scope : Arrays.asList("ALL_DIRECT_HP_COMPONENTS","ORDINARY_ATTACK"))
 		{
+			ResolverV1 engine=referenceEngine(true,false,scope);
 			DeathRecordingV2 input = priorExcluded(recording(900201,77,"Synthetic actor",16,20,true,false,0),scope);
 			SourceResolution resolution = new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 			assertEquals("ORDINARY_ATTACK".equals(scope),!resolution.getCandidates().isEmpty());
@@ -540,17 +559,20 @@ public class ResolverV1Test
 		}
 	}
 
-	@Test public void nonDamagingActivityRetiresOnlyItsLinkedOriginalActivitySupport()
+	@Test public void nonDamagingActivityRetiresOnlyItsLinkedCurrentActivitySupport()
 	{
 		ResolverV1 engine = referenceEngine(false,true);
 		for (boolean linked : new boolean[] {false,true})
 		{
 			DeathRecordingV2 input = recording(900201,77,"Synthetic actor",16,9,true,false,0);
-			DamageRecord hit = input.getEvents().getDamageEvents().get(0);
-			SourceResolution.Candidate prior = hit.getSourceResolution().getCandidates().get(0).toBuilder()
-				.evidence(Arrays.asList(linked ? "RECORDED_PRE_HIT_NPC_ACTIVITY;tick=10;sequence=19;cycle=300;animationId=777" : "INDEPENDENT_OBSERVED_PROJECTILE",
-					"HITSPLAT_SIGNATURE_UNESTABLISHED:synthetic:ZERO_OUTCOME_DOMAIN_UNAVAILABLE")).build();
-			input = replaceHit(input,hit.toBuilder().sourceResolution(hit.getSourceResolution().toBuilder().candidates(Collections.singletonList(prior)).build()).build());
+			if (!linked)
+			{
+				Map<String,Object> independent=new LinkedHashMap<>(input.getEvents().getObservations().get(0).getData());independent.put("animationId",778);
+				ObservedEvent other=ObservedEvent.builder().type("ANIMATION_CHANGED").actorRef("actual:minion").sceneKey("room")
+					.tick(10).sequence(18).gameCycle(299).data(independent).build();
+				java.util.List<ObservedEvent> actual=new java.util.ArrayList<>(input.getEvents().getObservations());actual.add(other);
+				input=input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(input.getEvents().getDamageEvents()).observations(actual).build()).build();
+			}
 			SourceResolution resolution = new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 			assertEquals(!linked,!resolution.getCandidates().isEmpty());
 			assertTrue(resolution.getExcludedCandidates().stream().anyMatch(c -> c.getReasons().contains("NON_DAMAGING_ACTIVITY")));
@@ -574,7 +596,7 @@ public class ResolverV1Test
 	@Test public void harmlessProjectileIdentityRejectsOnlyLinkedProjectileSupportWithoutInventingAnOwner()
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[],activityClassifications:[{id:'harmless.projectile',source:{kind:'projectile',ids:[900501]},signals:{projectileIds:[900501]},role:'non_damaging',authority:'verified',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class);
-		ResolverV1 engine = new ResolverV1(catalog);
+		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(catalog));
 		for (boolean planeKnown : new boolean[] {false,true}) for (boolean proximity : new boolean[] {false,true}) for (int amount : new int[] {0,9})
 		{
 			DeathRecordingV2 input = recording(900201,77,"Synthetic actor",16,amount,true,false,0);
@@ -638,17 +660,31 @@ public class ResolverV1Test
 		assertTrue(engine.isNonDamagingActivity(projectile,hit));
 		JsonObject graphic = gson.fromJson("{key:'actual-graphic',pattern:'area_impact',source:{kind:'graphic',id:2148},signals:{graphicIds:[2148],lifecycleEvents:['graphic_spawn']},tick:10,cycle:300,position:{x:3202,y:3200}}",JsonObject.class); graphic.getAsJsonObject("source").add("scope",scope);
 		JsonObject input = new JsonObject(); input.add("hit",hit); input.add("cues",gson.toJsonTree(Collections.singletonList(graphic)));
-		JsonObject result = engine.resolve(input);
+		JsonObject result = ResolverTestCatalog.resolve(engine,input);
 		assertTrue(result.getAsJsonArray("candidates").size()>0);
 		assertTrue(result.getAsJsonArray("candidates").get(0).getAsJsonObject().getAsJsonArray("reasons").toString().contains("GEOMETRY_MISMATCH"));
 	}
 
-	private ResolverV1 referenceEngine(boolean special,boolean classification)
+	private ResolverV1 referenceEngine(boolean special,boolean classification) { return referenceEngine(special,classification,null); }
+
+	private ResolverV1 referenceEngine(boolean special,boolean classification,String currentScope)
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[{id:'ordinary.synthetic',source:{kind:'npc',ids:[900201]},styles:['melee'],maximum:{kind:'fixed_max',value:10,authority:'reference_only'}}],specialRules:[]}",JsonObject.class);
 		if (special) catalog.getAsJsonArray("specialRules").add(gson.fromJson("{id:'special.synthetic',label:'Independent component',pattern:'direct_attack',source:{kind:'npc',ids:[900201]},signals:{animationIds:[777]},timing:{anchor:'actor_activity',authority:'unknown'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',calculationTick:'unknown',outcome:{surface:'hp_or_block',hitsplatTypeIds:[16],signatureComplete:true,signatureAuthority:'verified'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}",JsonObject.class));
 		if (classification) catalog.add("activityClassifications",gson.fromJson("[{id:'activity.synthetic',source:{kind:'npc',ids:[900201]},signals:{animationIds:[777]},role:'non_damaging',authority:'verified',references:[{source:'synthetic',claim:'test'}]}]",com.google.gson.JsonArray.class));
-		return new ResolverV1(catalog);
+		if ("ALL_DIRECT_HP_COMPONENTS".equals(currentScope)) catalog.add("sourceBounds",gson.fromJson("[{id:'current.whole',source:{kind:'npc',ids:[900201]},when:[{at:'source_event',fact:'world_mode',op:'equals',value:'NORMAL'},{at:'source_event',fact:'source_model_overrides',op:'equals',value:false}],maximum:{kind:'fixed_max',value:10,authority:'verified'},outcome:{surface:'hp_or_block',signatureComplete:true,signatureAuthority:'verified',hitsplatTypeIds:[16]}}]",com.google.gson.JsonArray.class));
+		if ("ORDINARY_ATTACK".equals(currentScope))
+		{
+			JsonObject profile=catalog.getAsJsonArray("ordinaryProfiles").get(0).getAsJsonObject();
+			profile.add("maximum",gson.fromJson("{kind:'fixed_max',value:10,authority:'verified'}",JsonObject.class));
+			profile.getAsJsonObject("source").add("names",gson.fromJson("['Synthetic actor']",com.google.gson.JsonArray.class));
+			profile.getAsJsonObject("source").add("combatLevels",gson.fromJson("[77]",com.google.gson.JsonArray.class));
+			profile.addProperty("signalAuthority","verified");profile.add("signals",gson.fromJson("{animationIds:[777]}",JsonObject.class));
+			profile.add("when",gson.fromJson("[{at:'source_event',fact:'world_mode',op:'equals',value:'NORMAL'},{at:'source_event',fact:'source_model_overrides',op:'equals',value:false}]",com.google.gson.JsonArray.class));
+		}
+		catalog.add("cuePolicies",RuntimeCatalog.load(gson).section("resolver").get("cuePolicies"));
+		if(currentScope!=null) catalog.add("sourceAssociations",gson.fromJson("[{id:'presence.synthetic',association:'observed_native_presence',authority:'verified',source:{kind:'npc',ids:[900201]},references:[{source:'synthetic',claim:'test'}]}]",com.google.gson.JsonArray.class));
+		return new ResolverV1(ResolverTestCatalog.lower(catalog),gson,CombatCatalog.load(gson),DamageMap.load(gson));
 	}
 
 	private static DeathRecordingV2 priorExcluded(DeathRecordingV2 recording,String scope)
@@ -669,7 +705,7 @@ public class ResolverV1Test
 			DeathRecordingV2 input = retaliationRecording("LOCAL_PLAYER",0,900301,later,"");
 			DamageRecord incoming = input.getEvents().getDamageEvents().get(1);
 			JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(incoming);
-			JsonObject result = engine.resolve(normalized); JsonObject reflected = null;
+			JsonObject result = ResolverTestCatalog.resolve(engine,normalized); JsonObject reflected = null;
 			for (JsonElement row : result.getAsJsonArray("candidates")) if ("retal".equals(row.getAsJsonObject().get("ruleId").getAsString())) reflected=row.getAsJsonObject();
 			assertNotNull(reflected); assertEquals("POSSIBLE",reflected.get("status").getAsString());
 			assertFalse("Later co-present source sample cannot acquire even a1HP cap",reflected.has("maximum"));
@@ -695,7 +731,7 @@ public class ResolverV1Test
 			retaliationRecording("LOCAL_PLAYER",0,900309,false,""),retaliationRecording("LOCAL_PLAYER",0,900301,false,"born_after"),
 			retaliationRecording("LOCAL_PLAYER",0,900301,false,"prior_despawn")))
 		{
-			JsonObject result=engine.resolve(new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(1)));
+			JsonObject result=ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(1)));
 			for (JsonElement row : result.getAsJsonArray("candidates")) assertNotEquals("retal",row.getAsJsonObject().get("ruleId").getAsString());
 			assertTrue(result.get("unidentifiedPossible").getAsBoolean());
 		}
@@ -703,7 +739,7 @@ public class ResolverV1Test
 
 	private ResolverV1 retaliationEngine()
 	{
-		return new ResolverV1(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'retal',label:'Reflected component',pattern:'retaliation',source:{kind:'npc',ids:[900302]},when:[{fact:'trigger_target_npc_id',op:'one_of',value:[900301],at:'source_event'}],timing:{anchor:'retaliation_event',authority:'unknown'},geometry:{shape:'target',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified'}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class));
+		return new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'retal',label:'Reflected component',pattern:'retaliation',source:{kind:'npc',ids:[900302]},when:[{fact:'trigger_target_npc_id',op:'one_of',value:[900301],at:'source_event'}],timing:{anchor:'retaliation_event',authority:'unknown'},geometry:{shape:'target',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified'}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 	}
 	private DeathRecordingV2 retaliationRecording(String owner,int sourceView,int targetId,boolean later,String lifetime)
 	{

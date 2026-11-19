@@ -50,14 +50,14 @@ public class SourceEvidenceResolverTest
 			.evidence(Collections.singletonList("RECORDED_HYPOTHESIS")).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis hypothesis(Candidate c)
+	private static LegacyConstraintOracle.Hypothesis hypothesis(Candidate c)
 	{
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(c).build();
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(c).build();
 	}
 
-	private static SourceResolution resolve(SourceEvidenceResolver.Hypothesis... h)
+	private static SourceResolution resolve(LegacyConstraintOracle.Hypothesis... h)
 	{
-		return SourceEvidenceResolver.resolve(Arrays.asList(h), 16, false, "test-catalog");
+		return LegacyConstraintOracle.resolve(Arrays.asList(h), 16, false, "test-catalog");
 	}
 
 	private static AttributionConstraint bound(String key, int max)
@@ -69,12 +69,12 @@ public class SourceEvidenceResolverTest
 			.build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis bounded(Candidate c, AttributionConstraint... rules)
+	private static LegacyConstraintOracle.Hypothesis bounded(Candidate c, AttributionConstraint... rules)
 	{
 		Map<String, Boolean> observed = new HashMap<>();
 		for (String key : bound("", 1).getRequiredObservations())
 			observed.put(key, true);
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(c).constraints(Arrays.asList(rules))
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(c).constraints(Arrays.asList(rules))
 			.observations(observed).mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT").worldMode("NORMAL")
 			.build();
 	}
@@ -114,7 +114,7 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void aBoundRequiresEveryPredicateButStillReportsReferenceContradictions()
 	{
-		SourceEvidenceResolver.Hypothesis h = bounded(actor("a", "family-a", "POSSIBLE"), bound("max", 13));
+		LegacyConstraintOracle.Hypothesis h = bounded(actor("a", "family-a", "POSSIBLE"), bound("max", 13));
 		SourceResolution excluded = resolve(h);
 		assertTrue(excluded.getCandidates().isEmpty());
 		assertEquals(1, excluded.getExcludedCandidates().size());
@@ -139,22 +139,22 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void zeroMaximumAndZeroHitsRemainLiteralValues()
 	{
-		SourceEvidenceResolver.Hypothesis h = bounded(actor("a", "family-a", "POSSIBLE"), bound("zero", 0));
+		LegacyConstraintOracle.Hypothesis h = bounded(actor("a", "family-a", "POSSIBLE"), bound("zero", 0));
 		assertEquals(1,
-			SourceEvidenceResolver.resolve(Collections.singletonList(h), 0, false, "test").getCandidates().size());
+			LegacyConstraintOracle.resolve(Collections.singletonList(h), 0, false, "test").getCandidates().size());
 		assertTrue(
-			SourceEvidenceResolver.resolve(Collections.singletonList(h), 1, false, "test").getCandidates().isEmpty());
+			LegacyConstraintOracle.resolve(Collections.singletonList(h), 1, false, "test").getCandidates().isEmpty());
 	}
 
 	@Test
 	public void canonicalOrderIsStrengthThenStableKeyAndPermutationIndependent()
 	{
-		List<SourceEvidenceResolver.Hypothesis> input = new ArrayList<>(
+		List<LegacyConstraintOracle.Hypothesis> input = new ArrayList<>(
 			Arrays.asList(hypothesis(actor("z", null, "STRONG")), hypothesis(actor("a", null, "POSSIBLE")),
 				hypothesis(actor("b", null, "POSSIBLE"))));
-		SourceResolution first = SourceEvidenceResolver.resolve(input, 0, false, "test");
+		SourceResolution first = LegacyConstraintOracle.resolve(input, 0, false, "test");
 		Collections.reverse(input);
-		assertEquals(first, SourceEvidenceResolver.resolve(input, 0, false, "test"));
+		assertEquals(first, LegacyConstraintOracle.resolve(input, 0, false, "test"));
 		assertEquals("z", first.getCandidates().get(0).getActorRef());
 	}
 
@@ -234,7 +234,7 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void allExcludedActualApiCorrelationRemainsPossibleWithReferenceConflict()
 	{
-		SourceEvidenceResolver.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
+		LegacyConstraintOracle.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
 			.observedApiSourceCorrelation(true).build();
 		SourceResolution r = resolve(api);
 		assertEquals("ALTERNATIVES", r.getStatus());
@@ -252,8 +252,8 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void allExcludedProximityOrAnimationWithoutApiRelationshipDoesNotRevive()
 	{
-		SourceEvidenceResolver.Hypothesis proximity = bounded(actor("a", "family-a", "STRONG"), bound("max", 13));
-		SourceEvidenceResolver.Hypothesis animation = bounded(actor("b", "family-b", "POSSIBLE"), bound("max", 13));
+		LegacyConstraintOracle.Hypothesis proximity = bounded(actor("a", "family-a", "STRONG"), bound("max", 13));
+		LegacyConstraintOracle.Hypothesis animation = bounded(actor("b", "family-b", "POSSIBLE"), bound("max", 13));
 		SourceResolution r = resolve(proximity, animation);
 		assertEquals("UNIDENTIFIED", r.getStatus());
 		assertTrue(r.getCandidates().isEmpty());
@@ -263,7 +263,7 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void eligibleAlternativeKeepsNumericExclusionOfConflictingApiHypothesis()
 	{
-		SourceEvidenceResolver.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
+		LegacyConstraintOracle.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
 			.observedApiSourceCorrelation(true).build();
 		SourceResolution r = resolve(api, bounded(actor("b", "family-b", "POSSIBLE"), bound("higher", 20)));
 		assertEquals("IDENTIFIED", r.getStatus());
@@ -277,7 +277,7 @@ public class SourceEvidenceResolverTest
 	@Test
 	public void observedOutcomeContradictionCannotBeRevivedAsANumericReferenceConflict()
 	{
-		SourceEvidenceResolver.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
+		LegacyConstraintOracle.Hypothesis api = bounded(actor("a", "family-a", "STRONG"), bound("max", 13)).toBuilder()
 			.observedApiSourceCorrelation(true).eligibilityEvidence(Collections.singletonList("OBSERVED_HITSPLAT:5"))
 			.eligibilityExclusions(Collections.singletonList("HITSPLAT_TYPE_MISMATCH:ordinary:observed=5;allowed=[16]"))
 			.build();
@@ -293,7 +293,7 @@ public class SourceEvidenceResolverTest
 	public void excludingOneMechanismDoesNotExcludeAnotherMechanismOfTheSameActor()
 	{
 		Candidate c = actor("a", "family-a", "POSSIBLE");
-		SourceEvidenceResolver.Hypothesis ordinary = hypothesis(c.toBuilder().key("ordinary").build()).toBuilder()
+		LegacyConstraintOracle.Hypothesis ordinary = hypothesis(c.toBuilder().key("ordinary").build()).toBuilder()
 			.eligibilityExclusions(Collections.singletonList("HITSPLAT_TYPE_MISMATCH:ordinary")).build();
 		SourceResolution r = resolve(ordinary, hypothesis(c.toBuilder().key("unclassified-special").build()));
 		assertEquals("IDENTIFIED", r.getStatus());
@@ -305,10 +305,10 @@ public class SourceEvidenceResolverTest
 	public void duplicateExcludedWitnessesMergeEvidenceWithoutMergingDifferentActorsByName()
 	{
 		Candidate c = actor("a", null, "POSSIBLE");
-		SourceEvidenceResolver.Hypothesis first = hypothesis(c).toBuilder()
+		LegacyConstraintOracle.Hypothesis first = hypothesis(c).toBuilder()
 			.eligibilityEvidence(Collections.singletonList("FIRST_OBSERVATION"))
 			.eligibilityExclusions(Collections.singletonList("HITSPLAT_TYPE_MISMATCH:first")).build();
-		SourceEvidenceResolver.Hypothesis second = first.toBuilder()
+		LegacyConstraintOracle.Hypothesis second = first.toBuilder()
 			.eligibilityEvidence(Collections.singletonList("SECOND_OBSERVATION"))
 			.eligibilityExclusions(Collections.singletonList("HITSPLAT_TYPE_MISMATCH:second")).build();
 		SourceResolution r = resolve(first, second);

@@ -24,12 +24,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 
 /** Independent current scene reads. Successful samples allocate no diagnostic maps or lists. */
@@ -41,13 +37,16 @@ final class SceneFieldObservation
 		"varpId", "controlValue", "orientation", "modelOrientation", "orientationA", "orientationB", "config",
 		"offsetX", "offsetY", "offsetX2", "offsetY2", "location", "startCycle", "z", "animation", "animationId",
 		"animationFrame", "finished", "mappedName", "model0.animation", "model0.animationId", "model0.animationFrame",
-		"model1.animation", "model1.animationId", "model1.animationFrame", "objectWorldView", "objectWorldViewId", "objectPlane" };
+		"model1.animation", "model1.animationId", "model1.animationFrame", "objectWorldView", "objectWorldViewId",
+		"objectPlane" };
 	private static final Map<String, Integer> INDEX;
 	static
 	{
 		Map<String, Integer> keys = new HashMap<>();
 		for (int i = 0; i < FIELDS.length; i++)
+		{
 			keys.put(FIELDS[i], i);
+		}
 		INDEX = Collections.unmodifiableMap(keys);
 	}
 	private long sampled, available, nullValues;
@@ -57,7 +56,9 @@ final class SceneFieldObservation
 	{
 		Integer index = INDEX.get(field);
 		if (index == null)
+		{
 			throw new IllegalArgumentException("Unregistered scene field: " + field);
+		}
 		return 1L << index;
 	}
 
@@ -70,7 +71,9 @@ final class SceneFieldObservation
 			T value = getter.get();
 			available |= bit;
 			if (value == null)
+			{
 				nullValues |= bit;
+			}
 			return value;
 		}
 		catch (RuntimeException unavailable)
@@ -87,7 +90,9 @@ final class SceneFieldObservation
 		available &= ~bit;
 		nullValues &= ~bit;
 		if (failures == null)
+		{
 			failures = new LinkedHashMap<>();
+		}
 		failures.put(field, reason);
 	}
 
@@ -104,11 +109,17 @@ final class SceneFieldObservation
 	Map<String, Boolean> availability()
 	{
 		if (!partial())
+		{
 			return null;
+		}
 		Map<String, Boolean> values = new LinkedHashMap<>();
 		for (int i = 0; i < FIELDS.length; i++)
+		{
 			if ((sampled & (1L << i)) != 0)
+			{
 				values.put(FIELDS[i], (available & (1L << i)) != 0);
+			}
+		}
 		return Collections.unmodifiableMap(values);
 	}
 
@@ -120,11 +131,17 @@ final class SceneFieldObservation
 	List<String> nulls()
 	{
 		if (!partial() || nullValues == 0)
+		{
 			return null;
+		}
 		List<String> values = new ArrayList<>();
 		for (int i = 0; i < FIELDS.length; i++)
+		{
 			if ((nullValues & (1L << i)) != 0)
+			{
 				values.add(FIELDS[i]);
+			}
+		}
 		return Collections.unmodifiableList(values);
 	}
 }

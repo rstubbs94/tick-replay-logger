@@ -48,7 +48,7 @@ final class SurfaceContactAdmission
 		return rule != null && rule.getContactAdmission() != null;
 	}
 
-	static boolean accepts(DamageMap.ObjectHazardRule rule, DamageRecord hit, CombatCatalog catalog,
+	static boolean accepts(DamageMap.ObjectHazardRule rule, DamageRecord hit, LegacyCombatCatalog catalog,
 		ObservedHpCallbackContext original)
 	{
 		if (!declared(rule))
@@ -62,7 +62,7 @@ final class SurfaceContactAdmission
 			&& catalog.hitsplatDamageType(hit.getHitsplatType()) == null && original.positionMatches(hit);
 	}
 
-	static SourceEvidenceResolver.Hypothesis constrain(SourceEvidenceResolver.Hypothesis hypothesis,
+	static LegacyConstraintOracle.Hypothesis constrain(LegacyConstraintOracle.Hypothesis hypothesis,
 		DamageMap.ObjectHazardRule rule, DamageRecord hit, ObservedHpCallbackContext original,
 		boolean definitionQualified)
 	{

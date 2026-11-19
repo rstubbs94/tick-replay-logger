@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 
@@ -40,6 +41,7 @@ public class HazardState
 	private final int id;
 	private final Integer baseId; // original TileObject id when resolving a dynamic definition
 	private final Long objectKey; // same tracker identity as the neutral scene-object channel, when available
+	private final Long objectObservationId; // shared API lifetime identity used by callback contact witnesses
 	private final Long graphicObservationId; // recorder-local graphics API lifetime identity; distinct from scene objectKey
 	private final String state; // inactive | warning | active | unknown; null if unclassified
 	private final Boolean damaging; // null means unclassified, not a safe tile
@@ -68,7 +70,7 @@ public class HazardState
 	private final Integer animationId;
 	private final Integer animationFrame;
 	private final Boolean finished;
-	private final java.util.Map<String, Boolean> fieldAvailability;
-	private final java.util.Map<String, String> observationIssues;
+	private final Map<String, Boolean> fieldAvailability;
+	private final Map<String, String> observationIssues;
 	private final java.util.List<String> nullFields;
 }

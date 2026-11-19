@@ -24,22 +24,11 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.world.DeathRecordingV2;
-import com.tickreplaylogger.model.world.NpcState;
-import com.tickreplaylogger.model.world.NpcStateTable;
-import com.tickreplaylogger.model.world.WorldSnapshot;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 /** Export-time wire sharing only. Every reference resolves to one complete recorded NPC value. */
 final class NpcStateEncoding
@@ -72,28 +61,40 @@ final class NpcStateEncoding
 		long rawBytes = 0;
 		NpcState exemplar = null;
 		for (WorldSnapshot frame : all)
+		{
 			if (frame.getNpcs() != null)
 			{
 				rawBytes += bytes(gson.toJson(frame.getNpcs())) + 8;
 				if (exemplar == null)
+				{
 					for (NpcState npc : frame.getNpcs())
+					{
 						if (npc != null)
 						{
 							exemplar = npc;
 							break;
 						}
+					}
+				}
 			}
+		}
 		if (exemplar == null || rawBytes < MINIMUM_BYTES)
+		{
 			return original;
+		}
 		NpcStateEncoding encoding = new NpcStateEncoding(exemplar, gson);
 		if (encoding.fields.size() > 128)
-			return original; // Do not emit a table outside the versioned reader contract.
+		{
+			return original;
+		} // Do not emit a table outside the versioned reader contract.
 		List<WorldSnapshot> frames = encoding.encode(original.getTicks());
 		NpcStateTable table = NpcStateTable.builder().format("shared-blocks-v1").blockWidth(WIDTH)
 			.fields(encoding.fields).values(encoding.values).blocks(encoding.blocks).rows(encoding.rows).build();
 		// Expensive sharing is admitted only when it reduces this actual wire payload.
 		if (bytes(gson.toJson(table)) + 17 + encoding.referenceBytes >= rawBytes)
+		{
 			return original;
+		}
 		return original.toBuilder().npcStateTable(table).ticks(frames).build();
 	}
 
@@ -116,7 +117,9 @@ final class NpcStateEncoding
 					}
 					JsonObject state = gson.toJsonTree(npc).getAsJsonObject();
 					if (!fieldNames.containsAll(state.keySet()))
+					{
 						throw new IllegalStateException("Unexpected NPC serialization fields");
+					}
 					int[] row = new int[(fields.size() + WIDTH - 1) / WIDTH];
 					for (int offset = 0; offset < fields.size(); offset += WIDTH)
 					{
@@ -125,7 +128,9 @@ final class NpcStateEncoding
 						{
 							JsonElement value = state.get(fields.get(offset + i));
 							if (value == null)
+							{
 								block[i] = -1;
+							}
 							else
 							{
 								String key = value.toString();
@@ -147,7 +152,9 @@ final class NpcStateEncoding
 				copy.npcs(null).npcStateRefs(refs);
 			}
 			if (frame.getAdditionalViews() != null)
+			{
 				copy.additionalViews(encode(frame.getAdditionalViews()));
+			}
 			output.add(copy.build());
 		}
 		return output;
@@ -172,7 +179,9 @@ final class NpcStateEncoding
 		{
 			all.add(frame);
 			if (frame.getAdditionalViews() != null)
+			{
 				collect(frame.getAdditionalViews(), all);
+			}
 		}
 	}
 
@@ -195,19 +204,25 @@ final class NpcStateEncoding
 				|| table.getFields() == null || table.getFields().isEmpty() || table.getFields().size() > 128
 				|| new HashSet<>(table.getFields()).size() != table.getFields().size() || table.getValues() == null
 				|| table.getBlocks() == null || table.getRows() == null)
+			{
 				throw new IllegalArgumentException("Invalid NPC state table");
+			}
 			this.table = table;
 		}
 
 		List<NpcState> read(WorldSnapshot frame)
 		{
 			if (frame.getNpcs() != null || frame.getNpcStateRefs() == null)
+			{
 				return frame.getNpcs();
+			}
 			List<NpcState> output = new ArrayList<>();
 			for (Integer ref : frame.getNpcStateRefs())
 			{
 				if (ref == null || ref < -1 || ref >= table.getRows().size())
+				{
 					throw new IllegalArgumentException("Invalid NPC row");
+				}
 				if (ref == -1)
 				{
 					output.add(null);
@@ -219,21 +234,31 @@ final class NpcStateEncoding
 					int[] row = table.getRows().get(ref);
 					JsonObject value = new JsonObject();
 					if (row == null || row.length != (table.getFields().size() + WIDTH - 1) / WIDTH)
+					{
 						throw new IllegalArgumentException("Invalid NPC row width");
+					}
 					for (int index = 0; index < row.length; index++)
 					{
 						if (row[index] < 0 || row[index] >= table.getBlocks().size())
+						{
 							throw new IllegalArgumentException("Invalid NPC block");
+						}
 						int[] block = table.getBlocks().get(row[index]);
 						if (block == null || block.length != Math.min(WIDTH, table.getFields().size() - index * WIDTH))
+						{
 							throw new IllegalArgumentException("Invalid NPC block width");
+						}
 						for (int offset = 0; offset < block.length; offset++)
 						{
 							int entry = block[offset];
 							if (entry < -1 || entry >= table.getValues().size())
+							{
 								throw new IllegalArgumentException("Invalid NPC value");
+							}
 							if (entry != -1)
+							{
 								value.add(table.getFields().get(index * WIDTH + offset), table.getValues().get(entry));
+							}
 						}
 					}
 					decoded = gson.fromJson(value, NpcState.class);

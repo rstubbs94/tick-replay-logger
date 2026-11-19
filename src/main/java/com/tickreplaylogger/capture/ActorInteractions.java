@@ -27,13 +27,8 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.ActorInteractionState;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
+import java.util.*;
+import net.runelite.api.*;
 
 public final class ActorInteractions
 {
@@ -50,7 +45,9 @@ public final class ActorInteractions
 		ActorInteractionState observed = captureObserved(target, flag, !issues.containsKey("interactionTarget"), local,
 			includeOthers, refs);
 		if (observed.getObservationIssues() != null)
+		{
 			issues.putAll(observed.getObservationIssues());
+		}
 		return issues.isEmpty() ? observed
 			: observed.toBuilder().observationIssues(Collections.unmodifiableMap(issues)).build();
 	}
@@ -76,18 +73,24 @@ public final class ActorInteractions
 		ActorInteractionState.ActorInteractionStateBuilder result = ActorInteractionState.builder()
 			.reportedInteracting(flag);
 		if (!targetKnown)
+		{
 			return result.evidence("INTERACTION_UNAVAILABLE").build();
+		}
 		if (target == null)
+		{
 			return result.evidence(Boolean.TRUE.equals(flag) ? "INTERACTING_ACTOR_UNAVAILABLE"
 				: flag == null ? "INTERACTION_FLAG_UNAVAILABLE" : "NO_INTERACTION_REPORTED").build();
+		}
 		String kind = target == local ? "LOCAL_PLAYER"
 			: target instanceof Player ? local == null ? "PLAYER" : "OTHER_PLAYER"
 				: target instanceof NPC ? "NPC" : "ACTOR";
 		result.actorKind(kind);
 		if (target instanceof Player && target != local && !includeOthers)
+		{
 			return result.evidence(
 				local == null ? "LOCAL_IDENTITY_UNAVAILABLE_PLAYER_CAPTURE_DISABLED" : "OTHER_PLAYER_CAPTURE_DISABLED")
 				.build();
+		}
 		Map<String, String> issues = new LinkedHashMap<>();
 		String reference = read(issues, "actorRef", () -> refs.apply(target));
 		result.actorRef(reference);
@@ -96,10 +99,16 @@ public final class ActorInteractions
 			result.actorName((String) original.get("name"));
 			result.worldViewId((Integer) original.get("worldViewId"));
 			if (originalIssues != null)
+			{
 				for (String field : new String[]
 				{ "name", "worldView", "worldViewId" })
+				{
 					if (originalIssues.containsKey(field))
+					{
 						issues.put(field.equals("name") ? "actorName" : field, originalIssues.get(field));
+					}
+				}
+			}
 		}
 		else
 		{
@@ -108,9 +117,13 @@ public final class ActorInteractions
 			result.worldViewId(view == null ? null : read(issues, "worldViewId", view::getId));
 		}
 		if (!issues.isEmpty())
+		{
 			result.observationIssues(Collections.unmodifiableMap(issues));
+		}
 		if (reference == null || !issues.isEmpty())
+		{
 			return result.evidence("ACTOR_REFERENCE_PARTIAL").build();
+		}
 		return result.evidence(flag == null ? "ACTOR_REFERENCE_FLAG_UNAVAILABLE"
 			: flag ? "ACTOR_REFERENCE_OBSERVED" : "ACTOR_REFERENCE_FLAG_CONFLICT").build();
 	}

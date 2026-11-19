@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.Map;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -40,7 +41,7 @@ public class PlayerState
 	private final Integer worldViewId;
 	private final ActorInteractionState interaction;
 	private final Integer combatLevel;
-	private final java.util.Map<String, String> observationIssues;
+	private final Map<String, String> observationIssues;
 	private final Boolean localPositionKnown;
 	private final Boolean worldPositionKnown;
 	private final Boolean planeKnown;
@@ -65,7 +66,7 @@ public class PlayerState
 	private final Integer prayer;
 	private final Integer maxPrayer;
 	private final Boolean prayerStateKnown; // all flags read and overhead resolved; raw icon availability is independent
-	private final java.util.Map<String, Boolean> prayerFlagValues; // unread flags are absent, not false
+	private final Map<String, Boolean> prayerFlagValues; // unread flags are absent, not false
 	private final List<String> activePrayers;
 	private final String overheadPrayer; // the single active overhead, or null
 	private final String overheadText;
@@ -82,8 +83,8 @@ public class PlayerState
 	private final Integer boostedDefence;
 	private final Integer boostedRanged;
 	private final Integer boostedMagic;
-	private final java.util.Map<String, Integer> baseSkillLevels;
-	private final java.util.Map<String, Integer> boostedSkillLevels;
+	private final Map<String, Integer> baseSkillLevels;
+	private final Map<String, Integer> boostedSkillLevels;
 
 	private final Integer specEnergy; // 0..100
 	private final Integer runEnergy; // 0..100 (legacy whole-percent display)

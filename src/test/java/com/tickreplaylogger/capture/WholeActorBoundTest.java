@@ -56,23 +56,23 @@ public class WholeActorBoundTest
 			.requiredObservations(REQUIRED).build();
 	}
 
-	private static SourceEvidenceResolver.Hypothesis source(AttributionConstraint guard)
+	private static LegacyConstraintOracle.Hypothesis source(AttributionConstraint guard)
 	{
 		Map<String, Boolean> facts = new HashMap<>(); for (String fact : REQUIRED) facts.put(fact, true);
 		facts.put("ORDINARY_ATTACK_COMPONENT", false); facts.put("STANDARD_DAMAGE_MODIFIERS", false);
 		SourceResolution.Candidate candidate = SourceResolution.Candidate.builder().key("source").name("Recorded source")
 			.actorRef("npc:actual-lifetime").npcId(999950).familyKey("fixture:source").sceneKey("room").worldViewId(0).plane(0)
 			.strength("POSSIBLE").build();
-		return SourceEvidenceResolver.Hypothesis.builder().candidate(candidate).constraints(Collections.singletonList(guard))
+		return LegacyConstraintOracle.Hypothesis.builder().candidate(candidate).constraints(Collections.singletonList(guard))
 			.observations(facts).numericObservations(Collections.singletonMap("source.sample.combatLevel", 10))
 			.mechanism("NPC_DIRECT_SOURCE").damageComponent("SINGLE_HIT").worldMode("NORMAL").observedHitsplatType(16).build();
 	}
 
-	private static SourceResolution resolve(SourceEvidenceResolver.Hypothesis source)
+	private static SourceResolution resolve(LegacyConstraintOracle.Hypothesis source)
 	{
-		SourceEvidenceResolver.Hypothesis other = SourceEvidenceResolver.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
+		LegacyConstraintOracle.Hypothesis other = LegacyConstraintOracle.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
 			.key("other").name("Other source").actorRef("npc:other").sceneKey("room").worldViewId(0).plane(0).build()).build();
-		return SourceEvidenceResolver.resolve(Arrays.asList(source, other), 5, false, "fixture");
+		return LegacyConstraintOracle.resolve(Arrays.asList(source, other), 5, false, "fixture");
 	}
 
 	@Test
@@ -87,8 +87,8 @@ public class WholeActorBoundTest
 	@Test
 	public void qualifiedWholeSourceEnvelopeIsNotRevivedByApiCorrelationFallback()
 	{
-		SourceEvidenceResolver.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE",Collections.singletonList(16),true));
-		SourceResolution result = SourceEvidenceResolver.resolve(Collections.singletonList(original.toBuilder()
+		LegacyConstraintOracle.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE",Collections.singletonList(16),true));
+		SourceResolution result = LegacyConstraintOracle.resolve(Collections.singletonList(original.toBuilder()
 			.candidate(original.getCandidate().toBuilder().strength("STRONG").build()).observedApiSourceCorrelation(true).build()),5,true,"fixture");
 		assertTrue(result.getCandidates().isEmpty());
 		assertEquals("ALL_DIRECT_HP_COMPONENTS",result.getExcludedCandidates().get(0).getExclusionScope());
@@ -98,12 +98,12 @@ public class WholeActorBoundTest
 	@Test
 	public void duplicateExclusionWitnessRetainsQualifiedWholeSourceScopeInEitherOrder()
 	{
-		SourceEvidenceResolver.Hypothesis whole = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE",Collections.singletonList(16),true));
-		SourceEvidenceResolver.Hypothesis other = whole.toBuilder().constraints(Collections.emptyList())
+		LegacyConstraintOracle.Hypothesis whole = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE",Collections.singletonList(16),true));
+		LegacyConstraintOracle.Hypothesis other = whole.toBuilder().constraints(Collections.emptyList())
 			.eligibilityExclusions(Collections.singletonList("OTHER_COMPONENT_EXCLUDED")).build();
-		for (List<SourceEvidenceResolver.Hypothesis> order : Arrays.asList(Arrays.asList(other,whole),Arrays.asList(whole,other)))
+		for (List<LegacyConstraintOracle.Hypothesis> order : Arrays.asList(Arrays.asList(other,whole),Arrays.asList(whole,other)))
 		{
-			SourceResolution result = SourceEvidenceResolver.resolve(order,5,true,"fixture");
+			SourceResolution result = LegacyConstraintOracle.resolve(order,5,true,"fixture");
 			assertTrue(result.getCandidates().isEmpty()); assertEquals(1,result.getExcludedCandidates().size());
 			assertEquals("ALL_DIRECT_HP_COMPONENTS",result.getExcludedCandidates().get(0).getExclusionScope());
 		}
@@ -112,7 +112,7 @@ public class WholeActorBoundTest
 	@Test
 	public void unlistedOrUnknownHitsplatOnlyMakesTheBoundInapplicable()
 	{
-		SourceEvidenceResolver.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
+		LegacyConstraintOracle.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
 		for (Integer type : Arrays.asList(null, 5, 74))
 		{
 			SourceResolution result = resolve(original.toBuilder().observedHitsplatType(type).build());
@@ -127,7 +127,7 @@ public class WholeActorBoundTest
 		for (List<Integer> invalid : Arrays.asList(Collections.singletonList(5), Collections.singletonList(999999),
 			Arrays.asList(16, 5), Arrays.asList(16, 16)))
 		{
-			SourceEvidenceResolver.Hypothesis source = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", invalid, true));
+			LegacyConstraintOracle.Hypothesis source = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", invalid, true));
 			for (int observed : Arrays.asList(5, 16, 999999))
 				assertEquals(2, resolve(source.toBuilder().observedHitsplatType(observed).build()).getCandidates().size());
 		}
@@ -136,7 +136,7 @@ public class WholeActorBoundTest
 	@Test
 	public void everyRequiredObservedFactAndOriginalNpcIdentityIsNecessary()
 	{
-		SourceEvidenceResolver.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
+		LegacyConstraintOracle.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
 		for (String fact : REQUIRED)
 		{
 			Map<String, Boolean> facts = new HashMap<>(original.getObservations()); facts.remove(fact);
@@ -150,7 +150,7 @@ public class WholeActorBoundTest
 	@Test
 	public void areasContactsStatusAndDifferentResourceComponentsCannotInheritTheEnvelope()
 	{
-		SourceEvidenceResolver.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
+		LegacyConstraintOracle.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
 		for (String mechanism : Arrays.asList("AREA_IMPACT", "TERMINAL_AREA", "CONTACT", "STATUS"))
 			assertEquals(mechanism, 2, resolve(original.toBuilder().mechanism(mechanism).build()).getCandidates().size());
 		assertEquals(2, resolve(original.toBuilder().damageComponent("PERIODIC_STATUS").build()).getCandidates().size());
@@ -164,7 +164,7 @@ public class WholeActorBoundTest
 			guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", null, true), guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.emptyList(), true),
 			guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), false)))
 			assertEquals(2, resolve(source(invalid)).getCandidates().size());
-		SourceEvidenceResolver.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
+		LegacyConstraintOracle.Hypothesis original = source(guard("QUALIFIED_WHOLE_ACTOR_ENVELOPE", Collections.singletonList(16), true));
 		assertEquals(2, resolve(original.toBuilder().numericObservations(Collections.emptyMap()).build()).getCandidates().size());
 		assertEquals(2, resolve(original.toBuilder().numericObservations(Collections.singletonMap("source.sample.combatLevel", 11)).build()).getCandidates().size());
 	}
@@ -175,7 +175,7 @@ public class WholeActorBoundTest
 		DamageMap map = DamageMap.load(new Gson());
 		List<AttributionConstraint> whole = new ArrayList<>();
 		for (int id : Arrays.asList(5779, 11705))
-			for (AttributionConstraint rule : map.catalog().attributionConstraints(id))
+			for (AttributionConstraint rule : LegacyCombatCatalog.from(map.catalog()).attributionConstraints(id))
 				if ("QUALIFIED_WHOLE_ACTOR_ENVELOPE".equals(rule.getBoundBasis())) whole.add(rule);
 		assertEquals("Both independently reviewed current declarations must reach the runtime", 2, whole.size());
 		for (AttributionConstraint rule : whole)
@@ -191,12 +191,12 @@ public class WholeActorBoundTest
 			if (!rule.has("boundBasis") || !"QUALIFIED_WHOLE_ACTOR_ENVELOPE".equals(rule.get("boundBasis").getAsString())) continue;
 			com.google.gson.JsonArray invalid = new com.google.gson.JsonArray(); invalid.add(5); rule.add("allowedHitsplatTypes", invalid);
 		}
-		Field index = CombatCatalog.class.getDeclaredField("attributionConstraintIndex"); index.setAccessible(true); index.set(map.catalog(), null);
-		for (AttributionConstraint rule : map.catalog().attributionConstraints(5779))
+		Field index = LegacyCombatCatalog.class.getDeclaredField("attributionConstraintIndex"); index.setAccessible(true); index.set(LegacyCombatCatalog.from(map.catalog()), null);
+		for (AttributionConstraint rule : LegacyCombatCatalog.from(map.catalog()).attributionConstraints(5779))
 			if ("QUALIFIED_WHOLE_ACTOR_ENVELOPE".equals(rule.getBoundBasis())) assertNull(rule.getAllowedHitsplatTypes());
 		root.getAsJsonObject("attributionConstraints").addProperty("version", 2);
-		index.set(map.catalog(), null);
-		assertTrue(map.catalog().attributionConstraints(5779).isEmpty());
+		index.set(LegacyCombatCatalog.from(map.catalog()), null);
+		assertTrue(LegacyCombatCatalog.from(map.catalog()).attributionConstraints(5779).isEmpty());
 	}
 
 	@Test

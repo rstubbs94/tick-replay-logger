@@ -1,5 +1,17 @@
-# Keep bundled rule and eligibility hashes stable across Windows and CI checkouts.
-src/main/resources/com/tickreplaylogger/resolver-v1.json text eol=lf
-src/main/resources/com/tickreplaylogger/source-association-npc-ids.json text eol=lf
-src/test/resources/resolver-v1-conformance.json text eol=lf
-src/test/resources/resolver-source-bounds.synthetic.json text eol=lf
+# Copyright (c) 2026, rstubbs94. SPDX-License-Identifier: BSD-2-Clause
+* text=auto
+*.java text eol=lf
+*.json text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf
+*.gradle text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf

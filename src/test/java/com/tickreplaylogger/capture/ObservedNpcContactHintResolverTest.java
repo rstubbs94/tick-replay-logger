@@ -102,7 +102,7 @@ public class ObservedNpcContactHintResolverTest
 		{
 			ObservedMechanismResolver.Result result = resolver.resolve(hit().toBuilder().impactX(point).impactY(202).build());
 			assertEquals(1, result.getContributions().size()); assertTrue(result.isUnidentifiedPossible());
-			SourceEvidenceResolver.Hypothesis body = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis body = result.getContributions().get(0).getHypothesis();
 			assertEquals(REF, body.getCandidate().getActorRef()); assertEquals("POSSIBLE", body.getCandidate().getStrength());
 			assertNull(body.getCandidate().getFamilyKey()); assertNull(body.getConstraints()); assertNull(body.getNumericObservations());
 			assertEquals("NPC_OCCUPIED_BODY_CONTACT", body.getMechanism());
@@ -174,13 +174,14 @@ public class ObservedNpcContactHintResolverTest
 	public void anOrdinaryComponentExclusionCannotEraseTheIndependentBodyPossibility() throws Exception
 	{
 		JsonObject namespace = namespace(ID, "Unseen body"); CombatCatalog catalog = catalog(namespace);
-		Field rootField = CombatCatalog.class.getDeclaredField("root"); rootField.setAccessible(true); JsonObject root = (JsonObject) rootField.get(catalog);
+		Field rootField = CombatCatalog.class.getDeclaredField("root"); rootField.setAccessible(true);
+		rootField.set(catalog, ((JsonObject) rootField.get(catalog)).deepCopy()); JsonObject root = (JsonObject) rootField.get(catalog);
 		root.getAsJsonObject("npcIdentities").add(String.valueOf(ID), GSON.fromJson("{\"candidates\":[{\"name\":\"Unseen body\",\"source_ref\":\"wiki:Unseen_body#infobox-1\",\"combat_level\":\"50\"}]}", JsonObject.class));
 		root.getAsJsonObject("reviewedBindings").getAsJsonObject("npcOverrides").add(String.valueOf(ID), GSON.fromJson("{\"animations\":{\"777777\":{\"kind\":\"attack\",\"outcomeMechanism\":\"ORDINARY_ATTACK\"}}}", JsonObject.class));
 		AttributionConstraint guard = AttributionConstraint.builder().key("fixture:ordinary").familyKey("wiki:Unseen_body#infobox-1")
 			.maximum(4).qualification("HARD_BOUND").mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT").worldMode("NORMAL")
 			.requiredObservations(Arrays.asList("QUALIFIED_NPC_VARIANT", "NORMAL_WORLD_CONTEXT", "NO_MODEL_OVERRIDES_OBSERVED", "ORDINARY_ATTACK_COMPONENT")).build();
-		Field index = CombatCatalog.class.getDeclaredField("attributionConstraintIndex"); index.setAccessible(true); index.set(catalog, Collections.singletonMap(ID, Collections.singletonList(guard)));
+		Field index = LegacyCombatCatalog.class.getDeclaredField("attributionConstraintIndex"); index.setAccessible(true); index.set(LegacyCombatCatalog.from(catalog), Collections.singletonMap(ID, Collections.singletonList(guard)));
 		DamageMap map = new DamageMap(); Field catalogField = DamageMap.class.getDeclaredField("catalog"); catalogField.setAccessible(true); catalogField.set(map, catalog);
 		Map<String, Object> ordinary = new LinkedHashMap<>(); ordinary.put("kind", "NPC_ANIMATION_CORRELATION"); ordinary.put("name", "Unseen body");
 		ordinary.put("npcId", ID); ordinary.put("actorRef", REF); ordinary.put("animationId", 777777);
@@ -204,7 +205,7 @@ public class ObservedNpcContactHintResolverTest
 		{
 			ObservedMechanismResolver.Result result=resolver.resolve(hit().toBuilder().impactX(point[0]).impactY(point[1]).build());
 			assertEquals(1,result.getContributions().size()); assertTrue(result.isUnidentifiedPossible());
-			SourceEvidenceResolver.Hypothesis hypothesis=result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hypothesis=result.getContributions().get(0).getHypothesis();
 			assertEquals("NPC_PROXIMITY_ASSOCIATION",hypothesis.getMechanism()); assertNull(hypothesis.getConstraints());
 			assertTrue(hypothesis.isCausalAssociationOnly()); assertEquals("Unseen body",hypothesis.getCandidate().getName());
 		}
@@ -229,7 +230,7 @@ public class ObservedNpcContactHintResolverTest
 			ObservedMechanismResolver.Result result = resolver.resolve(hit().toBuilder().impactX(point[0]).impactY(point[1]).build());
 			assertEquals(1, result.getContributions().size());
 			assertTrue(result.isUnidentifiedPossible());
-			SourceEvidenceResolver.Hypothesis hint = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hint = result.getContributions().get(0).getHypothesis();
 			assertEquals("NPC_PROXIMITY_ASSOCIATION", hint.getMechanism());
 			assertTrue(hint.isCausalAssociationOnly());
 			assertEquals("POSSIBLE", hint.getCandidate().getStrength());
@@ -295,7 +296,7 @@ public class ObservedNpcContactHintResolverTest
 	@Test
 	public void everyCompiledCurrentBodyRuleReachesTheSameRuntimeAdapter() throws Exception
 	{
-		CombatCatalog catalog = DamageMap.load(GSON).catalog(); JsonObject namespace = catalog.observedNpcContactHints();
+		CombatCatalog catalog = LegacyCombatCatalog.isolate(DamageMap.load(GSON)).catalog(); JsonObject namespace = LegacyCombatCatalog.from(catalog).observedNpcContactHints();
 		assertEquals(17, namespace.getAsJsonArray("rules").size()); int ids = 0;
 		for (JsonElement value : namespace.getAsJsonArray("rules"))
 		{

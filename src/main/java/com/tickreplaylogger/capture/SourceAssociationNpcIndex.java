@@ -23,14 +23,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /** Small capture eligibility index. Presence never establishes a damage source or activation. */
 public final class SourceAssociationNpcIndex
@@ -62,15 +58,16 @@ public final class SourceAssociationNpcIndex
 
 	public static SourceAssociationNpcIndex load(Gson gson)
 	{
-		try (InputStream input = SourceAssociationNpcIndex.class.getResourceAsStream(
-			"/com/tickreplaylogger/source-association-npc-ids.json"))
+		try (InputStream input = SourceAssociationNpcIndex.class
+			.getResourceAsStream("/com/tickreplaylogger/source-association-npc-ids.json"))
 		{
 			if (input != null)
 			{
 				byte[] bytes = input.readNBytes(65537);
 				if (bytes.length <= 65536)
 				{
-					return new SourceAssociationNpcIndex(gson.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonObject.class));
+					return new SourceAssociationNpcIndex(
+						gson.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonObject.class));
 				}
 			}
 		}

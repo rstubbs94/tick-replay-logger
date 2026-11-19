@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.Map;
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
@@ -50,8 +51,8 @@ public class ContextBlock
 	private final Integer scaledTeamSize;
 	private final String room;
 	private final Integer templateRegionId;
-	private final java.util.Map<String, Integer> observedVariables;
-	private final java.util.Map<String, String> evidence;
+	private final Map<String, Integer> observedVariables;
+	private final Map<String, String> evidence;
 	private final List<ObservedResource> resources;
 	private final String bossPhase;
 	private final Integer bossHpRatio;

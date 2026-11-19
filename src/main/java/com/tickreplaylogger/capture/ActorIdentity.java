@@ -25,10 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import java.util.IdentityHashMap;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 
 /** Session-local lifetime identity; names and cache slots are not actor lifetimes. */
 public final class ActorIdentity
@@ -45,9 +42,13 @@ public final class ActorIdentity
 	public String ref(Actor actor, Player local)
 	{
 		if (actor == null)
+		{
 			return null;
+		}
 		if (actor == local)
+		{
 			return "player";
+		}
 		return identities.computeIfAbsent(actor, value ->
 		{
 			String scope = "unknown";
@@ -55,7 +56,9 @@ public final class ActorIdentity
 			{
 				WorldView view = value.getWorldView();
 				if (view != null)
+				{
 					scope = String.valueOf(view.getId());
+				}
 			}
 			catch (RuntimeException unavailable)
 			{
@@ -65,9 +68,13 @@ public final class ActorIdentity
 			try
 			{
 				if (value instanceof NPC)
+				{
 					slot = "npc:" + ((NPC) value).getIndex();
+				}
 				else if (value instanceof Player)
+				{
 					slot = "otherplayer:" + ((Player) value).getId();
+				}
 			}
 			catch (RuntimeException unavailable)
 			{
@@ -80,9 +87,13 @@ public final class ActorIdentity
 	public String observedRef(Actor actor, Player local, Integer viewId, Integer slot)
 	{
 		if (actor == null)
+		{
 			return null;
+		}
 		if (actor == local)
+		{
 			return "player";
+		}
 		return identities.computeIfAbsent(actor, value ->
 		{
 			String kind = value instanceof NPC ? "npc" : value instanceof Player ? "otherplayer" : "actor";

@@ -25,9 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.ObservedVarbitLayout;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
 import net.runelite.api.Client;
 import net.runelite.api.VarbitComposition;
@@ -55,13 +53,17 @@ public final class VarbitLayoutCapture
 	public static ObservedVarbitLayout capture(Client client, int id)
 	{
 		if (id < 0)
+		{
 			return null;
+		}
 		Map<String, String> issues = new LinkedHashMap<>();
 		VarbitComposition composition = read("composition", () -> client.getVarbit(id), issues);
 		if (composition == null)
 		{
 			if (issues.isEmpty())
+			{
 				issues.put("composition", "UNAVAILABLE");
+			}
 			return ObservedVarbitLayout.builder().varbitId(id).layoutKnown(false)
 				.evidence("UNAVAILABLE_CLIENT_VARBIT_COMPOSITION")
 				.observationIssues(Collections.unmodifiableMap(issues)).build();
@@ -72,7 +74,9 @@ public final class VarbitLayoutCapture
 		boolean valid = index != null && least != null && most != null && index >= 0 && index < 32768 && least >= 0
 			&& least <= most && most < 32;
 		if (index != null && least != null && most != null && !valid)
+		{
 			issues.put("layout", "OUT_OF_SUPPORTED_RANGE");
+		}
 		return ObservedVarbitLayout.builder().varbitId(id).varpIndex(index).leastSignificantBit(least)
 			.mostSignificantBit(most).layoutKnown(valid).evidence("CLIENT_VARBIT_COMPOSITION")
 			.observationIssues(issues.isEmpty() ? null : Collections.unmodifiableMap(issues)).build();

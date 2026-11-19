@@ -24,6 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.List;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 
@@ -46,9 +48,9 @@ public class NpcState
 	private final NpcDefinitionStateReference definitionStateReference;
 	private final Boolean definitionHasTransforms;
 	private final int[] definitionTransformIds;
-	private final java.util.Map<String, String> observationIssues;
-	private final java.util.List<String> variantCandidates;
-	private final java.util.List<String> researchReferenceKeys;
+	private final Map<String, String> observationIssues;
+	private final List<String> variantCandidates;
+	private final List<String> researchReferenceKeys;
 	private final String actionEvidence;
 	private final String attackOnsetEvidence; // observed animation change/reset; attack/cooldown interpretation remains estimated
 	private final String observedPhase;
@@ -60,7 +62,7 @@ public class NpcState
 	private final Boolean worldPositionKnown;
 	private final Boolean planeKnown;
 	// Direct API occupied area; this is not a server damage footprint or activation claim.
-	private final java.util.Map<String, Integer> worldArea;
+	private final Map<String, Integer> worldArea;
 	private final Boolean worldAreaKnown;
 	private final Boolean worldAreaWorldViewKnown;
 	private final Integer worldAreaWorldViewId;

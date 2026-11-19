@@ -26,9 +26,7 @@ package com.tickreplaylogger.ui;
 
 import com.tickreplaylogger.model.DamageEvent;
 import com.tickreplaylogger.util.DisplayFormat;
-import java.awt.Image;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.io.IOException;
@@ -128,17 +126,23 @@ public final class CombatIcons
 		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img ->
 		{
 			if (img != null)
+			{
 				melee.set(scale(img));
+			}
 		});
 		spriteManager.getSpriteAsync(SpriteID.SKILL_RANGED, 0, img ->
 		{
 			if (img != null)
+			{
 				ranged.set(scale(img));
+			}
 		});
 		spriteManager.getSpriteAsync(SpriteID.SKILL_MAGIC, 0, img ->
 		{
 			if (img != null)
+			{
 				magic.set(scale(img));
+			}
 		});
 	}
 
@@ -147,7 +151,9 @@ public final class CombatIcons
 	{
 		DamageEvent.DamageType type = DisplayFormat.displayDamageType(damage);
 		if (type == DamageEvent.DamageType.TYPELESS)
+		{
 			return typeless;
+		}
 		return iconFor(type);
 	}
 
@@ -155,7 +161,9 @@ public final class CombatIcons
 	public static ImageIcon iconFor(DamageEvent.DamageType type)
 	{
 		if (type == null || type == DamageEvent.DamageType.UNKNOWN)
+		{
 			return unknown;
+		}
 		if (type != null)
 		{
 			switch (type)
@@ -170,21 +178,27 @@ public final class CombatIcons
 			{
 				ImageIcon i = melee.get();
 				if (i != null)
+				{
 					return i;
+				}
 				break;
 			}
 			case RANGED:
 			{
 				ImageIcon i = ranged.get();
 				if (i != null)
+				{
 					return i;
+				}
 				break;
 			}
 			case MAGIC:
 			{
 				ImageIcon i = magic.get();
 				if (i != null)
+				{
 					return i;
+				}
 				break;
 			}
 			default:

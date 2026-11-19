@@ -59,7 +59,9 @@ public class DamageEvent
 		public static DamageType fromReference(String value)
 		{
 			if (value == null)
+			{
 				return UNKNOWN;
+			}
 			try
 			{
 				return valueOf(value.toUpperCase(java.util.Locale.ROOT));

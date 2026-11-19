@@ -24,18 +24,12 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
-import java.util.Map;
-import java.util.LinkedHashMap;
-import java.util.Collections;
 import java.util.function.Supplier;
 import com.tickreplaylogger.model.world.PrayerState;
 import lombok.Getter;
-import net.runelite.api.Client;
-import net.runelite.api.HeadIcon;
-import net.runelite.api.Prayer;
+import net.runelite.api.*;
 
 /** Preserve raw flags and visible overhead separately; never choose between conflicting flags by enum order. */
 @Getter
@@ -78,7 +72,9 @@ public final class PrayerObservation
 			icon = head == null ? null : head.name();
 		}
 		else
+		{
 			observationIssues.put("overheadIcon", "LOCAL_PLAYER_UNAVAILABLE");
+		}
 		derive();
 	}
 
@@ -96,7 +92,9 @@ public final class PrayerObservation
 			sample.icon = (String) value;
 		}
 		else
+		{
 			sample.observationIssues.put("overheadIcon", "CALLBACK_ICON_UNAVAILABLE");
+		}
 		sample.derive();
 		return sample;
 	}
@@ -119,7 +117,9 @@ public final class PrayerObservation
 		{
 			Boolean value = read("prayerFlags." + prayer.name(), () -> client.isPrayerActive(prayer));
 			if (value != null)
+			{
 				flags.put(prayer.name(), value);
+			}
 		}
 	}
 
@@ -128,14 +128,24 @@ public final class PrayerObservation
 		flagsComplete = flags.size() == Prayer.values().length;
 		available = !flags.isEmpty() || iconKnown;
 		for (Map.Entry<String, Boolean> flag : flags.entrySet())
+		{
 			if (Boolean.TRUE.equals(flag.getValue()))
+			{
 				reported.add(flag.getKey());
+			}
+		}
 		List<String> overheadFlags = new ArrayList<>();
 		for (String prayer : reported)
+		{
 			if (OVERHEADS.contains(prayer))
+			{
 				overheadFlags.add(prayer);
+			}
 			else
+			{
 				active.add(prayer);
+			}
+		}
 		String visible = prayerForIconName(icon);
 		boolean unmapped = iconKnown && icon != null && visible == null;
 		conflict = overheadFlags.size() > 1 || visible != null && (Boolean.FALSE.equals(flags.get(visible))
@@ -149,7 +159,9 @@ public final class PrayerObservation
 					: !available ? "UNAVAILABLE"
 						: !flagsComplete ? "PARTIAL_PRAYER_FLAGS" : overhead != null ? "PRAYER_FLAGS" : "NONE";
 		if (overhead != null)
+		{
 			active.add(overhead);
+		}
 	}
 
 	public List<String> getReported()
@@ -175,6 +187,7 @@ public final class PrayerObservation
 	public PrayerState toState()
 	{
 		if (state == null)
+		{
 			state = PrayerState.builder().version(1).flags(Collections.unmodifiableMap(new LinkedHashMap<>(flags)))
 				.expectedFlags(Prayer.values().length).flagsComplete(flagsComplete)
 				.reportedPrayers(Collections.unmodifiableList(new ArrayList<>(reported)))
@@ -184,6 +197,7 @@ public final class PrayerObservation
 				.observationIssues(observationIssues.isEmpty() ? null
 					: Collections.unmodifiableMap(new LinkedHashMap<>(observationIssues)))
 				.build();
+		}
 		return state;
 	}
 
@@ -208,7 +222,9 @@ public final class PrayerObservation
 	private static String prayerForIconName(String icon)
 	{
 		if (icon == null)
+		{
 			return null;
+		}
 		switch (icon)
 		{
 		case "MELEE":

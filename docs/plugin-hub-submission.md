@@ -16,17 +16,22 @@ copy work into the background to reduce pauses. The existing Live View, manual
 snapshots and local playback remain available. Recordings stay local and can be
 copied manually.
 
-## Validation
+## Validation status
 
-- Java 11, RuneLite 1.13.6: complete rerun of 1,049 tests, zero failures, errors
-  or skips, including storage recovery, callback consistency, capture, replay
-  presentation and source attribution.
-- Includes 109 shared resolver cases and 528 qualification cases covering all
-  106 bundled source bounds. These verify rule interpretation, not an encounter
-  accuracy percentage.
-- Production JAR preflight against the current official restricted-API rules:
-  zero findings, with no packaged client or test classes. This is a local
-  preflight; official Hub review remains pending.
+The earlier candidate passed 1,049 tests against RuneLite 1.13.6 and a local
+restricted-API preflight. Those results describe that candidate, before the
+standard-build and resolver consolidation changes.
+
+The current candidate targets RuneLite 1.13.7. Its final full test run,
+standard-built JAR, restricted-API scan and review-size result are pending.
+Replace this status with the results from the exact final candidate before
+updating the Hub PR.
+
+The checks include 109 shared resolver cases and 528 qualification cases
+covering all 106 bundled source bounds. These verify rule interpretation,
+not an encounter accuracy percentage. The current reference manifest has
+also been checked against the supported status, graphic and mode bindings;
+this does not establish compiler provenance.
 
 ## Reviewer notes
 
@@ -37,6 +42,8 @@ copied manually.
 - Optional world ping uses RuneLite's existing WorldService and Ping utility.
   The most recent successful sample is recorded alongside each tick.
 - The Hub update changes the commit marker for the existing plugin.
+- The plugin uses the Hub's standard build template. Local development-client
+  packaging is separate from the submitted production JAR.
 
 ## Guidance checked
 

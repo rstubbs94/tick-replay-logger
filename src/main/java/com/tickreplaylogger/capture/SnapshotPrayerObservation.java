@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.api.Prayer;
 
@@ -45,7 +43,9 @@ final class SnapshotPrayerObservation
 		{
 			Boolean value = sample.read("prayerFlags." + prayer.name(), () -> client.isPrayerActive(prayer));
 			if (value != null)
+			{
 				flags.put(prayer.name(), value);
+			}
 		}
 		PrayerObservation observation = PrayerObservation.fromReadings(flags, sample.icon,
 			!sample.issues.containsKey("overheadIcon"));

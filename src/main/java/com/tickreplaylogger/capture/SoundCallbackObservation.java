@@ -24,15 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.AreaSoundEffectPlayed;
@@ -94,7 +89,9 @@ public final class SoundCallbackObservation
 				details.put("referenceEvidence", "EXISTING_REFERENCE_ONLY_NO_NEW_LIFETIME");
 				details.put("name", read(issues, "source.name", actor::getName));
 				if (actor instanceof NPC)
+				{
 					details.put("reportedNpcId", read(issues, "source.reportedNpcId", ((NPC) actor)::getId));
+				}
 				WorldView view = read(issues, "source.worldView", actor::getWorldView);
 				details.put("worldViewId", view == null ? null : read(issues, "source.worldViewId", view::getId));
 				WorldPoint world = read(issues, "source.worldPosition", actor::getWorldLocation);
@@ -107,10 +104,14 @@ public final class SoundCallbackObservation
 				result.put("reportedSource", Collections.unmodifiableMap(details));
 			}
 			else if (!withheld)
+			{
 				result.put("sourceContextUnavailable", true);
+			}
 		}
 		if (!issues.isEmpty())
+		{
 			result.put("observationIssues", Collections.unmodifiableMap(issues));
+		}
 		return Collections.unmodifiableMap(result);
 	}
 

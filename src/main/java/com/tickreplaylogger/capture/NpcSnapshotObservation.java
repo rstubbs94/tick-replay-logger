@@ -24,18 +24,12 @@
  */
 package com.tickreplaylogger.capture;
 
+import static net.runelite.client.util.Text.removeTags;
 import com.tickreplaylogger.model.world.NpcState;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.NpcOverrides;
-import net.runelite.api.WorldView;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldArea;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
 
 /** Independent reads of one reported NPC; a failed field cannot erase another observation. */
 final class NpcSnapshotObservation
@@ -56,7 +50,9 @@ final class NpcSnapshotObservation
 	{
 		actor = npc;
 		if (worldIssue != null)
+		{
 			issues.put("worldPosition", worldIssue);
+		}
 		index = read("sceneId", npc::getIndex);
 		NpcDefinitionObservation definition = NpcDefinitionObservation.capture(npc, issues, "");
 		baseId = definition.getBaseId();
@@ -94,12 +90,14 @@ final class NpcSnapshotObservation
 		ActorGraphicsObservation observedGraphics = new ActorGraphicsObservation(npc);
 		com.tickreplaylogger.model.world.ActorGraphicsState graphicsState = observedGraphics.getState();
 		if (graphicsState.getObservationIssues() != null)
+		{
 			issues.putAll(graphicsState.getObservationIssues());
+		}
 		state = NpcState.builder().sceneId(index).npcId(id).baseNpcId(baseId).worldViewId(viewId)
 			.definitionName(definitionName).definitionEvidence(evidence).definitionHasTransforms(hasTransforms)
-			.definitionTransformIds(transforms).name(name == null ? null : name.replaceAll("<[^>]*>", "").trim())
-			.combatLevel(level).localPositionKnown(local != null).worldPositionKnown(world != null)
-			.planeKnown(world != null).localX(local == null ? 0 : local.getX()).localY(local == null ? 0 : local.getY())
+			.definitionTransformIds(transforms).name(name == null ? null : removeTags(name).trim()).combatLevel(level)
+			.localPositionKnown(local != null).worldPositionKnown(world != null).planeKnown(world != null)
+			.localX(local == null ? 0 : local.getX()).localY(local == null ? 0 : local.getY())
 			.worldX(world == null ? 0 : world.getX()).worldY(world == null ? 0 : world.getY())
 			.plane(world == null ? 0 : world.getPlane()).size(size)
 			.modelOverridesPresent(issues.containsKey("modelOverrides") ? null : overrides != null)
@@ -117,11 +115,13 @@ final class NpcSnapshotObservation
 	{
 		boolean viewKnown = view != null && viewId != null && !issues.containsKey("worldView")
 			&& !issues.containsKey("worldViewId");
-		state.worldAreaKnown(false).worldAreaWorldViewKnown(viewKnown)
-			.worldAreaWorldViewId(viewKnown ? viewId : null).worldAreaEvidence("UNAVAILABLE");
+		state.worldAreaKnown(false).worldAreaWorldViewKnown(viewKnown).worldAreaWorldViewId(viewKnown ? viewId : null)
+			.worldAreaEvidence("UNAVAILABLE");
 		WorldArea area = read("worldArea", actor::getWorldArea);
 		if (area == null)
+		{
 			return;
+		}
 		try
 		{
 			if (area.getWidth() <= 0 || area.getHeight() <= 0)

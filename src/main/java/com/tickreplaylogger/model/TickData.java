@@ -26,10 +26,8 @@ package com.tickreplaylogger.model;
 
 import lombok.Builder;
 import lombok.Data;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.LinkedHashMap;
 
 /**
  * Represents all data captured for a single game tick.
@@ -127,9 +125,15 @@ public class TickData
 		int index = effectNotes == null ? 0 : effectNotes.size();
 		addEffectNote(note);
 		if (observationSequence == null || observationSequence <= 0 || index > 4095
-			|| effectNoteSourceSequences != null && effectNoteSourceSequences.size() >= 256) return;
+			|| effectNoteSourceSequences != null && effectNoteSourceSequences.size() >= 256)
+		{
+			return;
+		}
 		if (!(effectNoteSourceSequences instanceof LinkedHashMap))
-			effectNoteSourceSequences = new LinkedHashMap<>(effectNoteSourceSequences == null ? java.util.Collections.emptyMap() : effectNoteSourceSequences);
+		{
+			effectNoteSourceSequences = new LinkedHashMap<>(
+				effectNoteSourceSequences == null ? Collections.emptyMap() : effectNoteSourceSequences);
+		}
 		effectNoteSourceSequences.put(index, observationSequence);
 	}
 }

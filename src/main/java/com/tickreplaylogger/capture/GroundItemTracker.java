@@ -25,21 +25,11 @@
 package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.GroundItemState;
-import net.runelite.api.Client;
-import net.runelite.api.Tile;
-import net.runelite.api.TileItem;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import java.util.function.Supplier;
 
 /** Independent per-native-plane channel, reconciled from exposed tiles; no hazard or ownership attribution. */
@@ -86,14 +76,18 @@ public final class GroundItemTracker
 	public GroundItemState observation(Tile tile, TileItem item, Integer viewId)
 	{
 		if (item == null)
+		{
 			return null;
+		}
 		long key = identities.id(item);
 		List<String> issues = new ArrayList<>();
 		LocalPoint local = read(tile::getLocalLocation, "position", issues);
 		WorldPoint world = read(tile::getWorldLocation, "worldPosition", issues);
 		Integer plane = read(tile::getPlane, "plane", issues);
 		if (plane == null)
+		{
 			throw new IllegalStateException("Item plane unavailable");
+		}
 		GroundItemState state = GroundItemState.builder().itemKey(key).id(read(item::getId, "id", issues))
 			.quantity(read(item::getQuantity, "quantity", issues))
 			.ownership(read(item::getOwnership, "ownership", issues))
@@ -122,7 +116,9 @@ public final class GroundItemTracker
 		SceneCaptureTraversal traversal)
 	{
 		if (traversal == null || !traversal.matches(client, view))
+		{
 			throw new IllegalArgumentException("Mismatched scene traversal");
+		}
 		beginScope(key);
 		failures = 0;
 		dropped = 0;
@@ -135,7 +131,9 @@ public final class GroundItemTracker
 		}
 		available = traversal.planeArrayAvailable(plane);
 		if (!available)
+		{
 			failures++;
+		}
 		List<Tile> matching = traversal.tiles(plane);
 		failures += traversal.tileFailures();
 		Set<TileItem> found = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -150,13 +148,17 @@ public final class GroundItemTracker
 				if (items == null)
 				{
 					if (tile.getItemLayer() != null)
+					{
 						failures++;
+					}
 					continue;
 				} // No exposed item layer is an absence witness; a populated unreadable layer is not empty.
 				for (TileItem item : items)
 				{
 					if (item == null || found.contains(item))
+					{
 						continue;
+					}
 					if (found.size() >= MAX_ITEMS)
 					{
 						dropped++;
@@ -167,7 +169,9 @@ public final class GroundItemTracker
 					{
 						GroundItemState state = observation(tile, item, view == null ? null : view.getId());
 						if (state != null)
+						{
 							out.add(state);
+						}
 					}
 					catch (RuntimeException error)
 					{
@@ -181,17 +185,25 @@ public final class GroundItemTracker
 			}
 		}
 		if (!available)
+		{
 			return null;
+		}
 		if (failures == 0 && dropped == 0)
 		{
 			for (TileItem old : lastComplete)
+			{
 				if (!found.contains(old))
+				{
 					identities.invalidate(old);
+				}
+			}
 			lastComplete = found;
 		}
 		out.sort(Comparator.comparingLong(GroundItemState::getItemKey));
 		if (previous != null && previous.equals(out))
+		{
 			return previous;
+		}
 		previous = Collections.unmodifiableList(out);
 		return previous;
 	}

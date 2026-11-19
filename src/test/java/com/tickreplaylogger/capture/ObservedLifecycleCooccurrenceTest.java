@@ -108,12 +108,12 @@ public class ObservedLifecycleCooccurrenceTest
 		{
 			ObservedMechanismResolver.Result result = resolve(namespace(rule(type)), hit(), Arrays.asList(hp(hit()), lifecycle(type, 5, sequence == 49 ? 99 : 101, sequence, source())));
 			assertEquals(1, result.getContributions().size());
-			SourceEvidenceResolver.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
 			assertTrue(hypothesis.isCausalAssociationOnly()); assertNull(hypothesis.getConstraints());
 			assertEquals("TERMINAL_AREA", hypothesis.getMechanism()); assertEquals("heldout:terminal", hypothesis.getDamageComponent());
 			assertTrue(hypothesis.getCandidate().getEvidence().toString().contains("sequence=" + sequence));
 			assertTrue(hypothesis.getCandidate().getEvidence().toString().contains("not necessarily at HP callback"));
-			SourceResolution resolution = SourceEvidenceResolver.resolve(Collections.singletonList(hypothesis), 8, false, "fixture");
+			SourceResolution resolution = LegacyConstraintOracle.resolve(Collections.singletonList(hypothesis), 8, false, "fixture");
 			assertEquals("ALTERNATIVES", resolution.getStatus()); assertTrue(resolution.isUnidentifiedPossible());
 		}
 	}
@@ -209,18 +209,18 @@ public class ObservedLifecycleCooccurrenceTest
 	@Test
 	public void independentTerminalComponentSurvivesOrdinaryExclusionAndPreservesRival()
 	{
-		SourceEvidenceResolver.Hypothesis terminal = resolve(namespace(rule("ACTOR_DEATH")), hit(),
+		LegacyConstraintOracle.Hypothesis terminal = resolve(namespace(rule("ACTOR_DEATH")), hit(),
 			Arrays.asList(hp(hit()), lifecycle("ACTOR_DEATH", 5, 101, 51, source()))).getContributions().get(0).getHypothesis();
 		AttributionConstraint bound = AttributionConstraint.builder().key("ordinary-only-five").maximum(5).qualification("HARD_BOUND")
 			.mechanism("ORDINARY_ATTACK").damageComponent("SINGLE_HIT").worldMode("NORMAL")
 			.requiredObservations(Collections.singletonList("ORDINARY_ATTACK_COMPONENT")).build();
-		SourceEvidenceResolver.Hypothesis ordinary = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis ordinary = LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(terminal.getCandidate().toBuilder().key("ordinary").build()).mechanism("ORDINARY_ATTACK")
 			.damageComponent("SINGLE_HIT").worldMode("NORMAL").constraints(Collections.singletonList(bound))
 			.observations(Collections.singletonMap("ORDINARY_ATTACK_COMPONENT", true)).build();
-		SourceEvidenceResolver.Hypothesis rival = SourceEvidenceResolver.Hypothesis.builder().causalAssociationOnly(true)
+		LegacyConstraintOracle.Hypothesis rival = LegacyConstraintOracle.Hypothesis.builder().causalAssociationOnly(true)
 			.candidate(terminal.getCandidate().toBuilder().key("rival").actorRef("npc:another-lifetime").name("Rival").build()).build();
-		SourceResolution result = SourceEvidenceResolver.resolve(Arrays.asList(ordinary, terminal, rival), 8, false, "fixture");
+		SourceResolution result = LegacyConstraintOracle.resolve(Arrays.asList(ordinary, terminal, rival), 8, false, "fixture");
 		assertTrue(result.isUnidentifiedPossible()); assertEquals("ALTERNATIVES", result.getStatus());
 		assertTrue(result.getCandidates().stream().anyMatch(c -> "npc:original-lifetime".equals(c.getActorRef())));
 		assertTrue(result.getCandidates().stream().anyMatch(c -> "npc:another-lifetime".equals(c.getActorRef())));
@@ -242,7 +242,7 @@ public class ObservedLifecycleCooccurrenceTest
 	@Test
 	public void completedTickTailDoesNotNeedTheLargeRetainedJournal()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, GSON);
+		LegacyWorldSnapshotRecorder recorder = new LegacyWorldSnapshotRecorder(100, GSON);
 		for (int i = 0; i < 20000; i++) recorder.addObservation(ObservedEvent.builder().tick(4).sequence(i + 1L).type("UNRELATED").build());
 		DamageRecord hit = hit().toBuilder().observationSequence(20050L).build();
 		recorder.addObservation(hp(hit)); recorder.addObservation(lifecycle("ACTOR_DEATH", 5, 101, 20051, source()));
@@ -288,9 +288,9 @@ public class ObservedLifecycleCooccurrenceTest
 		ObservedMechanismResolver.Result result = new ObservedActorMechanismResolver(MechanismRules.load(namespace(rule("ACTOR_DEATH"))),
 			Collections.emptyList(), Collections.singletonList(hp(hit())), gaps).resolve(hit());
 		assertTrue(result.getContributions().isEmpty()); assertTrue(result.isUnidentifiedPossible());
-		SourceEvidenceResolver.Hypothesis rival = SourceEvidenceResolver.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
+		LegacyConstraintOracle.Hypothesis rival = LegacyConstraintOracle.Hypothesis.builder().candidate(SourceResolution.Candidate.builder()
 			.key("rival").actorRef("npc:rival").name("Rival").sceneKey("room").worldViewId(0).plane(0).strength("STRONG").build()).build();
-		SourceResolution resolution = SourceEvidenceResolver.resolve(Collections.singletonList(rival), 8, result.isUnidentifiedPossible(), "fixture");
+		SourceResolution resolution = LegacyConstraintOracle.resolve(Collections.singletonList(rival), 8, result.isUnidentifiedPossible(), "fixture");
 		assertTrue(resolution.isUnidentifiedPossible()); assertEquals("ALTERNATIVES", resolution.getStatus());
 		assertEquals("Rival", resolution.getCandidates().get(0).getName());
 	}
@@ -319,17 +319,17 @@ public class ObservedLifecycleCooccurrenceTest
 			DamageRecord hit = hit().toBuilder().amount(amount).build(); JsonObject rule = rule("ACTOR_DEATH"); rule.addProperty("perHitMaximum", 3);
 			ObservedMechanismResolver.Result actual = resolve(namespace(rule), hit, Arrays.asList(hp(hit), lifecycle("ACTOR_DEATH", 5, 101, 51, source())));
 			assertEquals(1, actual.getContributions().size());
-			SourceEvidenceResolver.Hypothesis terminal = actual.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis terminal = actual.getContributions().get(0).getHypothesis();
 			assertEquals(Integer.valueOf(3), terminal.getConstraints().get(0).getMaximum());
-			SourceResolution result = SourceEvidenceResolver.resolve(Collections.singletonList(terminal), amount, actual.isUnidentifiedPossible(), "fixture");
+			SourceResolution result = LegacyConstraintOracle.resolve(Collections.singletonList(terminal), amount, actual.isUnidentifiedPossible(), "fixture");
 			if (amount == 3) { assertEquals(1, result.getCandidates().size()); assertTrue(result.isUnidentifiedPossible()); }
 			else
 			{
 				assertTrue(result.getCandidates().isEmpty());
 				assertTrue(result.getExcludedCandidates().get(0).getReasons().toString().contains("MAXIMUM_EXCEEDED:lifecycle-per-callback:"));
-				SourceEvidenceResolver.Hypothesis rival = SourceEvidenceResolver.Hypothesis.builder().candidate(terminal.getCandidate().toBuilder()
+				LegacyConstraintOracle.Hypothesis rival = LegacyConstraintOracle.Hypothesis.builder().candidate(terminal.getCandidate().toBuilder()
 					.key("rival").name("Rival").actorRef("npc:rival").build()).build();
-				SourceResolution withRival = SourceEvidenceResolver.resolve(Arrays.asList(terminal, rival), amount, actual.isUnidentifiedPossible(), "fixture");
+				SourceResolution withRival = LegacyConstraintOracle.resolve(Arrays.asList(terminal, rival), amount, actual.isUnidentifiedPossible(), "fixture");
 				assertEquals("IDENTIFIED", withRival.getStatus()); assertFalse(withRival.isUnidentifiedPossible());
 				assertEquals("Rival", withRival.getCandidates().get(0).getName());
 			}

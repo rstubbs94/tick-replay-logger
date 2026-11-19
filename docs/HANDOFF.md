@@ -1,5 +1,25 @@
 # Current handoff
 
+## Current status - consolidation in progress, 19 November 2026
+
+PR #20986 is open for public source `bf19b988b53d3ec861d732671da35e1e7cdb76aa`,
+whose tree matches local validated candidate `1505ed1`. The build passed, but the
+maintainer requested `build=standard` and flagged 302,079 review tokens against a
+200,000 limit. Passing local checks did not establish review readiness.
+
+The [consolidation plan](resolver-consolidation-plan.md) defines the target,
+no-loss contract, staged migration and release gates. It replaces overlapping
+attribution paths with one data-driven interpreter while preserving standalone
+capture, Live View, snapshots, replay and exports. Merely changing the build flag
+would disable supported interpretations and is not an acceptable correction.
+Implementation is active in the isolated worktree `C:/Dev/tick-replay-refactor`,
+branch `refactor/standard-single-resolver-20261119`. The frozen public candidate
+and backup remain unchanged. The standard-build migration passed its isolated
+package checks. Production now uses the shared resolver path; unused legacy
+evaluators and reference resources remain in the test suite as comparison tools.
+Behaviour regressions and the review-size gate remain open. Older readiness
+notes below describe the previous candidate and do not validate this refactor.
+
 ## Release candidate - 19 November 2026
 
 The Phase 1 update is prepared locally for Plugin Hub submission. The public

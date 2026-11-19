@@ -169,14 +169,14 @@ public class ItemInputOutcomeCompatibilityTest
 	@Test public void independentPriorExclusionsAndEvidenceSurviveCompatibleUnknownAndMismatchingSignatures() throws Exception
 	{
 		Fixture fixture = new Fixture();
-		Method method = RecordedSourceResolver.class.getDeclaredMethod("outcomeCompatibility", SourceEvidenceResolver.Hypothesis.class,
+		Method method = RecordedSourceResolver.class.getDeclaredMethod("outcomeCompatibility", LegacyConstraintOracle.Hypothesis.class,
 			DamageRecord.class, String.class, Integer.class, Map.class, String.class, Map.class); method.setAccessible(true);
-		SourceEvidenceResolver.Hypothesis previous = SourceEvidenceResolver.Hypothesis.builder()
+		LegacyConstraintOracle.Hypothesis previous = LegacyConstraintOracle.Hypothesis.builder()
 			.eligibilityEvidence(Collections.singletonList("PRIOR_INDEPENDENT_EVIDENCE"))
 			.eligibilityExclusions(Collections.singletonList("PRIOR_INDEPENDENT_EXCLUSION")).build();
 		for (int type : new int[] { 65, 16, 3 })
 		{
-			SourceEvidenceResolver.Hypothesis result = (SourceEvidenceResolver.Hypothesis) method.invoke(fixture.resolver(), previous,
+			LegacyConstraintOracle.Hypothesis result = (LegacyConstraintOracle.Hypothesis) method.invoke(fixture.resolver(), previous,
 				hit(type, 5), "ITEM", ITEM, Collections.emptyMap(), "SELF_INPUT", fixture.input());
 			assertTrue(result.getEligibilityEvidence().contains("PRIOR_INDEPENDENT_EVIDENCE"));
 			assertTrue(result.getEligibilityExclusions().contains("PRIOR_INDEPENDENT_EXCLUSION"));

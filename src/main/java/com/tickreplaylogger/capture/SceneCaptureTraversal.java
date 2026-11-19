@@ -24,22 +24,9 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import net.runelite.api.Client;
-import net.runelite.api.GameObject;
-import net.runelite.api.Scene;
-import net.runelite.api.Tile;
-import net.runelite.api.TileObject;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 
 /** One current native-view census shared by discovery and capture; never reused across ticks. */
 final class SceneCaptureTraversal
@@ -109,7 +96,9 @@ final class SceneCaptureTraversal
 			return unavailable(client, view, "worldPlanes: scene " + unavailable.getClass().getSimpleName());
 		}
 		if (arrays == null)
+		{
 			return unavailable(client, view, "worldPlanes: scene arrays unavailable");
+		}
 		Set<Tile> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 		java.util.Deque<Tile> pending = new ArrayDeque<>();
 		Map<Integer, Integer> counts = new LinkedHashMap<>();
@@ -117,17 +106,27 @@ final class SceneCaptureTraversal
 		{
 			Tile[][] level = arrays[plane];
 			if (level == null)
+			{
 				continue;
+			}
 			int count = 0;
 			for (Tile[] column : level)
+			{
 				if (column != null)
+				{
 					for (Tile tile : column)
+					{
 						if (tile != null)
 						{
 							count++;
 							if (seen.add(tile))
+							{
 								pending.add(tile);
+							}
 						}
+					}
+				}
+			}
 			counts.put(plane, count);
 		}
 		List<Tile> tiles = new ArrayList<>(seen.size());
@@ -140,7 +139,9 @@ final class SceneCaptureTraversal
 			{
 				Tile bridge = tile.getBridge();
 				if (bridge != null && seen.add(bridge))
+				{
 					pending.addLast(bridge);
+				}
 			}
 			catch (RuntimeException unavailable)
 			{
@@ -179,7 +180,9 @@ final class SceneCaptureTraversal
 			{
 				Tile tile = tiles.get(index);
 				if (tilePlanes[index] != Integer.MIN_VALUE)
+				{
 					recordPlane(tilePlanes[index], "TILE_REPORTED_PLANE");
+				}
 				try
 				{
 					add(seen, "groundObject", tile.getGroundObject());
@@ -208,6 +211,7 @@ final class SceneCaptureTraversal
 				{
 					GameObject[] games = tile.getGameObjects();
 					if (games != null)
+					{
 						for (GameObject game : games)
 						{
 							try
@@ -219,6 +223,7 @@ final class SceneCaptureTraversal
 								objectFailure("game object");
 							}
 						}
+					}
 				}
 				catch (RuntimeException unavailable)
 				{
@@ -238,7 +243,9 @@ final class SceneCaptureTraversal
 	private void add(Set<TileObject> seen, String kind, TileObject object)
 	{
 		if (object == null || seen.contains(object))
+		{
 			return;
+		}
 		int plane = object.getPlane();
 		// Discovery retains a reported plane even when its object cannot join this native view.
 		recordPlane(plane, "OBJECT_REPORTED_PLANE");
@@ -247,7 +254,9 @@ final class SceneCaptureTraversal
 			try
 			{
 				if (object.getWorldView() != view)
+				{
 					return;
+				}
 			}
 			catch (RuntimeException unavailable)
 			{
@@ -262,7 +271,9 @@ final class SceneCaptureTraversal
 	private void recordPlane(int plane, String reason)
 	{
 		if (planeReasons.computeIfAbsent(plane, ignored -> new HashSet<>()).add(reason))
+		{
 			planeEvidence.add(new PlaneEvidence(plane, reason));
+		}
 	}
 
 	List<PlaneEvidence> planeEvidence()
@@ -276,12 +287,22 @@ final class SceneCaptureTraversal
 		objects(0);
 		List<String> issues = new ArrayList<>(planeIssues);
 		if (arrays != null)
+		{
 			for (int i = 0; i < bridgeFailures; i++)
+			{
 				issues.add("worldPlanes: bridge unavailable");
+			}
+		}
 		if (tilePlanes != null)
+		{
 			for (int plane : tilePlanes)
+			{
 				if (plane == Integer.MIN_VALUE)
+				{
 					issues.add("worldPlanes: tile plane unavailable");
+				}
+			}
+		}
 		return issues;
 	}
 
@@ -293,7 +314,9 @@ final class SceneCaptureTraversal
 	private void indexTilePlanes()
 	{
 		if (byPlane != null)
+		{
 			return;
+		}
 		byPlane = new HashMap<>();
 		tileFailures = bridgeFailures;
 		tilePlanes = new int[tiles.size()];

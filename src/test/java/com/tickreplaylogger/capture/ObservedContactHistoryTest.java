@@ -108,9 +108,9 @@ public class ObservedContactHistoryTest
 			assertEquals("CONTACT", result.getContributions().get(0).getHypothesis().getMechanism());
 			assertTrue(result.getContributions().get(0).getHypothesis().getCandidate().getEvidence().get(0).contains("contactTick=3"));
 			assertNull(result.getContributions().get(0).getHypothesis().getCandidate().getActorRef());
-			SourceEvidenceResolver.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
+			LegacyConstraintOracle.Hypothesis hypothesis = result.getContributions().get(0).getHypothesis();
 			assertTrue("Complete history remains recorded co-location, not a cause token", hypothesis.isCausalAssociationOnly());
-			com.tickreplaylogger.model.world.SourceResolution resolution = SourceEvidenceResolver.resolve(
+			com.tickreplaylogger.model.world.SourceResolution resolution = LegacyConstraintOracle.resolve(
 				Collections.singletonList(hypothesis), hit().getAmount(), result.isUnidentifiedPossible(), "fixture");
 			assertEquals("ALTERNATIVES", resolution.getStatus());
 			assertTrue(resolution.isUnidentifiedPossible());
@@ -288,8 +288,9 @@ public class ObservedContactHistoryTest
 	@Test
 	public void historyCannotReviveARejectedContactOutcome() throws Exception
 	{
-		DamageMap map = DamageMap.load(GSON);
+		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
 		Field rootField = CombatCatalog.class.getDeclaredField("root"); rootField.setAccessible(true);
+		rootField.set(map.catalog(), ((JsonObject) rootField.get(map.catalog())).deepCopy());
 		JsonObject root = (JsonObject) rootField.get(map.catalog());
 		JsonObject namespace = new JsonObject(); namespace.addProperty("version", 1);
 		JsonArray declarations = new JsonArray(); declarations.add(declaration("OBJECT", "CONTACT_SAMPLE", 2, 2));
@@ -300,7 +301,7 @@ public class ObservedContactHistoryTest
 		root.getAsJsonObject("damageCompatibility").getAsJsonArray("rules").add(signature);
 		for (String name : Arrays.asList("mechanismRuleIndex", "damageCompatibilityIndex"))
 		{
-			Field field = CombatCatalog.class.getDeclaredField(name); field.setAccessible(true); field.set(map.catalog(), null);
+			Field field = LegacyCombatCatalog.class.getDeclaredField(name); field.setAccessible(true); field.set(LegacyCombatCatalog.from(map.catalog()), null);
 		}
 		SourceResolution result = new RecordedSourceResolver(Arrays.asList(frame(3, 100, Collections.singletonList(surface("OBJECT"))),
 			frame(5, 101, Collections.emptyList())), Collections.emptyList(), map).resolve(hit());

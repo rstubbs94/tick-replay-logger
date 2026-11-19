@@ -93,7 +93,8 @@ actions. Check what you are sharing before sending a recording to someone else.
 Use Java 11. Run `./gradlew clean test jar` to check and build the plugin, or
 `./gradlew run` to start the development client. On Windows, use `.\gradlew.bat`.
 
-The Plugin Hub uses this project's Gradle build to include the build information
-needed by the exporter. `jar` builds the plugin; `shadowJar` builds a separate
-local test client. Use `-PruneLiteVersion=<version>` to build against a specific
-RuneLite version.
+The Plugin Hub builds this plugin with its standard Gradle template. The
+checked-in reference manifest qualifies supported RuneLite versions; it does
+not claim to identify the compiler or build environment. The local `jar` task
+builds the plugin, while `shadowJar` builds a separate development client. Use
+`-PruneLiteVersion=<version>` to check a specific RuneLite version locally.

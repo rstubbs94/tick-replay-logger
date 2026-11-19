@@ -163,7 +163,7 @@ public class SelfInputConstraintsTest
 			if (variant == 2) fixture.rule().getAsJsonObject("contextPredicate").addProperty("unobservedModifier", false);
 			assertFalse(excluded(fixture.resolve(99)));
 		}
-		Fixture fixture = new Fixture(); assertSame(fixture.shared.catalog.selfInputConstraints(), fixture.shared.catalog.selfInputConstraints());
+		Fixture fixture = new Fixture(); assertSame(LegacyCombatCatalog.from(fixture.shared.catalog).selfInputConstraints(), LegacyCombatCatalog.from(fixture.shared.catalog).selfInputConstraints());
 		fixture.rule().addProperty("maximum", 0); assertFalse(excluded(fixture.resolve(4)));
 	}
 }

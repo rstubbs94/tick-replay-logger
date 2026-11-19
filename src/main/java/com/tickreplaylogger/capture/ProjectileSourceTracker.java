@@ -27,16 +27,8 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.ProjectileSourceHistory;
 import com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation;
 import com.tickreplaylogger.model.world.ProjectileState;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.Projectile;
+import java.util.*;
+import net.runelite.api.*;
 
 /** Share immutable source anchors through the rolling window without replacing current samples. */
 public final class ProjectileSourceTracker
@@ -74,7 +66,8 @@ public final class ProjectileSourceTracker
 			return false;
 		}
 		Entry entry = entries.get(projectile);
-		return entry == null || !Objects.equals(entry.first.getObservationId(), observationId) || entry.firstActor == null;
+		return entry == null || !Objects.equals(entry.first.getObservationId(), observationId)
+			|| entry.firstActor == null;
 	}
 
 	public ProjectileState observe(Projectile projectile, ProjectileState state, Actor actor, Player local, long epoch,
@@ -124,8 +117,10 @@ public final class ProjectileSourceTracker
 			.projectileDefinitionChanged(entry.projectileChanged).build();
 		ProjectileState.ProjectileStateBuilder out = state.toBuilder().sourceHistory(history);
 		if (history.isAttributionUnestablished())
+		{
 			out.damageType(null).damageTypeRuleKey(null).damageTypeCatalogId(null)
 				.damageTypeEvidence("PROJECTILE_SOURCE_HISTORY_UNESTABLISHED");
+		}
 		return out.build();
 	}
 
@@ -145,23 +140,29 @@ public final class ProjectileSourceTracker
 	{
 		Map<String, String> issues = new LinkedHashMap<>();
 		if (state.getObservationIssues() != null)
+		{
 			for (Map.Entry<String, String> item : state.getObservationIssues().entrySet())
+			{
 				if (item.getKey().startsWith("source") || item.getKey().equals("projectileId"))
+				{
 					issues.put(item.getKey(), item.getValue());
+				}
+			}
+		}
 		String kind = actor == null ? "NONE"
 			: actor instanceof NPC ? "NPC"
 				: actor == local ? "LOCAL_PLAYER" : actor instanceof Player ? "OTHER_PLAYER" : "ACTOR";
 		return SourceObservation.builder().observationId(state.getObservationId()).projectileId(state.getProjectileId())
 			.observedTick(state.getObservedTick()).observedCycle(state.getObservedCycle()).contextEpoch(epoch)
 			.sampleEvidence(state.getPositionEvidence()).actorKind(kind).sourceRef(state.getSourceRef())
-			.sourceSceneKey(state.getSourceSceneKey())
-			.sourceEvidence(state.getSourceEvidence()).sourceName(state.getSourceName())
-			.sourceObservedName(state.getSourceObservedName()).sourceActorKnown(state.getSourceActorKnown())
-			.sourceNameKnown(state.getSourceNameKnown()).proximitySampleRetained(true)
-			.proximityCandidate(state.getProximitySourceCandidate()).sourceNpcIndex(state.getSourceNpcIndex())
-			.sourceNpcId(state.getSourceNpcId()).sourceBaseNpcId(state.getSourceBaseNpcId())
-			.sourceCombatLevel(state.getSourceCombatLevel()).sourceWorldViewId(state.getSourceWorldViewId())
-			.sourcePlane(state.getSourcePlane()).sourceDefinitionEvidence(state.getSourceDefinitionEvidence())
+			.sourceSceneKey(state.getSourceSceneKey()).sourceEvidence(state.getSourceEvidence())
+			.sourceName(state.getSourceName()).sourceObservedName(state.getSourceObservedName())
+			.sourceActorKnown(state.getSourceActorKnown()).sourceNameKnown(state.getSourceNameKnown())
+			.proximitySampleRetained(true).proximityCandidate(state.getProximitySourceCandidate())
+			.sourceNpcIndex(state.getSourceNpcIndex()).sourceNpcId(state.getSourceNpcId())
+			.sourceBaseNpcId(state.getSourceBaseNpcId()).sourceCombatLevel(state.getSourceCombatLevel())
+			.sourceWorldViewId(state.getSourceWorldViewId()).sourcePlane(state.getSourcePlane())
+			.sourceDefinitionEvidence(state.getSourceDefinitionEvidence())
 			.sourceDefinitionHasTransforms(state.getSourceDefinitionHasTransforms())
 			.sourceNormalWorldContextObserved(state.getSourceNormalWorldContextObserved())
 			.sourceModelOverridesPresent(state.getSourceModelOverridesPresent())

@@ -79,11 +79,11 @@ public class ObservedInventorySourceHintsTest
 
 	@Test public void heldOutItemUsesRealPresenceOnlyAndPreservesOriginalCallbackClockAndScope()
 	{
-		ObservedInventorySourceHints hints=new ObservedInventorySourceHints(namespace(ID));
+		LegacyInventorySourceHints hints=new LegacyInventorySourceHints(namespace(ID));
 		Map<String,Object> observed=hints.capture(client(container(new Item(ID,1))),5,100);
 		List<Map<String,Object>> raw=hints.witnesses(observed,20);
 		assertEquals("OBSERVED",observed.get("status")); assertEquals(1,raw.size());
-		SourceEvidenceResolver.Hypothesis result=hints.hypothesis(raw.get(0),hit()); assertNotNull(result);
+		LegacyConstraintOracle.Hypothesis result=hints.hypothesis(raw.get(0),hit()); assertNotNull(result);
 		assertEquals("ITEM_POSSESSION",result.getMechanism()); assertTrue(result.isCausalAssociationOnly());
 		assertEquals("item-possession-rule:heldout:possession",result.getCandidate().getFamilyKey());
 		assertEquals("native",result.getCandidate().getSceneKey()); assertEquals(Integer.valueOf(0),result.getCandidate().getWorldViewId());
@@ -98,7 +98,7 @@ public class ObservedInventorySourceHintsTest
 
 	@Test public void stackQuantityAndDuplicateSlotsDoNotMultiplyCandidateOrHpAndObservationIsFrozen()
 	{
-		ObservedInventorySourceHints hints=new ObservedInventorySourceHints(namespace(ID)); Item[] actual={new Item(ID,100),new Item(ID,2)};
+		LegacyInventorySourceHints hints=new LegacyInventorySourceHints(namespace(ID)); Item[] actual={new Item(ID,100),new Item(ID,2)};
 		Map<String,Object> observed=hints.capture(client(container(actual)),5,100); actual[0]=new Item(1,999); actual[1]=null;
 		List<Map<String,Object>> raw=hints.witnesses(observed,20); assertEquals(1,raw.size());
 		assertEquals(100,raw.get(0).get("quantity")); assertNotNull(hints.hypothesis(raw.get(0),hit()));
@@ -108,7 +108,7 @@ public class ObservedInventorySourceHintsTest
 
 	@Test public void unavailableIsNotEmptyAndUnknownClockOrIdentityCannotBecomePresence()
 	{
-		ObservedInventorySourceHints hints=new ObservedInventorySourceHints(namespace(ID));
+		LegacyInventorySourceHints hints=new LegacyInventorySourceHints(namespace(ID));
 		Map<String,Object> missing=hints.capture(client(null),5,100);
 		assertEquals("UNAVAILABLE",missing.get("status")); assertEquals("INVENTORY_SOURCE_CONTEXT_UNAVAILABLE",hints.witnesses(missing,20).get(0).get("kind"));
 		assertTrue(hints.witnesses(hints.capture(client(container()),5,100),20).isEmpty());
@@ -128,7 +128,7 @@ public class ObservedInventorySourceHintsTest
 			if (variant==2) row.getAsJsonArray("observedHitsplatTypes").add(5);
 			if (variant==3) row.getAsJsonObject("provenance").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("namespace","object");
 			if (variant==4) { JsonObject duplicate=row.deepCopy(); duplicate.addProperty("key","contradictory:rule"); ns.getAsJsonArray("rules").add(duplicate); }
-			ObservedInventorySourceHints hints=new ObservedInventorySourceHints(ns);
+			LegacyInventorySourceHints hints=new LegacyInventorySourceHints(ns);
 			assertTrue("variant "+variant,hints.witnesses(hints.capture(client(container(new Item(ID,1))),5,100),20).stream()
 				.noneMatch(w->"ITEM_POSSESSION_CANDIDATE".equals(w.get("kind"))));
 		}
@@ -148,17 +148,17 @@ public class ObservedInventorySourceHintsTest
 
 	@Test public void optionalHeldOutItemBoundFiltersOnlyItsComponentWithoutInferringCausality()
 	{
-		ObservedInventorySourceHints hints=new ObservedInventorySourceHints(boundedNamespace());
+		LegacyInventorySourceHints hints=new LegacyInventorySourceHints(boundedNamespace());
 		Map<String,Object> observed=hints.capture(normalClient(container(new Item(ID,100),new Item(ID,1))),5,100);
 		Map<String,Object> raw=hints.witnesses(observed,20).get(0);
-		SourceEvidenceResolver.Hypothesis allowed=hints.hypothesis(raw,hit().toBuilder().amount(2).build());
+		LegacyConstraintOracle.Hypothesis allowed=hints.hypothesis(raw,hit().toBuilder().amount(2).build());
 		assertEquals(Integer.valueOf(2),allowed.getConstraints().get(0).getMaximum());
 		assertFalse(allowed.getObservations().containsKey("STANDARD_DAMAGE_MODIFIERS"));
 		assertFalse(allowed.getObservations().containsKey("QUALIFIED_NPC_VARIANT"));
-		assertTrue(SourceEvidenceResolver.resolve(Collections.singletonList(allowed),2,false,"fixture").isUnidentifiedPossible());
-		SourceEvidenceResolver.Hypothesis rival=SourceEvidenceResolver.Hypothesis.builder()
+		assertTrue(LegacyConstraintOracle.resolve(Collections.singletonList(allowed),2,false,"fixture").isUnidentifiedPossible());
+		LegacyConstraintOracle.Hypothesis rival=LegacyConstraintOracle.Hypothesis.builder()
 			.candidate(com.tickreplaylogger.model.world.SourceResolution.Candidate.builder().key("rival").name("Other observed source").build()).build();
-		com.tickreplaylogger.model.world.SourceResolution result=SourceEvidenceResolver.resolve(Arrays.asList(
+		com.tickreplaylogger.model.world.SourceResolution result=LegacyConstraintOracle.resolve(Arrays.asList(
 			hints.hypothesis(raw,hit().toBuilder().amount(9).build()),rival),9,true,"fixture");
 		assertEquals(1,result.getExcludedCandidates().size()); assertEquals("Held item",result.getExcludedCandidates().get(0).getName());
 		assertEquals(1,result.getCandidates().size()); assertEquals("Other observed source",result.getCandidates().get(0).getName());
@@ -171,7 +171,7 @@ public class ObservedInventorySourceHintsTest
 		{
 			final int selected=variant; JsonObject namespace=boundedNamespace();
 			if (variant==6) namespace.getAsJsonArray("rules").get(0).getAsJsonObject().getAsJsonObject("componentBound").addProperty("maximum",9);
-			ObservedInventorySourceHints hints=new ObservedInventorySourceHints(namespace);
+			LegacyInventorySourceHints hints=new LegacyInventorySourceHints(namespace);
 			Client client=stub(Client.class,(n,a)-> {
 				if (n.equals("getItemContainer")) return container(new Item(ID,1));
 				if (n.equals("getWorldType")) return selected==0?null:selected==1?java.util.EnumSet.of(WorldType.SEASONAL):java.util.EnumSet.noneOf(WorldType.class);
@@ -182,7 +182,7 @@ public class ObservedInventorySourceHintsTest
 				.filter(w->"ITEM_POSSESSION_CANDIDATE".equals(w.get("kind"))).findFirst().get());
 			if (variant==4) raw.remove("numericContext");
 			if (variant==5) { Map<String,Object> changed=new LinkedHashMap<>((Map<String,Object>)raw.get("numericContext")); changed.put("observedCycle",101); raw.put("numericContext",changed); }
-			SourceEvidenceResolver.Hypothesis result=hints.hypothesis(raw,hit().toBuilder().amount(9).build());
+			LegacyConstraintOracle.Hypothesis result=hints.hypothesis(raw,hit().toBuilder().amount(9).build());
 			assertNotNull("Presence remains factual, case "+variant,result); assertNull("No qualified numeric context, case "+variant,result.getConstraints());
 		}
 	}

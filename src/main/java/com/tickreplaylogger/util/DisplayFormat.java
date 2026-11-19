@@ -24,17 +24,10 @@
  */
 package com.tickreplaylogger.util;
 
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.PlayerAction;
-import com.tickreplaylogger.model.TickData;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import com.tickreplaylogger.model.*;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
 import java.util.List;
 import javax.swing.ImageIcon;
 
@@ -154,7 +147,9 @@ public final class DisplayFormat
 			? SourceResolutionLabels.label(d.getSourceResolution())
 			: null;
 		if (resolved != null)
+		{
 			return resolved;
+		}
 		String source = d.getSource();
 		return source == null || source.trim().isEmpty() || "Unknown".equalsIgnoreCase(source.trim())
 			|| "Unknown source".equalsIgnoreCase(source.trim()) || "Unknown target".equalsIgnoreCase(source.trim())
@@ -171,9 +166,13 @@ public final class DisplayFormat
 	public static boolean sourceIsCorrelated(DamageEvent d)
 	{
 		if (d.getDirection() != DamageEvent.DamageDirection.RECEIVED || "Unknown".equals(damageSourceName(d)))
+		{
 			return false;
+		}
 		if (d.getSourceResolution() != null)
+		{
 			return true;
+		}
 		DamageEvent.DamageType type = d.getDamageType();
 		boolean status = type == DamageEvent.DamageType.POISON || type == DamageEvent.DamageType.VENOM
 			|| "Bleed".equals(d.getSource()) || "Burn".equals(d.getSource());
@@ -238,7 +237,9 @@ public final class DisplayFormat
 		else if (d.getDirection() == DamageEvent.DamageDirection.RECEIVED)
 		{
 			if (sourceIsCorrelated(d))
+			{
 				sb.append(". Timing describes the possible attack; this source is not confirmed");
+			}
 			sb.append(". ").append(timingExplanation(d.getDetermination()));
 		}
 		if (type == DamageEvent.DamageType.UNKNOWN)
@@ -282,11 +283,15 @@ public final class DisplayFormat
 	public static List<String> prayerChanges(TickData tick, TickData previous)
 	{
 		if (Boolean.FALSE.equals(tick.getPrayerStateKnown()))
+		{
 			return Collections.singletonList("Prayer state unavailable");
+		}
 		List<String> active = tick.getActivePrayers() == null ? Collections.emptyList() : tick.getActivePrayers();
 		if (previous != null && Boolean.FALSE.equals(previous.getPrayerStateKnown()))
+		{
 			return Collections.singletonList(
 				active.isEmpty() ? "Prayer state available; none active" : "Active: " + String.join(", ", active));
+		}
 		if (previous == null)
 		{
 			return active.isEmpty() ? Collections.emptyList()
@@ -298,12 +303,16 @@ public final class DisplayFormat
 		for (String prayer : active)
 		{
 			if (!before.contains(prayer))
+			{
 				changes.add("On: " + prayer);
+			}
 		}
 		for (String prayer : before)
 		{
 			if (!active.contains(prayer))
+			{
 				changes.add("Off: " + prayer);
+			}
 		}
 		return changes;
 	}

@@ -234,10 +234,10 @@ public class ProjectileComponentOutcomeTest
 		for (String field : Arrays.asList("outcomeDomain","outcomeSetEvidence","provenance","requiredObservations","nonHpOutcomeKinds"))
 		{
 			JsonObject config=namespace(); config.getAsJsonArray("rules").get(0).getAsJsonObject().remove(field);
-			assertTrue(field,map(config).catalog().damageOutcomeRules("NPC_PROJECTILE_COMPONENT",NPC).isEmpty());
+			assertTrue(field,LegacyCombatCatalog.from(map(config).catalog()).damageOutcomeRules("NPC_PROJECTILE_COMPONENT",NPC).isEmpty());
 		}
 		JsonObject config=namespace(); config.getAsJsonArray("rules").get(0).getAsJsonObject()
 			.add("positiveHitsplatTypes",GSON.fromJson("[16]",com.google.gson.JsonArray.class));
-		assertTrue(map(config).catalog().damageOutcomeRules("NPC_PROJECTILE_COMPONENT",NPC).isEmpty());
+		assertTrue(LegacyCombatCatalog.from(map(config).catalog()).damageOutcomeRules("NPC_PROJECTILE_COMPONENT",NPC).isEmpty());
 	}
 }

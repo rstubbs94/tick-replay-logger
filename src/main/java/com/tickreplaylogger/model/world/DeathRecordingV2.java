@@ -51,7 +51,7 @@ public class DeathRecordingV2
 	private final Summary summary;
 
 	@Data
-	@Builder
+	@Builder(toBuilder = true)
 	public static class Meta
 	{
 		private final String recordingId;
@@ -161,12 +161,12 @@ public class DeathRecordingV2
 		private final String killerName;
 		private final String killerConfidence;
 		private final String killerBasis;
-		private final java.util.List<java.util.Map<String, Object>> unresolvedImpactObservations;
+		private final List<Map<String, Object>> unresolvedImpactObservations;
 		private final int unresolvedImpactObservationCount;
 		private final DamageRecord fatalHit;
 		private final SourceResolution sourceResolution;
 		private final String fatalHitBasis; // selection basis, not proof of a hidden lethal server roll
-		private final java.util.List<DamageRecord> fatalHitCandidates; // positive received records in the death tick, in callback order
+		private final List<DamageRecord> fatalHitCandidates; // positive received records in the death tick, in callback order
 		private final Boolean reactable;
 		private final String activity;
 		private final String bossName;

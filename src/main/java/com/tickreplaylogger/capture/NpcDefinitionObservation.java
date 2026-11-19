@@ -59,7 +59,9 @@ public final class NpcDefinitionObservation
 			: effective != null ? "TRANSFORMED_COMPOSITION"
 				: baseEstablished ? "NPC_API_ID" : "DEFINITION_CONTEXT_UNAVAILABLE";
 		if (effective == null && !failed && !baseEstablished && !Boolean.TRUE.equals(hasTransforms))
+		{
 			issues.put(prefix + "definitionContext", "NO_BASE_OR_EFFECTIVE_COMPOSITION");
+		}
 		NPCComposition displayed = effective != null ? effective : !failed && baseEstablished ? base : null;
 		definitionName = displayed == null ? null : read(issues, prefix + "definitionName", displayed::getName);
 		size = displayed == null ? null : read(issues, prefix + "size", displayed::getSize);

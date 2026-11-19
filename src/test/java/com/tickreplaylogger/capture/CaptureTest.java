@@ -88,7 +88,8 @@ public class CaptureTest
 	public void unknownNpcHasNoStyles()
 	{
 		DamageMap map = DamageMap.load(new Gson());
-		assertTrue(map.stylesForNpc(-12345).isEmpty());
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
+		assertTrue(legacy.stylesForNpc(-12345).isEmpty());
 		assertEquals(null, map.hazardName("graphicsObject", -12345));
 		assertEquals(null, map.effectForSpotanim(-12345));
 	}
@@ -97,30 +98,33 @@ public class CaptureTest
 	public void determinationReflectsReactability()
 	{
 		DamageMap map = DamageMap.load(new Gson());
-		// A boss name alone cannot distinguish its ordinary attacks from specials.
-		assertEquals("UNKNOWN", map.determinationFor("TzTok-Jad"));
-		// No substring/default timing claims without an individual reviewed attack binding.
-		assertEquals("UNKNOWN", map.determinationFor("Zebak"));
-		assertEquals("UNKNOWN", map.determinationFor("The Leviathan"));
-		assertEquals("UNKNOWN", map.determinationFor("the whisperer"));
-		assertEquals("UNKNOWN", map.determinationForAttack(9036, 1712));
-		assertEquals("LAUNCH", map.determinationForAttack(9036, 1712, 894, true));
-		assertEquals("UNKNOWN", map.determinationForAttack(9036, 2444));
-		assertEquals("UNKNOWN", map.determinationForAttack(12204, 2444));
-		assertEquals("IMPACT", map.determinationForAttack(12204, 2444, 720, true));
-		assertEquals("UNKNOWN", map.determinationForAttack(12204, -1));
-		assertEquals(null, map.soleStyleForNpc(499));
-		assertEquals(null, map.soleStyleForNpc(499, 301));
-		assertEquals("typeless", map.soleStyleForNpc(499, 301, true));
-		assertEquals(null, map.soleStyleForNpc(499, 602));
-		assertTrue(!map.catalog().prayerIneffective(499, 602));
-		assertFalse(map.catalog().prayerIneffective(13011));
-		assertTrue(map.catalog().prayerIneffective(13011, 503, true));
-		assertNull(map.catalog().entityDamageType(1834, 149, false));
-		assertEquals("typeless", map.catalog().entityDamageType(1834, 149, true));
-		// No attacker name -> we do not guess.
-		assertEquals("UNKNOWN", map.determinationFor(null));
-		assertEquals("UNKNOWN", map.determinationFor(""));
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
+		// Timing references require an individual NPC/projectile tuple, never a boss name alone.
+		com.google.gson.JsonArray timingRules = RuntimeCatalog.load(new Gson()).section("references")
+			.getAsJsonObject("reviewedBindings").getAsJsonArray("prayerTimingRules");
+		assertTrue(timingRules.size() > 0);
+		for (com.google.gson.JsonElement value : timingRules)
+		{
+			com.google.gson.JsonObject rule = value.getAsJsonObject();
+			assertTrue(rule.getAsJsonArray("npcIds").size() > 0);
+			assertTrue(rule.getAsJsonArray("projectileIds").size() > 0);
+		}
+		assertEquals("UNKNOWN", legacy.determinationForAttack(9036, 1712));
+		assertEquals("LAUNCH", legacy.determinationForAttack(9036, 1712, 894, true));
+		assertEquals("UNKNOWN", legacy.determinationForAttack(9036, 2444));
+		assertEquals("UNKNOWN", legacy.determinationForAttack(12204, 2444));
+		assertEquals("IMPACT", legacy.determinationForAttack(12204, 2444, 720, true));
+		assertEquals("UNKNOWN", legacy.determinationForAttack(12204, -1));
+		assertEquals(null, legacy.soleStyleForNpc(499));
+		assertEquals(null, legacy.soleStyleForNpc(499, 301));
+		assertEquals("typeless", legacy.soleStyleForNpc(499, 301, true));
+		assertEquals(null, legacy.soleStyleForNpc(499, 602));
+		assertTrue(!LegacyCombatCatalog.from(map.catalog()).prayerIneffective(499, 602));
+		assertFalse(LegacyCombatCatalog.from(map.catalog()).prayerIneffective(13011));
+		assertTrue(LegacyCombatCatalog.from(map.catalog()).prayerIneffective(13011, 503, true));
+		assertNull(LegacyCombatCatalog.from(map.catalog()).entityDamageType(1834, 149, false));
+		assertEquals("typeless", LegacyCombatCatalog.from(map.catalog()).entityDamageType(1834, 149, true));
+		assertEquals("UNKNOWN", legacy.determinationForAttack(-1, -1, null, true));
 	}
 
 	@Test
@@ -132,12 +136,12 @@ public class CaptureTest
 		assertEquals(null, catalog.projectileDamageType(9022, 1711, 674, false));
 		assertEquals(null, catalog.projectileDamageType(499, 1712, 301, true));
 		assertEquals(null, catalog.projectileDamageType(9036, 999999, 894, true));
-		assertEquals("LAUNCH", catalog.prayerTiming(9022, 1711, 674, true));
-		assertEquals("hunllef_ordinary_projectiles", catalog.prayerTimingRuleKey(9022, 1711, 674, true));
-		assertNull(catalog.prayerTimingRuleKey(9022, 1711, 674, false));
-		assertNull(catalog.prayerTimingRuleKey(9023, 1713, 674, true));
-		assertEquals("UNKNOWN", catalog.prayerTiming(9023, 1713, 674, true));
-		assertEquals("UNKNOWN", catalog.prayerTiming(9037, 1714, 894, true));
+		assertEquals("LAUNCH", LegacyCombatCatalog.from(catalog).prayerTiming(9022, 1711, 674, true));
+		assertEquals("hunllef_ordinary_projectiles", LegacyCombatCatalog.from(catalog).prayerTimingRuleKey(9022, 1711, 674, true));
+		assertNull(LegacyCombatCatalog.from(catalog).prayerTimingRuleKey(9022, 1711, 674, false));
+		assertNull(LegacyCombatCatalog.from(catalog).prayerTimingRuleKey(9023, 1713, 674, true));
+		assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(9023, 1713, 674, true));
+		assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(9037, 1714, 894, true));
 	}
 
 	@Test
@@ -151,20 +155,20 @@ public class CaptureTest
 		assertNull(catalog.projectileDamageType(8061, 1479, 732, false));
 		assertNull(catalog.projectileDamageType(8061, 1480, 732, true));
 		assertNull(catalog.projectileDamageType(8061, 1481, 732, true));
-		assertEquals("UNKNOWN", catalog.prayerTiming(8061, 1479, 732, true));
+		assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(8061, 1479, 732, true));
 	}
 
 	@Test
 	public void overlappingTimingPredicatesDoNotChooseTheFirstRule() throws Exception
 	{
-		CombatCatalog catalog = CombatCatalog.load(new Gson());
-		java.lang.reflect.Field field = CombatCatalog.class.getDeclaredField("root");
+		LegacyCombatCatalog catalog = LegacyCombatCatalog.load(new Gson());
+		java.lang.reflect.Field field = LegacyCombatCatalog.class.getDeclaredField("root");
 		field.setAccessible(true);
 		com.google.gson.JsonObject root = (com.google.gson.JsonObject) field.get(catalog);
 		com.google.gson.JsonArray rules = root.getAsJsonObject("reviewedBindings").getAsJsonArray("prayerTimingRules");
 		rules.add(rules.get(0).deepCopy());
-		assertEquals("UNKNOWN", catalog.prayerTiming(9022, 1711, 674, true));
-		assertNull(catalog.prayerTimingRuleKey(9022, 1711, 674, true));
+		assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(9022, 1711, 674, true));
+		assertNull(LegacyCombatCatalog.from(catalog).prayerTimingRuleKey(9022, 1711, 674, true));
 	}
 
 	@Test
@@ -189,7 +193,7 @@ public class CaptureTest
 			{
 				assertEquals(projectile == 2327 ? "magic" : "ranged",
 					catalog.projectileDamageType(npc, projectile, 741, true));
-				assertEquals("UNKNOWN", catalog.prayerTiming(npc, projectile, 741, true));
+				assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(npc, projectile, 741, true));
 			}
 		for (int npc : new int[]
 		{ 11278, 11280, 11281 })
@@ -198,7 +202,7 @@ public class CaptureTest
 			{
 				assertEquals(projectile == 1999 ? "ranged" : "magic",
 					catalog.projectileDamageType(npc, projectile, 1001, true));
-				assertEquals("UNKNOWN", catalog.prayerTiming(npc, projectile, 1001, true));
+				assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(npc, projectile, 1001, true));
 			}
 		for (int npc : new int[]
 		{ 12073, 12074, 12075, 12076, 12081, 12082, 15549 })
@@ -222,9 +226,9 @@ public class CaptureTest
 		assertTrue(catalog.referenceKeys(2046).contains(key));
 		assertFalse(catalog.referenceKeys(2127).contains(key));
 		assertFalse(catalog.referenceKeys(2047).contains(key));
-		assertNull(catalog.entityDamageType(2045, 90, true));
-		assertNull(catalog.entityDamageType(2046, 90, true));
-		assertEquals("UNKNOWN", catalog.prayerTiming(2046, 1045, 90, true));
+		assertNull(LegacyCombatCatalog.from(catalog).entityDamageType(2045, 90, true));
+		assertNull(LegacyCombatCatalog.from(catalog).entityDamageType(2046, 90, true));
+		assertEquals("UNKNOWN", LegacyCombatCatalog.from(catalog).prayerTiming(2046, 1045, 90, true));
 	}
 
 	@Test
@@ -315,11 +319,16 @@ public class CaptureTest
 	public void environmentalAndNpcAttackRulesAreLoadedFromTheResearchBundle()
 	{
 		DamageMap map = DamageMap.load(new Gson());
-		assertEquals("unknown", map.environmentalRule().getDamageType());
-		assertEquals(5, map.environmentalRule().getSourceKeys().size());
-		assertTrue(!map.environmentalRule().getSourceKeys().contains("wintertodt"));
-		assertTrue(!map.environmentalRule().getSourceKeys().contains("tempoross"));
-		assertEquals("unknown", map.environmentalRule().getPrayable());
+		com.google.gson.JsonObject environmental = RuntimeCatalog.load(new Gson()).section("capture")
+			.getAsJsonObject("damageRules").getAsJsonObject("environmental");
+		assertEquals("unknown", environmental.get("damageType").getAsString());
+		assertEquals(5, environmental.getAsJsonArray("sourceKeys").size());
+		for (com.google.gson.JsonElement key : environmental.getAsJsonArray("sourceKeys"))
+		{
+			assertFalse("wintertodt".equals(key.getAsString()));
+			assertFalse("tempoross".equals(key.getAsString()));
+		}
+		assertEquals("unknown", environmental.get("prayable").getAsString());
 		assertEquals(null, map.attackRuleForNpc(9036, 8420)); // Shared mode ID without observed context.
 		assertEquals("typeless", map.attackRuleForNpc(9036, 8420, 894, true).getDamageType());
 		assertTrue(map.attackRuleForNpc(9036, 8419, 894, true).isRequiresProjectile());

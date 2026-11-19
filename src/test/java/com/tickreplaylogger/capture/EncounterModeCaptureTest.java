@@ -102,9 +102,14 @@ public class EncounterModeCaptureTest
 	@Test
 	public void changedClientTargetCannotApplyThePinnedReference()
 	{
-		catalog.contextBindings().getAsJsonArray("encounterModeRules").get(0).getAsJsonObject()
+		assertTrue(mode().get("known").getAsBoolean());
+		CombatCatalog altered = CombatCatalog.referenceView(RuntimeCatalog.load(gson).section("references").deepCopy());
+		altered.contextBindings().getAsJsonArray("encounterModeRules").get(0).getAsJsonObject()
 			.addProperty("clientArtifactSha256", String.join("", Collections.nCopies(64, "0")));
-		assertFalse(mode().get("known").getAsBoolean());
+		ContextBlock.ModeReference rejected = EncounterModeCapture.interpret(context(), altered);
+		assertFalse(rejected.isKnown());
+		assertEquals("UNSUPPORTED_CLIENT_MODE_REFERENCE", rejected.getEvidence());
+		assertTrue("The shared reviewed reference must remain usable", mode().get("known").getAsBoolean());
 	}
 
 	@Test

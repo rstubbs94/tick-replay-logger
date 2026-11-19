@@ -25,8 +25,7 @@
 package com.tickreplaylogger.util;
 
 import com.tickreplaylogger.model.TickData;
-import java.util.ArrayList;
-import java.util.Collections;
+import java.util.*;
 import java.util.List;
 
 /**
@@ -140,7 +139,9 @@ public final class TickDisplay
 	private static boolean hasEvents(TickData t)
 	{
 		if (t.getCaptureIssues() != null && !t.getCaptureIssues().isEmpty())
+		{
 			return true;
+		}
 		if (t.getDamageEvents() != null && !t.getDamageEvents().isEmpty())
 		{
 			return true;
@@ -154,7 +155,7 @@ public final class TickDisplay
 
 	private static boolean stateDiffers(TickData a, TickData b)
 	{
-		return !java.util.Objects.equals(a.getUnavailableStateFields(), b.getUnavailableStateFields())
+		return !Objects.equals(a.getUnavailableStateFields(), b.getUnavailableStateFields())
 			|| a.getCurrentHp() != b.getCurrentHp() || a.getMaxHp() != b.getMaxHp()
 			|| a.getCurrentPrayer() != b.getCurrentPrayer() || a.getMaxPrayer() != b.getMaxPrayer()
 			|| Boolean.FALSE.equals(a.getPrayerStateKnown()) != Boolean.FALSE.equals(b.getPrayerStateKnown())

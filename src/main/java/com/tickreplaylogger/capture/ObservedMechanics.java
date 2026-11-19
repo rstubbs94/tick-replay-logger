@@ -24,14 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
+import static net.runelite.client.util.Text.removeTags;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.IdentityHashMap;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
 import net.runelite.api.NPC;
 import lombok.Value;
 
@@ -101,15 +97,21 @@ public final class ObservedMechanics
 	public void clearView(net.runelite.api.WorldView view)
 	{
 		for (NPC npc : new ArrayList<>(scopes.keySet()))
+		{
 			if (scopes.get(npc).view == view)
+			{
 				clear(npc);
+			}
+		}
 	}
 
 	public void validateIdentity(CombatCatalog catalog, NPC npc, int definitionId, boolean normalContext)
 	{
 		Phase phase = phases.get(npc);
 		if (phase == null)
+		{
 			return;
+		}
 		Scope scope = scopes.get(npc), current = Scope.read(npc);
 		if (scope == null || current == null || !scope.matches(current))
 		{
@@ -125,10 +127,16 @@ public final class ObservedMechanics
 		{
 			JsonObject rule = entry.getAsJsonObject();
 			if (!phase.rule.equals(rule.get("key").getAsString()))
+			{
 				continue;
+			}
 			for (JsonElement id : rule.getAsJsonArray("npcIds"))
+			{
 				if (id.getAsInt() == definitionId)
+				{
 					return;
+				}
+			}
 		}
 		clear(npc);
 	}
@@ -141,39 +149,59 @@ public final class ObservedMechanics
 
 	private static String clean(String text)
 	{
-		return text == null ? "" : text.replaceAll("<[^>]*>", "").trim().toLowerCase(Locale.ROOT);
+		return text == null ? "" : removeTags(text).trim().toLowerCase(Locale.ROOT);
 	}
 
 	public void observe(CombatCatalog catalog, NPC npc, int definitionId, String operator, String speech, int animation,
 		Collection<NPC> nearby, int tick, String evidence)
 	{
 		if (catalog == null || npc == null)
+		{
 			return;
+		}
 		for (JsonElement entry : catalog.phaseRules())
 		{
 			JsonObject rule = entry.getAsJsonObject();
 			if (!operator.equals(rule.get("operator").getAsString()))
+			{
 				continue;
+			}
 			boolean actorMatches = false;
 			for (JsonElement id : rule.getAsJsonArray("npcIds"))
+			{
 				if (id.getAsInt() == definitionId)
+				{
 					actorMatches = true;
+				}
+			}
 			if (!actorMatches)
+			{
 				continue;
+			}
 			boolean matched = false;
 			for (JsonElement value : rule.getAsJsonArray("values"))
 			{
 				if (operator.equals("overheadEquals"))
+				{
 					matched |= clean(value.getAsString()).equals(clean(speech));
+				}
 				else if (operator.equals("animationIn"))
+				{
 					matched |= animation == value.getAsInt();
+				}
 				else if (operator.equals("npcPresent"))
+				{
 					for (NPC other : nearby)
+					{
 						if (other != null && other.getWorldView() == npc.getWorldView()
 							&& other.getWorldLocation() != null && npc.getWorldLocation() != null
 							&& other.getWorldLocation().getPlane() == npc.getWorldLocation().getPlane()
 							&& other.getId() == value.getAsInt())
+						{
 							matched = true;
+						}
+					}
+				}
 			}
 			if (matched)
 			{

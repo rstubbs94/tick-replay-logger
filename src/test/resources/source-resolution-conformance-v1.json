@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "single_actor",
+      "resolution": {
+        "version": 1,
+        "status": "IDENTIFIED",
+        "identityLevel": "ACTOR",
+        "candidates": [
+          {
+            "key": "actor:arbitrary-a",
+            "name": "Entity A",
+            "actorRef": "npc:arbitrary-a:v0:g1",
+            "worldViewId": 0,
+            "plane": 0,
+            "sceneKey": "scope-a",
+            "strength": "STRONG",
+            "evidence": [
+              "PROJECTILE_AND_ANIMATION_SAME_ACTOR"
+            ]
+          }
+        ],
+        "unidentifiedPossible": false
+      },
+      "expectedLabel": "Entity A"
+    },
+    {
+      "id": "named_alternatives",
+      "resolution": {
+        "version": 1,
+        "status": "ALTERNATIVES",
+        "identityLevel": "NONE",
+        "candidates": [
+          {
+            "key": "actor:arbitrary-a",
+            "name": "Entity A",
+            "strength": "STRONG",
+            "evidence": [
+              "PROJECTILE_TIMING"
+            ]
+          },
+          {
+            "key": "actor:arbitrary-b",
+            "name": "Entity B",
+            "strength": "POSSIBLE",
+            "evidence": [
+              "ANIMATION_TIMING"
+            ]
+          }
+        ],
+        "unidentifiedPossible": false
+      },
+      "expectedLabel": "Entity A or Entity B"
+    },
+    {
+      "id": "family_without_individual",
+      "resolution": {
+        "version": 1,
+        "status": "IDENTIFIED",
+        "identityLevel": "FAMILY",
+        "candidates": [
+          {
+            "key": "family:ordinary-minion:scope-a",
+            "name": "Minion",
+            "familyKey": "definition:900001",
+            "strength": "POSSIBLE",
+            "evidence": [
+              "MULTIPLE_INDIVIDUALS_SAME_QUALIFIED_FAMILY"
+            ]
+          }
+        ],
+        "unidentifiedPossible": false
+      },
+      "expectedLabel": "Minion"
+    },
+    {
+      "id": "known_plus_unidentified",
+      "resolution": {
+        "version": 1,
+        "status": "ALTERNATIVES",
+        "identityLevel": "NONE",
+        "candidates": [
+          {
+            "key": "actor:arbitrary-a",
+            "name": "Entity A",
+            "strength": "POSSIBLE",
+            "evidence": [
+              "PARTIAL_SOURCE_CONTEXT"
+            ]
+          }
+        ],
+        "unidentifiedPossible": true
+      },
+      "expectedLabel": "Entity A"
+    },
+    {
+      "id": "no_identified_source",
+      "resolution": {
+        "version": 1,
+        "status": "UNIDENTIFIED",
+        "identityLevel": "NONE",
+        "candidates": [],
+        "unidentifiedPossible": true
+      },
+      "expectedLabel": "Unknown"
+    }
+  ]
+}

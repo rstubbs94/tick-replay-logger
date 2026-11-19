@@ -1,13 +1,43 @@
+/*
+ * Copyright (c) 2026, rstubbs94
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.tickreplaylogger.ui.playback;
 
 import net.runelite.client.ui.ColorScheme;
 
-import javax.swing.*;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JProgressBar;
+import javax.swing.SwingConstants;
 import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
 
 /**
  * Reusable stat box showing a label, progress bar, and value.
@@ -112,6 +142,21 @@ public class StatBoxPanel extends JPanel
 		updateColors();
 	}
 
+	public void setObservedValue(Integer current, Integer max)
+	{
+		if (current != null && max != null)
+		{
+			setValue(current, max);
+			return;
+		}
+		previousValue = -1;
+		progressBar.setValue(0);
+		valueLabel.setText((current == null ? "?" : current) + "/" + (max == null ? "?" : max));
+		valueLabel.setForeground(Color.GRAY);
+		progressBar.setForeground(Color.GRAY);
+		clearChangeIndicator();
+	}
+
 	/**
 	 * Reset tracking for a new recording playback.
 	 */
@@ -128,10 +173,7 @@ public class StatBoxPanel extends JPanel
 			// Healing/restore
 			changeLabel.setText("+" + delta);
 			changeLabel.setForeground(HIGHLIGHT_HEAL);
-			setBorder(new CompoundBorder(
-				new LineBorder(HIGHLIGHT_HEAL, 1),
-				new EmptyBorder(1, 0, 1, 0)
-			));
+			setBorder(new CompoundBorder(new LineBorder(HIGHLIGHT_HEAL, 1), new EmptyBorder(1, 0, 1, 0)));
 		}
 		else if (delta < 0)
 		{
@@ -139,10 +181,7 @@ public class StatBoxPanel extends JPanel
 			changeLabel.setText(String.valueOf(delta));
 			Color highlightColor = isHpBar ? HIGHLIGHT_DAMAGE : HIGHLIGHT_DRAIN;
 			changeLabel.setForeground(highlightColor);
-			setBorder(new CompoundBorder(
-				new LineBorder(highlightColor, 1),
-				new EmptyBorder(1, 0, 1, 0)
-			));
+			setBorder(new CompoundBorder(new LineBorder(highlightColor, 1), new EmptyBorder(1, 0, 1, 0)));
 		}
 	}
 

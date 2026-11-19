@@ -1,0 +1,5 @@
+# Keep bundled rule and eligibility hashes stable across Windows and CI checkouts.
+src/main/resources/com/tickreplaylogger/resolver-v1.json text eol=lf
+src/main/resources/com/tickreplaylogger/source-association-npc-ids.json text eol=lf
+src/test/resources/resolver-v1-conformance.json text eol=lf
+src/test/resources/resolver-source-bounds.synthetic.json text eol=lf

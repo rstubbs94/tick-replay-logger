@@ -1,0 +1,2546 @@
+{
+  "timestamp": 1793326442336,
+  "killerName": "Zulrah",
+  "location": "(13412, 2014)",
+  "ticks": [
+    {
+      "tickNumber": 15368,
+      "timestamp": 1793326382935,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 69,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 598,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15369,
+      "timestamp": 1793326383556,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 69,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 27,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15370,
+      "timestamp": 1793326384156,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 69,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15371,
+      "timestamp": 1793326384756,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 69,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15372,
+      "timestamp": 1793326385355,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 68,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 17,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15373,
+      "timestamp": 1793326385976,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 68,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15374,
+      "timestamp": 1793326386556,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 68,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15375,
+      "timestamp": 1793326387155,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 68,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 11,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15376,
+      "timestamp": 1793326387756,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 67,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15377,
+      "timestamp": 1793326388436,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 67,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 680,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15378,
+      "timestamp": 1793326388955,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 67,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 10,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 519,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15379,
+      "timestamp": 1793326389557,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 67,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 602,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15380,
+      "timestamp": 1793326390155,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 66,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 598,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15381,
+      "timestamp": 1793326390735,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 66,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 25,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15382,
+      "timestamp": 1793326391335,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 66,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15383,
+      "timestamp": 1793326391955,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 66,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15384,
+      "timestamp": 1793326392535,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 65,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15385,
+      "timestamp": 1793326393156,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 65,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15386,
+      "timestamp": 1793326393757,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 65,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15387,
+      "timestamp": 1793326394356,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 64,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "PRAYER_ACTIVATED",
+          "description": "Activated Protect from Missiles",
+          "target": "Protect from Missiles"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15388,
+      "timestamp": 1793326394936,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 64,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15389,
+      "timestamp": 1793326395536,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 64,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15390,
+      "timestamp": 1793326396156,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 63,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15391,
+      "timestamp": 1793326396736,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 63,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [
+        "Venomed"
+      ],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15392,
+      "timestamp": 1793326397336,
+      "currentHp": 92,
+      "maxHp": 99,
+      "currentPrayer": 62,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15393,
+      "timestamp": 1793326397935,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 62,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15394,
+      "timestamp": 1793326398535,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 62,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15395,
+      "timestamp": 1793326399157,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 61,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 24,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 622,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15396,
+      "timestamp": 1793326399756,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 61,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "DRINK_POTION",
+          "description": "Drank Extended anti-venom+(3)",
+          "itemName": "Extended anti-venom+(3)"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15397,
+      "timestamp": 1793326400356,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 60,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15398,
+      "timestamp": 1793326400937,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 60,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 27,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15399,
+      "timestamp": 1793326401556,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 60,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15400,
+      "timestamp": 1793326402155,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 59,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15401,
+      "timestamp": 1793326402736,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 59,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 36,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15402,
+      "timestamp": 1793326403335,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 58,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15403,
+      "timestamp": 1793326403956,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 58,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15404,
+      "timestamp": 1793326404537,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 58,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 12,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15405,
+      "timestamp": 1793326405156,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 57,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15406,
+      "timestamp": 1793326405756,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 57,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15407,
+      "timestamp": 1793326406336,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 57,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 12,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15408,
+      "timestamp": 1793326406935,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 56,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 0,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15409,
+      "timestamp": 1793326407554,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 56,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15410,
+      "timestamp": 1793326408157,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 55,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 38,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 603,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15411,
+      "timestamp": 1793326408756,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 55,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15412,
+      "timestamp": 1793326409336,
+      "currentHp": 93,
+      "maxHp": 99,
+      "currentPrayer": 55,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15413,
+      "timestamp": 1793326409956,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 54,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 10,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15414,
+      "timestamp": 1793326410535,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 54,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Snakeling"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15415,
+      "timestamp": 1793326411155,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 53,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15416,
+      "timestamp": 1793326411736,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 53,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15417,
+      "timestamp": 1793326412336,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 53,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15418,
+      "timestamp": 1793326412935,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 52,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15419,
+      "timestamp": 1793326413535,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 52,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 35,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15420,
+      "timestamp": 1793326414155,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 51,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15421,
+      "timestamp": 1793326414755,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 51,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15422,
+      "timestamp": 1793326415336,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 51,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 0,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15423,
+      "timestamp": 1793326415957,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 50,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15424,
+      "timestamp": 1793326416536,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 50,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15425,
+      "timestamp": 1793326417155,
+      "currentHp": 83,
+      "maxHp": 99,
+      "currentPrayer": 49,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 18,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15426,
+      "timestamp": 1793326417736,
+      "currentHp": 82,
+      "maxHp": 99,
+      "currentPrayer": 49,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 1,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15427,
+      "timestamp": 1793326418376,
+      "currentHp": 82,
+      "maxHp": 99,
+      "currentPrayer": 49,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Snakeling"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 640,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15428,
+      "timestamp": 1793326418936,
+      "currentHp": 82,
+      "maxHp": 99,
+      "currentPrayer": 48,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 560,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15429,
+      "timestamp": 1793326419577,
+      "currentHp": 70,
+      "maxHp": 99,
+      "currentPrayer": 48,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 12,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 641,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15430,
+      "timestamp": 1793326420156,
+      "currentHp": 70,
+      "maxHp": 99,
+      "currentPrayer": 48,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Snakeling"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15431,
+      "timestamp": 1793326420735,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 47,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 9,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "RECEIVED",
+          "amount": 15,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15432,
+      "timestamp": 1793326421336,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 47,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Snakeling"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15433,
+      "timestamp": 1793326421956,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 46,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15434,
+      "timestamp": 1793326422556,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 46,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 12,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15435,
+      "timestamp": 1793326423156,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 46,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15436,
+      "timestamp": 1793326423756,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 45,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15437,
+      "timestamp": 1793326424335,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 45,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15438,
+      "timestamp": 1793326424956,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 44,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15439,
+      "timestamp": 1793326425536,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 44,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15440,
+      "timestamp": 1793326426156,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 44,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 26,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15441,
+      "timestamp": 1793326426737,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 43,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 10,
+          "damageType": "MELEE",
+          "source": "Snakeling",
+          "confidence": "PROXIMITY",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15442,
+      "timestamp": 1793326427356,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 43,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Snakeling"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15443,
+      "timestamp": 1793326427935,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 42,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 32,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 2,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15444,
+      "timestamp": 1793326428535,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 42,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15445,
+      "timestamp": 1793326429156,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 42,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15446,
+      "timestamp": 1793326429736,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 41,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 30,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15447,
+      "timestamp": 1793326430356,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 41,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 1,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15448,
+      "timestamp": 1793326430937,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 40,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15449,
+      "timestamp": 1793326431555,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 40,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 18,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 618,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15450,
+      "timestamp": 1793326432136,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 40,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15451,
+      "timestamp": 1793326432735,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 39,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15452,
+      "timestamp": 1793326433336,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 39,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 29,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15453,
+      "timestamp": 1793326433936,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 39,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15454,
+      "timestamp": 1793326434555,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 38,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15455,
+      "timestamp": 1793326435156,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 38,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 74,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15456,
+      "timestamp": 1793326435735,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 37,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 579,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15457,
+      "timestamp": 1793326436336,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 37,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15458,
+      "timestamp": 1793326436936,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 37,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15459,
+      "timestamp": 1793326437534,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 36,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "PRAYER_DEACTIVATED",
+          "description": "Deactivated Protect from Missiles",
+          "target": "Protect from Missiles"
+        },
+        {
+          "type": "PRAYER_DRAINED",
+          "description": "Protect From Missiles disabled (prayer drained)",
+          "target": "Protect From Missiles"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury"
+      ],
+      "tickDurationMs": 598,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15460,
+      "timestamp": 1793326438136,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 36,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "PRAYER_ACTIVATED",
+          "description": "Activated Protect from Magic",
+          "target": "Protect from Magic"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 602,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15461,
+      "timestamp": 1793326438755,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 35,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 19,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        },
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 619,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15462,
+      "timestamp": 1793326439335,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 35,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 580,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15463,
+      "timestamp": 1793326439956,
+      "currentHp": 45,
+      "maxHp": 99,
+      "currentPrayer": 35,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 621,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15464,
+      "timestamp": 1793326440537,
+      "currentHp": 16,
+      "maxHp": 99,
+      "currentPrayer": 34,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 29,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15465,
+      "timestamp": 1793326441155,
+      "currentHp": 16,
+      "maxHp": 99,
+      "currentPrayer": 34,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        },
+        {
+          "type": "ATTACK",
+          "description": "Attacked Zulrah  (level-725) (Eye of Ayak)",
+          "target": "Zulrah  (level-725)",
+          "itemName": "Eye of Ayak"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "DEALT",
+          "amount": 3,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 618,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15466,
+      "timestamp": 1793326441736,
+      "currentHp": 16,
+      "maxHp": 99,
+      "currentPrayer": 33,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "MAGIC",
+          "source": "Snakeling",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 581,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 15467,
+      "timestamp": 1793326442356,
+      "currentHp": 0,
+      "maxHp": 99,
+      "currentPrayer": 33,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "EAT_FOOD",
+          "description": "Ate Manta ray",
+          "itemName": "Manta ray"
+        }
+      ],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 19,
+          "damageType": "UNKNOWN",
+          "source": "Zulrah",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Augury",
+        "Protect From Magic"
+      ],
+      "tickDurationMs": 620,
+      "pingMs": 75,
+      "packetLossPercent": 0
+    }
+  ],
+  "eventsBeforeSnapshot": true,
+  "finalHp": 0,
+  "totalDamageReceived": 96
+}

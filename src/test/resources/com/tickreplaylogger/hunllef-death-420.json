@@ -1,0 +1,340 @@
+{
+  "killerName": "Corrupted Hunllef",
+  "location": "(12859, 14135)",
+  "finalHp": 0,
+  "totalDamageReceived": 99,
+  "eventsBeforeSnapshot": true,
+  "timestamp": 1793215092843,
+  "ticks": [
+    {
+      "tickNumber": 407,
+      "timestamp": 1793215085061,
+      "currentHp": 99,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 0,
+          "damageType": "RANGED",
+          "source": "Corrupted Hunllef",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [],
+      "tickDurationMs": 602,
+      "pingMs": 78,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 408,
+      "timestamp": 1793215085659,
+      "currentHp": 99,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [],
+      "tickDurationMs": 598,
+      "pingMs": 78,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 409,
+      "timestamp": 1793215086263,
+      "currentHp": 99,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [
+        {
+          "type": "PRAYER_ACTIVATED",
+          "description": "Activated Protect from Missiles",
+          "target": "Protect from Missiles"
+        }
+      ],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 1,
+        "tilesCompleted": 1,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 604,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 410,
+      "timestamp": 1793215086859,
+      "currentHp": 99,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 596,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 411,
+      "timestamp": 1793215087461,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 14,
+          "damageType": "RANGED",
+          "source": "Corrupted Hunllef",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 602,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 412,
+      "timestamp": 1793215088060,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 413,
+      "timestamp": 1793215088659,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 599,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 414,
+      "timestamp": 1793215089259,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 99,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 1,
+        "tilesCompleted": 1,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 415,
+      "timestamp": 1793215089861,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 98,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 602,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 416,
+      "timestamp": 1793215090459,
+      "currentHp": 85,
+      "maxHp": 99,
+      "currentPrayer": 98,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 598,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 417,
+      "timestamp": 1793215091049,
+      "currentHp": 55,
+      "maxHp": 99,
+      "currentPrayer": 98,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 30,
+          "damageType": "UNKNOWN",
+          "source": "Corrupted Hunllef",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 590,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 418,
+      "timestamp": 1793215091659,
+      "currentHp": 37,
+      "maxHp": 99,
+      "currentPrayer": 98,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 18,
+          "damageType": "UNKNOWN",
+          "source": "Environmental",
+          "confidence": "ENVIRONMENTAL",
+          "determination": "UNKNOWN"
+        }
+      ],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 1,
+        "tilesCompleted": 1,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 610,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 419,
+      "timestamp": 1793215092259,
+      "currentHp": 7,
+      "maxHp": 99,
+      "currentPrayer": 98,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 30,
+          "damageType": "UNKNOWN",
+          "source": "Environmental",
+          "confidence": "ENVIRONMENTAL",
+          "determination": "UNKNOWN"
+        }
+      ],
+      "effectNotes": [],
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 600,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    },
+    {
+      "tickNumber": 420,
+      "timestamp": 1793215092860,
+      "currentHp": 0,
+      "maxHp": 99,
+      "currentPrayer": 97,
+      "maxPrayer": 99,
+      "playerActions": [],
+      "damageEvents": [
+        {
+          "direction": "RECEIVED",
+          "amount": 7,
+          "damageType": "UNKNOWN",
+          "source": "Corrupted Hunllef",
+          "confidence": "TIMED",
+          "determination": "LAUNCH"
+        }
+      ],
+      "effectNotes": [],
+      "movement": {
+        "tilesIntended": 2,
+        "tilesCompleted": 2,
+        "wasCancelled": false
+      },
+      "activePrayers": [
+        "Protect From Missiles"
+      ],
+      "tickDurationMs": 601,
+      "pingMs": 77,
+      "packetLossPercent": 0
+    }
+  ],
+  "richExportJson": "{\"schemaVersion\":\"1.0\",\"ticks\":[{\"tick\":407,\"wallClockMs\":1793215085067,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12856,\"worldY\":14130,\"plane\":1,\"localX\":6208,\"localY\":7488,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":808,\"graphicIds\":[],\"hp\":99,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[],\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12856,\"fromY\":14130,\"toX\":12856,\"toY\":14130},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":0,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":3}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":408,\"wallClockMs\":1793215085660,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12855,\"worldY\":14132,\"plane\":1,\"localX\":6208,\"localY\":7494,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":824,\"graphicIds\":[],\"hp\":99,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[],\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12856,\"fromY\":14130,\"toX\":12855,\"toY\":14132},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":0,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":2}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":409,\"wallClockMs\":1793215086263,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12854,\"worldY\":14133,\"plane\":1,\"localX\":6121,\"localY\":7702,\"orientation\":768,\"animationId\":403,\"poseAnimationId\":824,\"graphicIds\":[],\"hp\":99,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12855,\"fromY\":14132,\"toX\":12854,\"toY\":14133},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":46,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":1}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":410,\"wallClockMs\":1793215086859,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12854,\"worldY\":14133,\"plane\":1,\"localX\":5980,\"localY\":7843,\"orientation\":768,\"animationId\":403,\"poseAnimationId\":819,\"graphicIds\":[],\"hp\":99,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12854,\"fromY\":14133,\"toX\":12854,\"toY\":14133},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":160,\"animationId\":8419,\"poseAnimationId\":8416,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"MOVING_AND_ATTACKING\",\"attackCooldownTicksRemaining\":5}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":411,\"wallClockMs\":1793215087462,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12854,\"worldY\":14133,\"plane\":1,\"localX\":5952,\"localY\":7872,\"orientation\":768,\"animationId\":403,\"poseAnimationId\":808,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12854,\"fromY\":14133,\"toX\":12854,\"toY\":14133},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":191,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":4}],\"players\":[],\"projectiles\":[{\"projectileId\":1712,\"sourceName\":\"Corrupted Hunllef\",\"targetsPlayer\":true,\"startWorldX\":12854,\"startWorldY\":14134,\"endWorldX\":12854,\"endWorldY\":14133,\"plane\":1,\"spawnTick\":411,\"startCycle\":16175,\"endCycle\":16210,\"estimatedImpactTick\":413,\"slope\":18,\"startHeight\":214,\"endHeight\":124}],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":412,\"wallClockMs\":1793215088061,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12856,\"worldY\":14133,\"plane\":1,\"localX\":5955,\"localY\":7872,\"orientation\":1536,\"animationId\":403,\"poseAnimationId\":820,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12854,\"fromY\":14133,\"toX\":12856,\"toY\":14133},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":191,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":3}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":413,\"wallClockMs\":1793215088659,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12858,\"worldY\":14133,\"plane\":1,\"localX\":6108,\"localY\":7872,\"orientation\":1536,\"animationId\":403,\"poseAnimationId\":824,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12856,\"fromY\":14133,\"toX\":12858,\"toY\":14133},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":88,\"animationId\":-1,\"poseAnimationId\":8416,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"MOVING\",\"attackCooldownTicksRemaining\":2}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":414,\"wallClockMs\":1793215089259,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12858,\"worldY\":14134,\"plane\":1,\"localX\":6348,\"localY\":7872,\"orientation\":1536,\"animationId\":-1,\"poseAnimationId\":824,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":99,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12858,\"fromY\":14133,\"toX\":12858,\"toY\":14134},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12854,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":1940,\"animationId\":-1,\"poseAnimationId\":8416,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"MOVING\",\"attackCooldownTicksRemaining\":1}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":415,\"wallClockMs\":1793215089861,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12858,\"worldY\":14134,\"plane\":1,\"localX\":6464,\"localY\":7904,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":819,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":98,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12858,\"fromY\":14134,\"toX\":12858,\"toY\":14134},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":1844,\"animationId\":8420,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"ATTACKING\",\"attackCooldownTicksRemaining\":5}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":416,\"wallClockMs\":1793215090459,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12858,\"worldY\":14134,\"plane\":1,\"localX\":6464,\"localY\":8000,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":808,\"graphicIds\":[],\"hp\":85,\"maxHp\":99,\"prayer\":98,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12858,\"fromY\":14134,\"toX\":12858,\"toY\":14134},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":1792,\"animationId\":8420,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":4}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":417,\"wallClockMs\":1793215091050,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12858,\"worldY\":14134,\"plane\":1,\"localX\":6464,\"localY\":8000,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":808,\"graphicIds\":[],\"hp\":55,\"maxHp\":99,\"prayer\":98,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12858,\"fromY\":14134,\"toX\":12858,\"toY\":14134},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6208,\"localY\":8256,\"orientation\":1792,\"animationId\":8420,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":3}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":418,\"wallClockMs\":1793215091659,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12859,\"worldY\":14135,\"plane\":1,\"localX\":6465,\"localY\":8001,\"orientation\":1280,\"animationId\":403,\"poseAnimationId\":819,\"graphicIds\":[],\"hp\":37,\"maxHp\":99,\"prayer\":98,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12858,\"fromY\":14134,\"toX\":12859,\"toY\":14135},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6204,\"localY\":8256,\"orientation\":1792,\"animationId\":-1,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"COOLDOWN\",\"attackCooldownTicksRemaining\":2}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":419,\"wallClockMs\":1793215092259,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12859,\"worldY\":14135,\"plane\":1,\"localX\":6573,\"localY\":8109,\"orientation\":1280,\"animationId\":403,\"poseAnimationId\":819,\"graphicIds\":[],\"hp\":7,\"maxHp\":99,\"prayer\":98,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":100,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12859,\"fromY\":14135,\"toX\":12859,\"toY\":14135},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6084,\"localY\":8256,\"orientation\":1635,\"animationId\":-1,\"poseAnimationId\":8416,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"MOVING\",\"attackCooldownTicksRemaining\":1}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}},{\"tick\":420,\"wallClockMs\":1793215092860,\"sceneKey\":\"1e76:1\",\"plane\":1,\"player\":{\"worldX\":12859,\"worldY\":14137,\"plane\":1,\"localX\":6592,\"localY\":8131,\"orientation\":1024,\"animationId\":403,\"poseAnimationId\":819,\"graphicIds\":[],\"hp\":0,\"maxHp\":99,\"prayer\":97,\"maxPrayer\":99,\"activePrayers\":[\"PROTECT_FROM_MISSILES\"],\"overheadPrayer\":\"PROTECT_FROM_MISSILES\",\"boostedAttack\":99,\"boostedStrength\":99,\"boostedDefence\":99,\"boostedRanged\":99,\"boostedMagic\":99,\"specEnergy\":100,\"runEnergy\":99,\"equipmentItemIds\":[-1,-1,-1,23820,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],\"fromX\":12859,\"fromY\":14135,\"toX\":12859,\"toY\":14137},\"npcs\":[{\"sceneId\":37185,\"npcId\":9036,\"name\":\"Corrupted Hunllef\",\"combatLevel\":894,\"worldX\":12853,\"worldY\":14134,\"plane\":1,\"localX\":6080,\"localY\":8256,\"orientation\":1616,\"animationId\":8419,\"poseAnimationId\":8417,\"graphicIds\":[],\"healthRatio\":-1,\"healthScale\":-1,\"interactingWithPlayer\":true,\"derivedAction\":\"ATTACKING\",\"attackCooldownTicksRemaining\":5}],\"players\":[],\"projectiles\":[],\"hazards\":[],\"context\":{\"inInstance\":true,\"inWilderness\":false}}],\"events\":{\"damageEvents\":[{\"launchTick\":406,\"impactTick\":407,\"attackerName\":\"Corrupted Hunllef\",\"attribution\":\"TIMED\",\"amount\":0,\"hitsplatType\":12,\"damageType\":\"ranged\",\"determination\":\"LAUNCH\",\"pvp\":false,\"prayersAtLaunch\":[],\"launchX\":12856,\"launchY\":14130,\"prayersAtImpact\":[],\"impactX\":12856,\"impactY\":14130},{\"launchTick\":411,\"impactTick\":411,\"attackerName\":\"Corrupted Hunllef\",\"attribution\":\"TIMED\",\"amount\":14,\"hitsplatType\":16,\"damageType\":\"ranged\",\"determination\":\"LAUNCH\",\"pvp\":false,\"overheadAtLaunch\":\"Protect From Missiles\",\"prayersAtLaunch\":[\"Protect From Missiles\"],\"launchX\":12854,\"launchY\":14133,\"overheadAtImpact\":\"Protect From Missiles\",\"prayersAtImpact\":[\"Protect From Missiles\"],\"impactX\":12854,\"impactY\":14133},{\"launchTick\":417,\"impactTick\":417,\"attackerName\":\"Corrupted Hunllef\",\"attribution\":\"TIMED\",\"amount\":30,\"hitsplatType\":16,\"damageType\":\"unknown\",\"determination\":\"LAUNCH\",\"pvp\":false,\"overheadAtLaunch\":\"Protect From Missiles\",\"prayersAtLaunch\":[\"Protect From Missiles\"],\"launchX\":12858,\"launchY\":14134,\"overheadAtImpact\":\"Protect From Missiles\",\"prayersAtImpact\":[\"Protect From Missiles\"],\"impactX\":12858,\"impactY\":14134},{\"launchTick\":418,\"impactTick\":418,\"attackerName\":\"Environmental\",\"attribution\":\"ENVIRONMENTAL\",\"amount\":18,\"hitsplatType\":16,\"damageType\":\"unknown\",\"determination\":\"UNKNOWN\",\"pvp\":false,\"overheadAtLaunch\":\"Protect From Missiles\",\"prayersAtLaunch\":[\"Protect From Missiles\"],\"launchX\":12858,\"launchY\":14134,\"overheadAtImpact\":\"Protect From Missiles\",\"prayersAtImpact\":[\"Protect From Missiles\"],\"impactX\":12858,\"impactY\":14134},{\"launchTick\":419,\"impactTick\":419,\"attackerName\":\"Environmental\",\"attribution\":\"ENVIRONMENTAL\",\"amount\":30,\"hitsplatType\":16,\"damageType\":\"unknown\",\"determination\":\"UNKNOWN\",\"pvp\":false,\"overheadAtLaunch\":\"Protect From Missiles\",\"prayersAtLaunch\":[\"Protect From Missiles\"],\"launchX\":12859,\"launchY\":14135,\"overheadAtImpact\":\"Protect From Missiles\",\"prayersAtImpact\":[\"Protect From Missiles\"],\"impactX\":12859,\"impactY\":14135},{\"launchTick\":420,\"impactTick\":420,\"attackerName\":\"Corrupted Hunllef\",\"attribution\":\"TIMED\",\"amount\":7,\"hitsplatType\":16,\"damageType\":\"unknown\",\"determination\":\"LAUNCH\",\"pvp\":false,\"overheadAtLaunch\":\"Protect From Missiles\",\"prayersAtLaunch\":[\"Protect From Missiles\"],\"launchX\":12859,\"launchY\":14135,\"overheadAtImpact\":\"Protect From Missiles\",\"prayersAtImpact\":[\"Protect From Missiles\"],\"impactX\":12859,\"impactY\":14135}]}}"
+}

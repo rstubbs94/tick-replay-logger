@@ -1,0 +1,11 @@
+# Selected-field source references
+
+`CombatCatalog.supplementalReferenceAnnotation(exactRowKey)` returns an immutable selected-field source review. Version 1 validates the separate namespace, strict source-only flags and its exact attack-reference key, original row hash, CSV line, source identity and preserved raw cells. Missing, future or malformed namespaces return unavailable and ordinary capture continues. Validation is cached once per loaded catalog. The compiler owns retained-source and whole-record cryptographic proof; this accessor does not repeat that research audit.
+
+The existing NPC `researchReferenceKeys` and callback `actorResearchKeys` remain unchanged. A qualified settled NPC may additionally carry `supplementalReferenceCandidates`; an equivalent raw NPC callback may carry `actorSupplementalReferenceCandidates`. Each optional pointer contains only `catalogId`, `annotationVersion: 1`, `rowKeys` and `evidence: "SOURCE_FIELD_REFERENCE_CANDIDATES"`. No entry text or citation payload is repeated per tick.
+
+These pointers reuse the original effective definition and name observations. Settled candidates also require the existing normal/reference context. Failed names remain distinct from successful unnamed observations. No getter is reread to qualify an annotation, and unavailable annotations do not add an empty default pointer.
+
+A pointer links source-field candidates. It cannot select an actor, mode, attack, damage style, timer, ownership or causal attribution. No/N/A/blank cadence does not prove absence of poison, passive damage, explosions or other hazards. Historical source eligibility does not establish current combat eligibility. Source reviews cover stated fields and retain their unknowns.
+
+The focused controls use a one-row injected namespace to test types, source-only flags, immutability and real producer survival. The separate canonical producer test requires the actual emitted 121-row bundled namespace, checks its new catalog epoch and writes `supplemental-reference-candidates.json`; it has no injected fallback. Its mixed received/dealt/other damage is 99/4/7, including a contradictory-name callback that cannot gain candidate pointers. Resource generation and contract registration belong to the integration owner.

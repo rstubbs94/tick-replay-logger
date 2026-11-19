@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "referenceOnly": true,
+  "runtimeQualificationGranted": false,
+  "reviewedInputCatalog": {
+    "catalogId": "eb13a0abdc907482ab7999ca454ae25a088cfdb0805e4c698d76876ffe3507ae",
+    "fileSha256": "dfdc9068b753d2271f1ef65eb287d131d6ca8316f4c357597b94a1a1e11b333c"
+  },
+  "retainedInventoryCatalogId": "d1c8df3670591de1efd002af13ae869847ee276f3f43dfa836d42343f2321de8",
+  "rowCount": 1,
+  "entries": {
+    "attack_reference:3b92c0d7f43074741a91:1": {
+      "ordinal": 1,
+      "rowKey": "attack_reference:3b92c0d7f43074741a91:1",
+      "csvLine": 2142,
+      "originalRowHash": "3b92c0d7f43074741a9112ef85cf32720ed666d8eff0be067e50711eb5784b54",
+      "unchangedInputRecordSha256": "de55c7aa686867acaa2fb600702ca3766269a1ac7ce8d0a8057a90bdbb6b0c58",
+      "referenceOnly": true,
+      "reviewScope": "stated_fields_only",
+      "authorDisposition": "source_correction",
+      "sourceIdentity": {
+        "page": "Portal (wighted leech)",
+        "declaredRowSource": "Portal (wighted leech)",
+        "rawNpcIds": "12334",
+        "variantScopes": [
+          {
+            "index": 7332,
+            "page": "Portal (wighted leech)",
+            "version": "",
+            "context": "",
+            "infoboxKind": "monster",
+            "templateOrdinal": 1,
+            "variant": "Portal (wighted leech)",
+            "name": "Portal",
+            "npc_ids": [
+              12334
+            ],
+            "id_qualifiers": [],
+            "unbound_ids": [],
+            "max_hit": "",
+            "attack_style": "None",
+            "attack_speed": "0",
+            "source_ref": "wiki:Portal (wighted leech)#infobox-1",
+            "cacheStatuses": {
+              "12334": "name_reference_agreement"
+            },
+            "runtimeQualificationGranted": false
+          }
+        ],
+        "uniqueObservedActorOrModeGranted": false
+      },
+      "ordinaryCadenceReference": {
+        "originalNumericCell": "",
+        "sourceLiteral": "0",
+        "interpretation": "scalar_reference_only",
+        "scalarTicksForComparisonOnly": 0,
+        "executableTimerGranted": false
+      },
+      "maximumReference": {
+        "originalCell": "",
+        "sourceLiteral": "",
+        "incomingCapOrDamageTypeGranted": false,
+        "scope": "Literal definition/conditional reference only; applicability is limited by the accompanying field dispositions and unknowns."
+      },
+      "ordinaryStyleReference": {
+        "sourceLiterals": [
+          "None"
+        ],
+        "displayLabel": null,
+        "labelDecision": null,
+        "damageTypeUnchanged": "",
+        "noneDoesNotMeanTypelessOrHarmless": true
+      },
+      "sourceContextFacts": {
+        "cadenceLiteral": "0",
+        "maximumLiteral": ""
+      },
+      "roleContext": [
+        "The30HP portal summoned by Persten emits Wighted Leeches until destroyed; spawning is distinct from its own attack cadence."
+      ],
+      "conditionalCadenceReferences": [],
+      "fieldDispositions": [
+        {
+          "field": "max_hit",
+          "retainedValue": "",
+          "primaryVariantValue": "",
+          "disposition": "literal_match_context_retained",
+          "comment": "Exact shared/version-selected maximum cell matches; this is not proof of a per-style executable cap."
+        },
+        {
+          "field": "attack_speed_ticks",
+          "retainedValue": "",
+          "primaryVariantValue": "0",
+          "disposition": "blank_omits_literal_context",
+          "comment": "Source literal0 is retained as a non-attacking portal field, not an executable every-tick attack interval."
+        },
+        {
+          "field": "attack_name/damage_type versus attack_style",
+          "retainedValue": {
+            "attack_name": "(non-combat / no attack on wiki)",
+            "damage_type": ""
+          },
+          "primaryVariantValue": "None",
+          "disposition": "source_scope_reviewed_not_runtime_qualified",
+          "comment": "StyleNone and blank maximum do not specify an outgoing damaging attack or prove the encounter harmless."
+        },
+        {
+          "field": "npcIds/identity",
+          "retainedValue": [
+            12334
+          ],
+          "primaryVariantValue": [
+            12334
+          ],
+          "disposition": "literal_membership_match_no_unique_actor_binding",
+          "comment": "Keep Persten portal12334 distinct from the Wighted Leeches that emerge; do not assign their damage to this definition by proximity."
+        },
+        {
+          "field": "variant/context",
+          "retainedValue": "Portal (wighted leech)",
+          "primaryVariantValue": {
+            "version": "",
+            "context": "",
+            "templateOrdinal": 1
+          },
+          "disposition": "retain_exact_version_context",
+          "comment": "Keep Persten portal12334 distinct from the Wighted Leeches that emerge; do not assign their damage to this definition by proximity."
+        },
+        {
+          "field": "mechanism/context",
+          "retainedValue": "",
+          "disposition": "bounded_primary_context_review",
+          "comment": "The30HP portal summoned by Persten emits Wighted Leeches until destroyed; spawning is distinct from its own attack cadence."
+        }
+      ],
+      "unknowns": [
+        "Leech spawn timing and causal damage attribution are outside this page delta."
+      ],
+      "historicalSourceEligibility": {
+        "status": "not_qualified_by_this_review",
+        "currentActiveGameEligibilityGranted": false,
+        "rawCaptureMustRemainVisible": true
+      },
+      "authorEvidenceRefs": [
+        "C:E061",
+        "C:E062",
+        "C:E063",
+        "C:E064",
+        "C:E065",
+        "C:E066",
+        "C:E067"
+      ],
+      "provenance": {
+        "authorManifestSha256": "cf282b76c3a761703cafcd1b0d4620e8cdef4353c3a588502c91f85ad07a67a6",
+        "peerManifestSha256": "6889c29e65cd9393ac72d9ef3e4be21181f5fdc4df3e1ee80fb288a62cb1c164",
+        "acceptedExactTokenAnnotation": null,
+        "acceptedTokenAnnotationCounted": false
+      },
+      "fullRecordApproved": false,
+      "runtimeQualificationGranted": false,
+      "secondaryDispositions": []
+    }
+  },
+  "consumerPolicy": {
+    "use": "Exact-row-key bibliography and field-scoped research display only",
+    "originalAttackReferencesUnchanged": true,
+    "runtimeRuleSelectionAllowed": false,
+    "damageTypeOrOwnershipInferenceAllowed": false,
+    "sourceNoNABlankNeverRemovesHazardDiscovery": true,
+    "unknownTimingRemainsUnknown": true,
+    "historicalReferenceNeverPromotedByCachePresence": true
+  },
+  "sourceEvidence": {
+    "C:E061": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 18,
+      "endExclusive": 32,
+      "sha256": "ec9fefcc13c473eb1da4c79ccd2f95f85f611742aa2cab1d77748bb9770af0a8",
+      "text": "|name = Portal",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E062": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 180,
+      "endExclusive": 190,
+      "sha256": "be5b74673fc706fc203587291011d00815cad7e410e90e5a144a5468e4f7b53a",
+      "text": "|combat = ",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E063": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 266,
+      "endExclusive": 277,
+      "sha256": "5fc26d775e78275ee14e78a90e12052b86db9aa0fb0e96935696945c2e1e855f",
+      "text": "|max hit = ",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E064": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 311,
+      "endExclusive": 331,
+      "sha256": "16ae2df3af2ea15c6a705be6f2276972eb5ae1ccca5681eef0ccec2ddaa09896",
+      "text": "|attack style = None",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E065": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 332,
+      "endExclusive": 349,
+      "sha256": "8d1dabf848e1c383674dc6ca0917684a96ae4b799e3df1a82002d97a175ba676",
+      "text": "|attack speed = 0",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E066": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 635,
+      "endExclusive": 646,
+      "sha256": "29475dbfee0386fd6e38e97bf015cc7aabdc6f1056a801299d21a804488e4623",
+      "text": "|id = 12334",
+      "label": "literal_infobox_parameter"
+    },
+    "C:E067": {
+      "page": "Portal (wighted leech)",
+      "url": "https://oldschool.runescape.wiki/w/Portal_(wighted_leech)",
+      "pageSha256": "3fa215616e709e42bc26bf99639c8be5a626dfbdde86e00755b2b5659c44b4a1",
+      "offsetUnit": "unicode_code_points",
+      "start": 650,
+      "endExclusive": 890,
+      "sha256": "0d06132957b11f142a6e038b5bc80255c677ff9fd1eaf94219a4f6a213b13314",
+      "text": "The '''portal''' is summoned by [[Persten the Deceitful]] during the fight against her at the end of [[Desert Treasure II - The Fallen Empire]]. Having 30 [[Hitpoints]], [[Wighted Leech]]es will come out of the portal until it is destroyed.",
+      "label": "context_or_mechanism"
+    }
+  }
+}

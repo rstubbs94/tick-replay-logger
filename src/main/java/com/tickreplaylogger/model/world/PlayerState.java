@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2026, rstubbs94
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+package com.tickreplaylogger.model.world;
+
+import java.util.List;
+import lombok.Builder;
+import lombok.Data;
+
+/**
+ * The local player's full per-tick state for death reconstruction. Unlike the lightweight
+ * {@code TickData} used by the in-plugin journal, this stores absolute + local coordinates and
+ * the rich fields needed for local recording analysis. Part of a {@link WorldSnapshot}.
+ */
+@Data
+@Builder
+public class PlayerState
+{
+	private final Integer worldViewId;
+	private final ActorInteractionState interaction;
+	private final Integer combatLevel;
+	private final java.util.Map<String, String> observationIssues;
+	private final Boolean localPositionKnown;
+	private final Boolean worldPositionKnown;
+	private final Boolean planeKnown;
+	private final int worldX;
+	private final int worldY;
+	private final int plane;
+	private final int localX; // scene-local (0..104*128), for sub-tile animation
+	private final int localY;
+	private final Integer orientation; // 0..2047
+	private final Integer currentOrientation; // sampled client-facing angle; orientation is the target
+
+	private final Integer animationId;
+	private final Integer animationFrame;
+	private final Integer poseAnimationId;
+	private final Integer poseAnimationFrame;
+	private final int[] graphicIds; // active spotanims (freeze/teleblock/etc. show here)
+	private final Boolean graphicsKnown;
+	private final ActorGraphicsState graphicsState;
+
+	private final Integer hp;
+	private final Integer maxHp;
+	private final Integer prayer;
+	private final Integer maxPrayer;
+	private final Boolean prayerStateKnown; // all flags read and overhead resolved; raw icon availability is independent
+	private final java.util.Map<String, Boolean> prayerFlagValues; // unread flags are absent, not false
+	private final List<String> activePrayers;
+	private final String overheadPrayer; // the single active overhead, or null
+	private final String overheadText;
+	private final Integer overheadCycle;
+	private final String overheadIcon; // raw actor icon, independent of prayer varbit flags
+	private final Boolean overheadIconKnown;
+	private final List<String> reportedActivePrayers;
+	private final boolean prayerStateConflict;
+	private final String overheadPrayerEvidence;
+
+	// Real (base) vs boosted levels → stat drains/boosts are the delta.
+	private final Integer boostedAttack;
+	private final Integer boostedStrength;
+	private final Integer boostedDefence;
+	private final Integer boostedRanged;
+	private final Integer boostedMagic;
+	private final java.util.Map<String, Integer> baseSkillLevels;
+	private final java.util.Map<String, Integer> boostedSkillLevels;
+
+	private final Integer specEnergy; // 0..100
+	private final Integer runEnergy; // 0..100 (legacy whole-percent display)
+	private final Integer runEnergyRaw; // Client.getEnergy(), native hundredths of one percent
+	private final Integer specEnergyRaw; // SPECIAL_ATTACK_PERCENT/SA_ENERGY varp, native tenths of one percent
+	private final Boolean runEnergyKnown;
+	private final Boolean specEnergyKnown;
+	private final Integer interactingNpcIndex; // who the player is interacting with, or null
+
+	private final int[] equipmentItemIds; // actual local container, indexed by EquipmentInventorySlot.getSlotIdx()
+	private final boolean[] equipmentSlotKnown;
+	private final PlayerAppearanceState appearance;
+	private final int[] inventoryItemIds;
+	private final int[] inventoryQuantities;
+	private final boolean[] inventorySlotKnown;
+	private final boolean[] inventoryQuantityKnown;
+	private final int poisonValue; // raw poison/venom varp, including statuses applied before this window
+	private final Boolean poisonValueKnown; // false means the numeric field is an unavailable placeholder
+
+	// Supplied previous world point and current observed world point; these are not movement intent.
+	private final Integer fromX;
+	private final Integer fromY;
+	private final Integer toX;
+	private final Integer toY;
+}

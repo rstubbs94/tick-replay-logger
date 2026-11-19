@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "referenceOnly": true,
+  "runtimeQualificationGranted": false,
+  "reviewedInputCatalog": {
+    "catalogId": "eb13a0abdc907482ab7999ca454ae25a088cfdb0805e4c698d76876ffe3507ae",
+    "fileSha256": "dfdc9068b753d2271f1ef65eb287d131d6ca8316f4c357597b94a1a1e11b333c"
+  },
+  "retainedInventoryCatalogId": "d1c8df3670591de1efd002af13ae869847ee276f3f43dfa836d42343f2321de8",
+  "rowCount": 1,
+  "entries": {
+    "attack_reference:cbd9f2135c74ca4d0d3f:1": {
+      "ordinal": 1,
+      "rowKey": "attack_reference:cbd9f2135c74ca4d0d3f:1",
+      "csvLine": 114,
+      "originalRowHash": "cbd9f2135c74ca4d0d3f15fca1e6cf9564d34f0bf7aed519a22070774716e853",
+      "unchangedInputRecordSha256": "33921a19842e187ee400e026ccc28a6959e21162c04e98da2af5730266e56342",
+      "referenceOnly": true,
+      "reviewScope": "stated_fields_only",
+      "authorDisposition": "mode/version separation",
+      "sourceIdentity": {
+        "page": "Armoured zombie (The Curse of Arrav)",
+        "declaredRowSource": "Armoured zombie (The Curse of Arrav) - 1",
+        "rawNpcIds": "14135",
+        "variantScopes": [
+          {
+            "page": "Armoured zombie (The Curse of Arrav)",
+            "version": "1",
+            "context": "",
+            "infoboxKind": "monster",
+            "templateOrdinal": 1,
+            "variant": "Armoured zombie (The Curse of Arrav) — 1",
+            "name": "Armoured zombie",
+            "npc_ids": [
+              14135
+            ],
+            "id_raw": "14135",
+            "id_qualifiers": [],
+            "unbound_ids": [],
+            "source_ref": "wiki:Armoured zombie (The Curse of Arrav)#infobox-1",
+            "combat_level": "70",
+            "hitpoints": "10",
+            "max_hit": "10",
+            "attack_style": "None",
+            "attack_speed": "No",
+            "aggressive": "Yes",
+            "poisonous": "No",
+            "field_sources": {
+              "version": 1,
+              "variantIndex": 1,
+              "parameters": {
+                "combat_level": "combat",
+                "hitpoints": "hitpoints",
+                "max_hit": "max hit",
+                "attack_style": "attack style",
+                "attack_speed": "attack speed",
+                "aggressive": "aggressive",
+                "poisonous": "poisonous"
+              }
+            },
+            "mechanic_fields_raw": {
+              "attack style": "None",
+              "attack speed": "No",
+              "max hit": "10",
+              "attributes": "undead",
+              "immunecannon": "Yes",
+              "immunethrall": "No"
+            }
+          }
+        ],
+        "uniqueObservedActorOrModeGranted": false
+      },
+      "ordinaryCadenceReference": {
+        "originalNumericCell": "",
+        "sourceLiteral": "No",
+        "interpretation": "nonnumeric_ordinary_cadence_reference",
+        "scalarTicksForComparisonOnly": null,
+        "executableTimerGranted": false
+      },
+      "maximumReference": {
+        "originalCell": "10",
+        "sourceLiteral": "10",
+        "incomingCapOrDamageTypeGranted": false,
+        "scope": "Literal definition/conditional reference only; applicability is limited by the accompanying field dispositions and unknowns."
+      },
+      "ordinaryStyleReference": {
+        "sourceLiterals": [
+          "None"
+        ],
+        "displayLabel": null,
+        "labelDecision": null,
+        "damageTypeUnchanged": "",
+        "noneDoesNotMeanTypelessOrHarmless": true
+      },
+      "sourceContextFacts": {
+        "cadenceLiteral": "No",
+        "maximumLiteral": "10"
+      },
+      "roleContext": [
+        "Infobox max10/speedNo is not a conventional-attack rule. Lead explicitly describes venom pools: up to4 damage per stationary tick, stacking to20. Keep pool application and observed position/movement separate; no timing/attribution promotion."
+      ],
+      "conditionalCadenceReferences": [],
+      "fieldDispositions": [
+        {
+          "field": "max_hit",
+          "before": "10",
+          "sourceLiteral": "10",
+          "verdict": "literal/reference agreement; no numerical replacement",
+          "action": "retain original max_hit; no new incoming cap inferred",
+          "evidence": [
+            "evidence:9bed8c410ccaf5aa172c",
+            "evidence:1a8cf907c88a12cec549"
+          ]
+        },
+        {
+          "field": "attack_speed_ticks",
+          "before": "",
+          "sourceLiteral": "No",
+          "verdict": "blank numeric cell vs source literal No; no numeric contradiction",
+          "action": "numeric cadence remains unavailable; preserve source literal separately, never insert0 or default ticks",
+          "evidence": [
+            "evidence:e69464a39c67222aebd4"
+          ]
+        },
+        {
+          "field": "npc_ids/version/context",
+          "before": {
+            "npc_ids": "14135",
+            "source": "Armoured zombie (The Curse of Arrav) - 1"
+          },
+          "variants": [
+            {
+              "variantIndex": 436,
+              "version": "1",
+              "retainedContext": "",
+              "directSourceContext": "",
+              "idParameterLiteral": "14135",
+              "idEvidence": "evidence:716ba8dd9250e3c5e968",
+              "versionEvidence": "evidence:59d917270531d3d5a849",
+              "contextEvidence": null,
+              "maxParameter": "max hit",
+              "speedParameter": "attack speed"
+            }
+          ],
+          "verdict": "exact page/ID correspondence to retained variant parameters; reference identity only",
+          "action": "retain modes, active/inactive states, pages and IDs separately; no runtime selection from lexical/name agreement",
+          "evidence": [
+            "evidence:716ba8dd9250e3c5e968",
+            "evidence:59d917270531d3d5a849"
+          ]
+        }
+      ],
+      "unknowns": [
+        "Application and prayer timing remainUNKNOWN; original spreadsheet defaults remain archived only.",
+        "No live, actor ownership, phase/mode predicate or unique attacker was validated.",
+        "No removal from hazard discovery; ordinary cadence absence is not all-damage absence."
+      ],
+      "historicalSourceEligibility": {
+        "status": "not_qualified_by_this_review",
+        "currentActiveGameEligibilityGranted": false,
+        "rawCaptureMustRemainVisible": true
+      },
+      "authorEvidenceRefs": [
+        "A:evidence:9bed8c410ccaf5aa172c",
+        "A:evidence:e69464a39c67222aebd4",
+        "A:evidence:1a8cf907c88a12cec549",
+        "A:evidence:d586ffb67ce502bde4e0",
+        "A:evidence:716ba8dd9250e3c5e968",
+        "A:evidence:59d917270531d3d5a849"
+      ],
+      "provenance": {
+        "authorManifestSha256": "1a70bf909f672efef62293b86c884ee7b105db323b31398a3e540c25af3a6242",
+        "peerManifestSha256": "aa42b94bb9fe1bee159cbc541be0e4677892ac3d665579c897b34a0dd0d8fb4a",
+        "acceptedExactTokenAnnotation": null,
+        "acceptedTokenAnnotationCounted": false
+      },
+      "fullRecordApproved": false,
+      "runtimeQualificationGranted": false,
+      "secondaryDispositions": []
+    }
+  },
+  "consumerPolicy": {
+    "use": "Exact-row-key bibliography and field-scoped research display only",
+    "originalAttackReferencesUnchanged": true,
+    "runtimeRuleSelectionAllowed": false,
+    "damageTypeOrOwnershipInferenceAllowed": false,
+    "sourceNoNABlankNeverRemovesHazardDiscovery": true,
+    "unknownTimingRemainsUnknown": true,
+    "historicalReferenceNeverPromotedByCachePresence": true
+  },
+  "sourceEvidence": {
+    "A:evidence:9bed8c410ccaf5aa172c": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 545,
+      "endExclusive": 558,
+      "sha256": "8e1b5a6b6820dcfa0178a8500640795cddd4a95c53e4606df2892ba5a0e7823b",
+      "text": "|max hit = 10",
+      "label": "max hit literal parameter"
+    },
+    "A:evidence:e69464a39c67222aebd4": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 614,
+      "endExclusive": 632,
+      "sha256": "38119c9691ca27253655f2ff22bb8fda851d10dc55fb0c9b85bd1ff385ae98b1",
+      "text": "|attack speed = No",
+      "label": "attack speed literal parameter"
+    },
+    "A:evidence:1a8cf907c88a12cec549": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 1044,
+      "endExclusive": 1586,
+      "sha256": "3bde992c41d002974035755474474561fd18ae5c265ecff32af74c366bf6bb86",
+      "text": "'''Armoured zombies''' are spawned during the [[Arrav]] boss fight in [[The Curse of Arrav]], who leave behind venom pools wherever they walk. Stepping on these will inflict [[venom]] and deal up to 4 damage every [[tick]] if not moving; this stacks up to a maximum of 20 damage per tick if the player does not move.\n\nUsing ranged or magic is recommended as they have very low ranged and magic defence.\n[[file:The Curse of Arrav - fighting Arrav.png|thumb|left|300px|Armoured zombies leaving behind venom pools during the fight with Arrav.]]\n",
+      "label": "Directly read lead/role context (bounded excerpt)"
+    },
+    "A:evidence:d586ffb67ce502bde4e0": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 593,
+      "endExclusive": 613,
+      "sha256": "16ae2df3af2ea15c6a705be6f2276972eb5ae1ccca5681eef0ccec2ddaa09896",
+      "text": "|attack style = None",
+      "label": "attack style literal parameter"
+    },
+    "A:evidence:716ba8dd9250e3c5e968": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 1015,
+      "endExclusive": 1027,
+      "sha256": "80b40316c2ce42b3693474bd035cfaad5e64f7754bd5c48a8f9d264c49d6aa52",
+      "text": "|id1 = 14135",
+      "label": "id1 literal parameter"
+    },
+    "A:evidence:59d917270531d3d5a849": {
+      "page": "Armoured zombie (The Curse of Arrav)",
+      "url": "https://oldschool.runescape.wiki/w/Armoured_zombie_(The_Curse_of_Arrav)",
+      "pageSha256": "d10423876c8f2f5a502e013fc6433bb4aab9e437dc497a2047e4f99cf48c3f97",
+      "offsetUnit": "unicode_code_points",
+      "start": 111,
+      "endExclusive": 124,
+      "sha256": "4826943c745f25079137c69276b9d0a438fbfd4b65619bb429f3c9b1cbb4d605",
+      "text": "|version1 = 1",
+      "label": "version1 literal parameter"
+    }
+  }
+}

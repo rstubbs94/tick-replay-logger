@@ -1,0 +1,560 @@
+{
+  "scope": "Synthetic incoming HP callbacks with independently reviewed source ceilings; not observed gameplay or whole-game certification.",
+  "sourceReviewSha256": "38ace9dfc7248322de8613388daad870db854f67274b6299cf445f36d63d658a",
+  "declaredGuards": 58,
+  "cases": [
+    {
+      "rule": "whole_actor_bound:kalphite_queen:f6366b11af",
+      "name": "Kalphite Queen",
+      "npcId": 963,
+      "level": 333,
+      "maximum": 31
+    },
+    {
+      "rule": "whole_actor_bound:kalphite_queen:f6366b11af",
+      "name": "Kalphite Queen",
+      "npcId": 4303,
+      "level": 333,
+      "maximum": 31
+    },
+    {
+      "rule": "whole_actor_bound:kalphite_queen:abf90b40a0",
+      "name": "Kalphite Queen",
+      "npcId": 965,
+      "level": 333,
+      "maximum": 31
+    },
+    {
+      "rule": "whole_actor_bound:kalphite_queen:abf90b40a0",
+      "name": "Kalphite Queen",
+      "npcId": 4304,
+      "level": 333,
+      "maximum": 31
+    },
+    {
+      "rule": "whole_actor_bound:kolodion:10503c6e8e",
+      "name": "Kolodion",
+      "npcId": 1609,
+      "level": 112,
+      "maximum": 20
+    },
+    {
+      "rule": "whole_actor_bound:sarachnis:a50e94d47f",
+      "name": "Sarachnis",
+      "npcId": 8713,
+      "level": 318,
+      "maximum": 31
+    },
+    {
+      "rule": "whole_actor_bound:mercenary_captain:1e7a94ec92",
+      "name": "Mercenary Captain",
+      "npcId": 4635,
+      "level": 47,
+      "maximum": 5
+    },
+    {
+      "rule": "whole_actor_bound:balfrug_kreeyath:b13fea6234",
+      "name": "Balfrug Kreeyath",
+      "npcId": 3132,
+      "level": 151,
+      "maximum": 16
+    },
+    {
+      "rule": "whole_actor_bound:zakl_n_gritch:2e030fdca3",
+      "name": "Zakl'n Gritch",
+      "npcId": 3131,
+      "level": 142,
+      "maximum": 21
+    },
+    {
+      "rule": "whole_actor_bound:tstanon_karlak:f43b1fc36f",
+      "name": "Tstanon Karlak",
+      "npcId": 3130,
+      "level": 145,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:bree:2f21667685",
+      "name": "Bree",
+      "npcId": 2208,
+      "level": 146,
+      "maximum": 16
+    },
+    {
+      "rule": "whole_actor_bound:growler:c49a91996a",
+      "name": "Growler",
+      "npcId": 2207,
+      "level": 139,
+      "maximum": 16
+    },
+    {
+      "rule": "whole_actor_bound:flight_kilisa:05f5b9a52e",
+      "name": "Flight Kilisa",
+      "npcId": 3165,
+      "level": 159,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:flockleader_geerin:c5ac51d8d6",
+      "name": "Flockleader Geerin",
+      "npcId": 3164,
+      "level": 149,
+      "maximum": 25
+    },
+    {
+      "rule": "whole_actor_bound:sergeant_grimspike:7bda79647f",
+      "name": "Sergeant Grimspike",
+      "npcId": 2218,
+      "level": 142,
+      "maximum": 21
+    },
+    {
+      "rule": "whole_actor_bound:sergeant_steelwill:235df3a4c4",
+      "name": "Sergeant Steelwill",
+      "npcId": 2217,
+      "level": 142,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:wingman_skree:0acc76b47f",
+      "name": "Wingman Skree",
+      "npcId": 3163,
+      "level": 143,
+      "maximum": 16
+    },
+    {
+      "rule": "whole_actor_bound:starlight:64ed1618c3",
+      "name": "Starlight",
+      "npcId": 2206,
+      "level": 149,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:enormous_tentacle:d3d498f7e9",
+      "name": "Enormous Tentacle",
+      "npcId": 5535,
+      "level": 112,
+      "maximum": 2
+    },
+    {
+      "rule": "whole_actor_bound:kraken:68e4397ec1",
+      "name": "Kraken",
+      "npcId": 494,
+      "level": 291,
+      "maximum": 28
+    },
+    {
+      "rule": "whole_actor_bound:tztok_jad:0e5d79b3e0",
+      "name": "TzTok-Jad",
+      "npcId": 3127,
+      "level": 702,
+      "maximum": 97
+    },
+    {
+      "rule": "whole_actor_bound:abyssal_demon:3b05fd42f1",
+      "name": "Abyssal demon",
+      "npcId": 415,
+      "level": 124,
+      "maximum": 8
+    },
+    {
+      "rule": "whole_actor_bound:abyssal_demon:3b05fd42f1",
+      "name": "Abyssal demon",
+      "npcId": 416,
+      "level": 124,
+      "maximum": 8
+    },
+    {
+      "rule": "whole_actor_bound:abyssal_demon:1fdbdfcec9",
+      "name": "Abyssal demon",
+      "npcId": 7241,
+      "level": 124,
+      "maximum": 8
+    },
+    {
+      "rule": "whole_actor_bound:abyssal_demon:8a1d5c78a3",
+      "name": "Abyssal demon",
+      "npcId": 11239,
+      "level": 124,
+      "maximum": 8
+    },
+    {
+      "rule": "whole_actor_bound:angry_barbarian_spirit:66d262b430",
+      "name": "Angry barbarian spirit",
+      "npcId": 5563,
+      "level": 166,
+      "maximum": 18
+    },
+    {
+      "rule": "whole_actor_bound:animated_mithril_armour:9ca45367cc",
+      "name": "Animated Mithril Armour",
+      "npcId": 2454,
+      "level": 92,
+      "maximum": 10
+    },
+    {
+      "rule": "whole_actor_bound:archer_ardougne:d5725e1f8a",
+      "name": "Archer",
+      "npcId": 3301,
+      "level": 37,
+      "maximum": 6
+    },
+    {
+      "rule": "whole_actor_bound:archer_burthorpe:4a00aabd77",
+      "name": "Archer",
+      "npcId": 4096,
+      "level": 42,
+      "maximum": 6
+    },
+    {
+      "rule": "whole_actor_bound:archer_burthorpe:4a00aabd77",
+      "name": "Archer",
+      "npcId": 4097,
+      "level": 42,
+      "maximum": 6
+    },
+    {
+      "rule": "whole_actor_bound:archer_burthorpe:4a00aabd77",
+      "name": "Archer",
+      "npcId": 4098,
+      "level": 42,
+      "maximum": 6
+    },
+    {
+      "rule": "whole_actor_bound:battle_mage:eb09839e26",
+      "name": "Battle mage",
+      "npcId": 1611,
+      "level": 54,
+      "maximum": 20
+    },
+    {
+      "rule": "whole_actor_bound:battle_mage:466ce2f1cf",
+      "name": "Battle mage",
+      "npcId": 1610,
+      "level": 54,
+      "maximum": 20
+    },
+    {
+      "rule": "whole_actor_bound:battle_mage:2705fba8c5",
+      "name": "Battle mage",
+      "npcId": 1612,
+      "level": 54,
+      "maximum": 20
+    },
+    {
+      "rule": "whole_actor_bound:black_guard_berserker:9103df91a1",
+      "name": "Black Guard Berserker",
+      "npcId": 6050,
+      "level": 66,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:black_guard_berserker:dbe071b48f",
+      "name": "Black Guard Berserker",
+      "npcId": 6051,
+      "level": 66,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:black_guard_berserker:5811bafea4",
+      "name": "Black Guard Berserker",
+      "npcId": 6052,
+      "level": 66,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:black_guard_berserker:5811bafea4",
+      "name": "Black Guard Berserker",
+      "npcId": 2232,
+      "level": 66,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:bouncer:e6fa9ceed8",
+      "name": "Bouncer",
+      "npcId": 1224,
+      "level": 137,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:chaotic_death_spawn:d0d79f4777",
+      "name": "Chaotic death spawn",
+      "npcId": 6716,
+      "level": 215,
+      "maximum": 7
+    },
+    {
+      "rule": "whole_actor_bound:chaotic_death_spawn:4c99c93288",
+      "name": "Chaotic death spawn",
+      "npcId": 6723,
+      "level": 215,
+      "maximum": 7
+    },
+    {
+      "rule": "whole_actor_bound:chaotic_death_spawn:f3e7155bc7",
+      "name": "Chaotic death spawn",
+      "npcId": 7649,
+      "level": 215,
+      "maximum": 7
+    },
+    {
+      "rule": "whole_actor_bound:death_spawn:af886cd279",
+      "name": "Death spawn",
+      "npcId": 10,
+      "level": 46,
+      "maximum": 2
+    },
+    {
+      "rule": "whole_actor_bound:drunken_man:3d2e91b270",
+      "name": "Drunken man",
+      "npcId": 3263,
+      "level": 3,
+      "maximum": 1
+    },
+    {
+      "rule": "whole_actor_bound:guard_burthorpe:19edad2659",
+      "name": "Guard",
+      "npcId": 4099,
+      "level": 37,
+      "maximum": 5
+    },
+    {
+      "rule": "whole_actor_bound:guard_burthorpe:caf37dec6e",
+      "name": "Guard",
+      "npcId": 4100,
+      "level": 37,
+      "maximum": 5
+    },
+    {
+      "rule": "whole_actor_bound:jal_nib:b461e5e10a",
+      "name": "Jal-Nib",
+      "npcId": 7691,
+      "level": 32,
+      "maximum": 4
+    },
+    {
+      "rule": "whole_actor_bound:jungle_demon:0e25219706",
+      "name": "Jungle Demon",
+      "npcId": 1443,
+      "level": 195,
+      "maximum": 32
+    },
+    {
+      "rule": "whole_actor_bound:kraka:8d2a289a37",
+      "name": "Kraka",
+      "npcId": 928,
+      "level": 91,
+      "maximum": 23
+    },
+    {
+      "rule": "whole_actor_bound:monkey_guard:e39ad32449",
+      "name": "Monkey Guard",
+      "npcId": 5275,
+      "level": 167,
+      "maximum": 14
+    },
+    {
+      "rule": "whole_actor_bound:monkey_guard:270092b49b",
+      "name": "Monkey Guard",
+      "npcId": 5276,
+      "level": 167,
+      "maximum": 14
+    },
+    {
+      "rule": "whole_actor_bound:ork:15590a2162",
+      "name": "Ork",
+      "npcId": 2237,
+      "level": 107,
+      "maximum": 12
+    },
+    {
+      "rule": "whole_actor_bound:ork:15590a2162",
+      "name": "Ork",
+      "npcId": 2238,
+      "level": 107,
+      "maximum": 12
+    },
+    {
+      "rule": "whole_actor_bound:ork:15590a2162",
+      "name": "Ork",
+      "npcId": 2239,
+      "level": 107,
+      "maximum": 12
+    },
+    {
+      "rule": "whole_actor_bound:ork:15590a2162",
+      "name": "Ork",
+      "npcId": 2240,
+      "level": 107,
+      "maximum": 12
+    },
+    {
+      "rule": "whole_actor_bound:pee_hat:16b1a5b2d1",
+      "name": "Pee Hat",
+      "npcId": 927,
+      "level": 91,
+      "maximum": 23
+    },
+    {
+      "rule": "whole_actor_bound:possessed_priest:80fb60525c",
+      "name": "Possessed Priest",
+      "npcId": 4210,
+      "level": 91,
+      "maximum": 6
+    },
+    {
+      "rule": "whole_actor_bound:rock_troll:e00c28b46c",
+      "name": "Rock",
+      "npcId": 925,
+      "level": 111,
+      "maximum": 30
+    },
+    {
+      "rule": "whole_actor_bound:shadow_temple_of_light:7f6fc7b969",
+      "name": "Shadow",
+      "npcId": 4004,
+      "level": 73,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:slagilith:1f8ebb94de",
+      "name": "Slagilith",
+      "npcId": 1362,
+      "level": 92,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:slagilith:1f8ebb94de",
+      "name": "Slagilith",
+      "npcId": 1364,
+      "level": 92,
+      "maximum": 13
+    },
+    {
+      "rule": "whole_actor_bound:spinolyp:34d1566e16",
+      "name": "Spinolyp",
+      "npcId": 5947,
+      "level": 76,
+      "maximum": 10
+    },
+    {
+      "rule": "whole_actor_bound:spinolyp:34d1566e16",
+      "name": "Spinolyp",
+      "npcId": 5963,
+      "level": 76,
+      "maximum": 10
+    },
+    {
+      "rule": "whole_actor_bound:spinolyp:34d1566e16",
+      "name": "Spinolyp",
+      "npcId": 5961,
+      "level": 76,
+      "maximum": 10
+    },
+    {
+      "rule": "whole_actor_bound:troll_general:7a355c1f31",
+      "name": "Troll general",
+      "npcId": 4120,
+      "level": 113,
+      "maximum": 38
+    },
+    {
+      "rule": "whole_actor_bound:troll_general:24b212bfb8",
+      "name": "Troll general",
+      "npcId": 4121,
+      "level": 113,
+      "maximum": 38
+    },
+    {
+      "rule": "whole_actor_bound:troll_general:ddbba49951",
+      "name": "Troll general",
+      "npcId": 4122,
+      "level": 113,
+      "maximum": 38
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 639,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 1327,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 3433,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 3434,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 3436,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 8945,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 8961,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 8962,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 8963,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:tyras_guard:14c524451d",
+      "name": "Tyras guard",
+      "npcId": 8964,
+      "level": 110,
+      "maximum": 15
+    },
+    {
+      "rule": "whole_actor_bound:wallasalki:08a6f5bb66",
+      "name": "Wallasalki",
+      "npcId": 5938,
+      "level": 98,
+      "maximum": 30
+    },
+    {
+      "rule": "whole_actor_bound:wallasalki:a118cf5823",
+      "name": "Wallasalki",
+      "npcId": 5939,
+      "level": 98,
+      "maximum": 30
+    }
+  ]
+}

@@ -1,115 +1,99 @@
 # Tick Replay Logger
 
-Tick Replay Logger is a RuneLite Plugin Hub submission that records the last few dozen ticks leading up to a death (or a manual snapshot) so you can replay every action after the fact without any predictive overlays.
+Tick Replay Logger records what happened on each tick before you died, so you
+can look back at your damage, prayers, movement and actions. You can also save a
+recording without dying using Live View.
+
+This update improves damage-source matching, adds tick timing and ping context,
+records more information in JSON exports, and makes the replay easier to read.
+See the [changelog](CHANGELOG.md).
 
 ## Features
 
-### Death Recording
-- Automatically captures the last 50-100 ticks (configurable) before each death
-- Records HP, prayer points, and active prayers each tick
-- Tracks damage received and dealt with source attribution
-- Captures player actions: eating, drinking, prayer switches, gear changes, attacks, and special attacks
-- Detects prayer conflicts (e.g., multiple overhead prayers, incompatible combat prayers)
-- Stores up to 3 deaths (configurable) with persistent storage
+- Automatically record the ticks leading up to a death.
+- See your HP, prayer points, active prayers, movement and actions on each tick.
+- Review damage taken, damage dealt and where the damage came from.
+- See recorded tick intervals and sampled world ping alongside the combat log.
+- Step through a recording or play it back at different speeds.
+- Save and rename recordings you want to keep.
+- Use Live View to watch the recent tick log, pause it and save a snapshot.
+- Copy recordings as JSON for later inspection or sharing.
 
-### Playback System
-- **Visual Playback Dashboard** - Replay recordings tick-by-tick with synchronized panels
-- **Transport Controls** - Play/Pause, Previous/Next tick, Jump to First/Last
-- **Playback Speed** - 0.5x, 1x, or 2x speed options
-- **HP & Prayer Bars** - Color-coded progress bars showing current values with change indicators
-- **Cumulative Damage** - Running totals for damage taken and dealt
-- **Active Prayers Display** - Shows all active prayers for the current tick
-- **Current Tick Events** - Detailed view of actions, damage, and movement with icons
-- **Event Log Timeline** - Clickable list to jump to any tick
-  - Multi-color angled stripe highlighting for significant events
-  - Red for damage received, Blue for damage dealt, Green for healing, Purple for prayer actions
-- **Combat Status** - Shows current state (Attacking, In Combat, Moving, Idle)
-- **Keyboard Shortcuts** - Space (play/pause), Left/Right arrows (prev/next tick)
+When more than one source fits, the replay can show their names together.
+Damage sources still show **Unknown** when there is not enough information
+to identify them. Matching uses recorded attacks, projectiles, hit types and
+positions together with known attack rules to interpret damage after it happens.
+The plugin records information; it does not control your character or tell you
+what to do during a fight.
 
-### Saved Recordings
-- **Two-Section View** - Organized into "Saved Recordings" and "Recent Deaths"
-- **Save Deaths** - Star button to save important deaths (won't auto-delete)
-- **Save Live Snapshots** - Capture current tick buffer as a named recording
-- **Rename Recordings** - Inline rename button keeps long-term logs organized
-- **No Limit** - Saved recordings have no storage limit
-- **Persistent Storage** - Saved recordings stored separately from deaths
+## Getting started
 
-### Timeline Views
-- **Recordings View** - Browse deaths and saved recordings with expandable tick-by-tick timelines
-- **Live View** - Optional running journal of the most recent tick (no predictions)
-  - Pause/resume to freeze the display
-  - Export the paused buffer as JSON
-  - Save the paused buffer as a recording
-- **Icons** - OSRS skill icons for actions, damage, prayers, and movement
+1. Install **Tick Replay Logger** from RuneLite's Plugin Hub.
+2. Open its sidebar panel and play normally.
+3. After a death, click **Replay** to watch the recording, or **Timeline** to browse the ticks.
+4. Click **Save** to keep a death, **Rename** to give it a name, or **Copy** to export it.
+5. To record without dying, open **Live View**, pause it and click **Save Snapshot**.
 
-### Export
-- Export individual recordings as JSON
-- Copy to clipboard for external analysis or sharing
+Use **Copy** on a saved recording to include its full recorded information.
+Live View's **Export** button copies just the basic tick log.
 
-## Configuration
+Playback supports 0.5x, 1x and 2x speed. Space starts or pauses playback; the left
+and right arrow keys move one tick at a time.
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Ticks to Record | 100 | Number of ticks to keep in memory before death |
-| Max Deaths to Store | 3 | Maximum number of death records to persist (saved recordings are unlimited) |
-| Enable Live View | Enabled | Allow the optional live tick journal (disable for strict post-death review) |
+## Settings
 
-## Usage
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Ticks to Record | 100 | How many recent ticks to keep, from 1 to 1,000 |
+| Max Deaths to Store | 3 | How many recent deaths to keep automatically |
+| Enable Live View | Enabled | Show the live tick log |
+| Capture World Snapshots | Enabled | Record extra information about the player and nearby scene |
+| Capture Scene Map | Enabled | Record blocked and walkable tiles |
+| Capture Floor Appearance | Enabled | Record floor tiles and changes to their appearance |
+| Capture Other Players | Enabled | Record information available about nearby players |
+| Capture Combat Effects | Enabled | Record effects such as poison, stuns and changes to stats |
+| Track Tick Time | Enabled | Record the time between game ticks as received by the client |
+| Track Ping | Enabled | Include the latest sampled ping to the current game world |
 
-1. Open the Tick Replay Logger panel from the sidebar
-2. Play normally - the plugin records in the background
-3. When you die, the death is automatically saved
-4. Click **Replay** to open the playback dashboard and step through tick-by-tick
-5. Click **Timeline** to expand the inline tick timeline
-6. Use **Live View** to monitor the most recent tick, then pause before exporting or saving
-7. Click the [Save] button next to a death entry to keep it permanently
-8. While Live View is paused, click **Save Snapshot** to archive exactly what you were viewing
+You can also choose which actions and events to record. Longer recordings and
+more detailed capture use more memory and disk space. Saved recordings are kept
+separately from the recent-death limit.
 
-### Playback Controls
+Tick intervals and ping provide context when reviewing a recording. Ping is
+sampled periodically; its value on a tick is the latest available sample.
 
-| Control | Action |
-|---------|--------|
-| ⏮ | Jump to first tick |
-| ◀ | Previous tick |
-| ▶/⏸ | Play/Pause |
-| ▶ | Next tick |
-| ⏭ | Jump to last tick (death) |
-| Speed dropdown | Change playback speed |
-| Event log row | Click to jump to that tick |
+## JSON exports
 
-### Keyboard Shortcuts (in Playback)
+Exports now include more information about NPCs, positions, animations,
+projectiles, objects and floor tiles, alongside the tick log, damage records,
+tick intervals and sampled ping.
+Large exports are compressed to make them smaller without removing information.
+Copying runs in the background so the panel can keep responding.
 
-| Key | Action |
-|-----|--------|
-| Space | Play/Pause |
-| Left Arrow | Previous tick |
-| Right Arrow | Next tick |
+For file-format and decoding details, see [the export documentation](docs/export-schema-v1.3.md).
 
-## Data Recorded Per Tick
+## Storage and privacy
 
-- Tick number and timestamp
-- Current/max HP and prayer points
-- Active prayers (with upgrade filtering)
-- Movement (tiles traveled, run/walk detection)
-- Player actions (eat, drink, pray, equip, attack, special attack)
-- Damage events (received and dealt, with source/target and type)
+Recordings stay on your computer. The plugin does not upload them.
 
-## Storage
+- `~/.runelite/plugin-data/tick-replay-logger/deaths.json` contains recent deaths.
+- `~/.runelite/plugin-data/tick-replay-logger/saved.json` contains saved recordings.
 
-Data is stored in the RuneLite directory:
-- `~/.runelite/tick-replay-logger/deaths.json` - Recent deaths (auto-pruned)
-- `~/.runelite/tick-replay-logger/saved.json` - Saved recordings (permanent)
+RuneLite moves the previous `~/.runelite/tick-replay-logger/` folder automatically
+when the new folder does not already exist. Saves use buffered UTF-8 writes in the
+background and replace files atomically, keeping a `.bak` copy of the previous
+successful save. If a file cannot be read and no valid backup exists, the plugin
+leaves it untouched.
 
-## Installation (Plugin Hub)
+Exports can include player names, locations, equipment, inventory and recorded
+actions. Check what you are sharing before sending a recording to someone else.
 
-1. Launch RuneLite 1.10.34 or newer.
-2. Open **Settings → Plugin Hub** and search for “Tick Replay Logger.”
-3. Click **Install** and enable the plugin.
+## Development
 
-_Manual build:_ Run `./gradlew build` and copy the generated JAR into your external-plugins directory.
+Use Java 11. Run `./gradlew clean test jar` to check and build the plugin, or
+`./gradlew run` to start the development client. On Windows, use `.\gradlew.bat`.
 
-## Compliance Notes
-
-- Informational only: Live View and replays show historical tick data and never provide predictions, alerts, or instructions.
-- No automation: the plugin only listens to RuneLite events and never issues in-game inputs.
-- Local storage: recordings remain on disk at `~/.runelite/tick-replay-logger/` and are not uploaded anywhere.
+The Plugin Hub uses this project's Gradle build to include the build information
+needed by the exporter. `jar` builds the plugin; `shadowJar` builds a separate
+local test client. Use `-PruneLiteVersion=<version>` to build against a specific
+RuneLite version.

@@ -3,7 +3,6 @@ plugins {
 }
 
 repositories {
-	mavenLocal()
 	maven {
 		url = 'https://repo.runelite.net'
 		content {
@@ -13,7 +12,7 @@ repositories {
 	mavenCentral()
 }
 
-def runeLiteVersion = 'latest.release'
+def runeLiteVersion = providers.gradleProperty('runeLiteVersion').getOrElse('latest.release')
 def pluginMainClass = 'com.tickreplaylogger.TickReplayLoggerPluginTest'
 
 dependencies {
@@ -30,9 +29,96 @@ dependencies {
 group = 'com.tickreplaylogger'
 version = '1.0.0'
 
+def captureInfoDirectory = layout.buildDirectory.dir('generated/capture-build')
+def captureInputs = files(
+	fileTree('src/main'), file('build.gradle'), file('settings.gradle'), file('runelite-plugin.properties'))
+// Small, explicit witness for the version-bound status/layout reference code.
+// These hashes identify selected class resources, not a complete loaded runtime JAR.
+def referenceClasses = [
+	'runelite-api': ['net/runelite/api/Client.class', 'net/runelite/api/VarbitComposition.class'],
+	'client': ['net/runelite/client/RuneLiteProperties.class',
+		'net/runelite/client/plugins/poison/PoisonPlugin.class',
+		'net/runelite/client/plugins/timersandbuffs/TimersAndBuffsPlugin.class',
+		'net/runelite/client/plugins/timersandbuffs/GameTimer.class']
+]
+def captureApiVersion = providers.provider {
+	def api = configurations.compileClasspath.resolvedConfiguration.resolvedArtifacts.find {
+		it.moduleVersion.id.group == 'net.runelite' && it.name == 'runelite-api'
+	}
+	api == null ? 'unresolved' : api.moduleVersion.id.version
+}
+def captureArtifacts = providers.provider {
+	configurations.compileClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+		it.moduleVersion.id.group == 'net.runelite' && it.name in ['runelite-api', 'client']
+	}.sort { a,b -> a.name <=> b.name }.collectEntries { artifact ->
+		def hash=java.security.MessageDigest.getInstance('SHA-256')
+		artifact.file.withInputStream { input ->
+			byte[] block = new byte[65536]
+			int count
+			while ((count = input.read(block)) > 0) hash.update(block, 0, count)
+		}
+		def classHashes = new TreeMap<String,String>()
+		new java.util.zip.ZipFile(artifact.file).withCloseable { archive ->
+			referenceClasses[artifact.name].each { path ->
+				def entry = archive.getEntry(path)
+				// Internal reference code may move in a later client. Keep raw provenance;
+				// the incomplete manifest will leave qualified lookups unsupported.
+				if (entry != null) {
+					def classHash = java.security.MessageDigest.getInstance('SHA-256')
+					archive.getInputStream(entry).withCloseable { input ->
+						byte[] block = new byte[8192]
+						int count
+						while ((count = input.read(block)) > 0) {
+							classHash.update(block, 0, count)
+						}
+					}
+					classHashes[path] = classHash.digest().encodeHex().toString()
+				}
+			}
+		}
+		[(artifact.name):[
+			version:artifact.moduleVersion.id.version,
+			sha256:hash.digest().encodeHex().toString(),
+			referenceClassSha256s:classHashes]]
+	}
+}
+tasks.register('generateCaptureBuildInfo') {
+	inputs.files(captureInputs)
+	inputs.property('resolvedRuneLiteApiVersion', captureApiVersion)
+	inputs.property('resolvedRuneLiteArtifacts', captureArtifacts)
+	outputs.dir(captureInfoDirectory)
+	doLast {
+		def digest = java.security.MessageDigest.getInstance('SHA-256')
+		captureInputs.files.findAll { it.isFile() }.sort { a, b -> a.path <=> b.path }.each { source ->
+			digest.update(project.relativePath(source).replace('\\', '/').getBytes('UTF-8'))
+			digest.update((byte) 0)
+			source.withInputStream { input ->
+				byte[] block = new byte[65536]
+				int count
+				while ((count = input.read(block)) > 0) digest.update(block, 0, count)
+			}
+		}
+		def destination = captureInfoDirectory.get().file('com/tickreplaylogger/capture-build.json').asFile
+		destination.parentFile.mkdirs()
+		destination.setText(groovy.json.JsonOutput.toJson([
+			sourceTreeHash: digest.digest().encodeHex().toString(),
+			artifactIdentityScope: 'COMPILE_CLASSPATH_REFERENCE',
+			runtimeReferencePolicy: 'SELECTED_CLASSES_AND_VERSION_V1',
+			runeLiteApiVersion: captureApiVersion.get(),
+			runeLiteArtifacts: captureArtifacts.get()
+		]) + '\n', 'UTF-8')
+	}
+}
+sourceSets.main.resources.srcDir(captureInfoDirectory)
+tasks.named('processResources') { dependsOn 'generateCaptureBuildInfo' }
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
+}
+tasks.withType(Jar).configureEach {
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
 }
 
 tasks.register('run', JavaExec) {

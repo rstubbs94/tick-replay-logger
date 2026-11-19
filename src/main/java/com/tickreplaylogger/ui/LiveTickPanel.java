@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2026, rstubbs94
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.tickreplaylogger.ui;
 
 import com.tickreplaylogger.model.DamageEvent;
@@ -8,9 +32,18 @@ import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 
-import javax.swing.*;
+import javax.swing.ImageIcon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -24,9 +57,12 @@ public class LiveTickPanel
 	private static final Color ACTION_COLOR = new Color(255, 200, 100);
 	private static final Color PRAYER_COLOR = new Color(150, 150, 255);
 	private static final Color MOVEMENT_COLOR = new Color(100, 200, 255);
+	private static final Color EFFECT_COLOR = new Color(210, 140, 255);
 	private static final Color HP_LOW_COLOR = new Color(255, 80, 80);
 	private static final Color HP_MED_COLOR = new Color(255, 180, 80);
 	private static final Color HP_HIGH_COLOR = new Color(80, 200, 80);
+	private static final Color TELEMETRY_COLOR = new Color(160, 160, 160);
+	private static final Color TELEMETRY_LAG_COLOR = new Color(255, 100, 100);
 
 	// Alternating row colors
 	private static final Color ROW_COLOR_1 = ColorScheme.DARK_GRAY_COLOR;
@@ -47,27 +83,34 @@ public class LiveTickPanel
 	 */
 	public static void loadSprites(SpriteManager spriteManager)
 	{
+		if (spriteManager == null)
+			return;
 		if (iconsLoaded)
 		{
 			return;
 		}
 
-		spriteManager.getSpriteAsync(SpriteID.SKILL_HITPOINTS, 0, img -> {
+		spriteManager.getSpriteAsync(SpriteID.SKILL_HITPOINTS, 0, img ->
+		{
 			iconHitpoints.set(scaleIcon(img));
 		});
 
-		spriteManager.getSpriteAsync(SpriteID.SKILL_PRAYER, 0, img -> {
+		spriteManager.getSpriteAsync(SpriteID.SKILL_PRAYER, 0, img ->
+		{
 			iconPrayer.set(scaleIcon(img));
 		});
 
-		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img -> {
+		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img ->
+		{
 			iconAttack.set(scaleIcon(img));
 		});
 
-		spriteManager.getSpriteAsync(SpriteID.SKILL_AGILITY, 0, img -> {
+		spriteManager.getSpriteAsync(SpriteID.SKILL_AGILITY, 0, img ->
+		{
 			iconAgility.set(scaleIcon(img));
 		});
 
+		CombatIcons.load(spriteManager);
 		iconsLoaded = true;
 	}
 
@@ -110,12 +153,14 @@ public class LiveTickPanel
 
 		// Calculate HP color
 		float hpPercent = tick.getMaxHp() > 0 ? (float) tick.getCurrentHp() / tick.getMaxHp() : 0;
-		Color hpColor = hpPercent > 0.5 ? HP_HIGH_COLOR : (hpPercent > 0.25 ? HP_MED_COLOR : HP_LOW_COLOR);
+		Color hpColor = tick.isStateKnown("currentHp") && tick.isStateKnown("maxHp")
+			? (hpPercent > 0.5 ? HP_HIGH_COLOR : (hpPercent > 0.25 ? HP_MED_COLOR : HP_LOW_COLOR))
+			: Color.GRAY;
 
 		// Header: tick number, prayer, and HP
 		String tickLabel = "#" + tick.getTickNumber();
-		String hpText = tick.getCurrentHp() + "/" + tick.getMaxHp();
-		String prayerText = tick.getCurrentPrayer() + "/" + tick.getMaxPrayer();
+		String hpText = com.tickreplaylogger.util.DisplayFormat.resourceText(tick, true);
+		String prayerText = com.tickreplaylogger.util.DisplayFormat.resourceText(tick, false);
 
 		JPanel headerPanel = new JPanel(new BorderLayout());
 		headerPanel.setBackground(bgColor);
@@ -160,7 +205,15 @@ public class LiveTickPanel
 		boolean hasContent = false;
 
 		// Active prayers - each on its own line
-		for (String prayer : tick.getActivePrayers())
+		if (Boolean.FALSE.equals(tick.getPrayerStateKnown()))
+		{
+			panel.add(createIconLabel("Prayer state unavailable", iconPrayer.get(), PRAYER_COLOR), gbc);
+			gbc.gridy++;
+			hasContent = true;
+		}
+		for (String prayer : Boolean.FALSE.equals(tick.getPrayerStateKnown())
+			? java.util.Collections.<String>emptyList()
+			: tick.getActivePrayers())
 		{
 			JLabel label = createIconLabel(prayer, iconPrayer.get(), PRAYER_COLOR);
 			panel.add(label, gbc);
@@ -186,19 +239,49 @@ public class LiveTickPanel
 		for (PlayerAction action : tick.getPlayerActions())
 		{
 			ImageIcon icon = getActionIcon(action);
-			JLabel label = createIconLabel(action.getDescription(), icon, ACTION_COLOR);
+			JLabel label = createIconLabel(com.tickreplaylogger.util.DisplayFormat.actionText(action), icon,
+				ACTION_COLOR, action.getDescription());
 			panel.add(label, gbc);
 			gbc.gridy++;
 			hasContent = true;
 		}
 
-		// Damage events
+		// Damage events — icon = type (sword/bow/wand/dot), colour = direction (red in / green out).
 		for (DamageEvent damage : tick.getDamageEvents())
 		{
-			boolean isReceived = damage.getDirection() == DamageEvent.DamageDirection.RECEIVED;
-			Color color = isReceived ? DAMAGE_RECEIVED_COLOR : DAMAGE_DEALT_COLOR;
-			JLabel label = createIconLabel(damage.getDescription(), iconAttack.get(), color);
+			JLabel label = createIconLabel(com.tickreplaylogger.util.DisplayFormat.damageLineText(damage),
+				CombatIcons.iconFor(damage), com.tickreplaylogger.util.DisplayFormat.damageDirectionColor(damage),
+				com.tickreplaylogger.util.DisplayFormat.damageTooltip(damage));
 			panel.add(label, gbc);
+			gbc.gridy++;
+			hasContent = true;
+		}
+
+		// Combat effects (freeze/teleblock/stun/knockback/drain/disarm/poison)
+		if (tick.getEffectNotes() != null)
+		{
+			for (String note : tick.getEffectNotes())
+			{
+				JLabel label = createIconLabel(note, iconPrayer.get(), EFFECT_COLOR);
+				panel.add(label, gbc);
+				gbc.gridy++;
+				hasContent = true;
+			}
+		}
+
+		// Telemetry (tick duration and ping)
+		String telemetryText = buildTelemetryText(tick);
+		if (telemetryText != null)
+		{
+			boolean isLagSpike = tick.getTickDurationMs() > 700 || tick.getPingMs() > 200
+				|| tick.getPacketLossPercent() > 0;
+			Color telColor = isLagSpike ? TELEMETRY_LAG_COLOR : TELEMETRY_COLOR;
+			JLabel telLabel = new JLabel(telemetryText);
+			telLabel.setForeground(telColor);
+			telLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+			telLabel.setBorder(new EmptyBorder(1, 20, 1, 0));
+			telLabel.setToolTipText("Client tick interval / Latest ping sample / Failed ping attempts");
+			panel.add(telLabel, gbc);
 			gbc.gridy++;
 			hasContent = true;
 		}
@@ -216,6 +299,59 @@ public class LiveTickPanel
 		return panel;
 	}
 
+	/**
+	 * Create a compact "N ticks unchanged" separator row, used when the collapse-unchanged
+	 * display option is enabled. Shared by the live and recording timeline views.
+	 */
+	public static JPanel createGapPanel(int count)
+	{
+		JPanel panel = new JPanel(new BorderLayout());
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(2, 6, 2, 6));
+
+		String text = "⋮  " + count + (count == 1 ? " tick unchanged" : " ticks unchanged");
+		JLabel label = new JLabel(text, SwingConstants.CENTER);
+		label.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		label.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 11));
+		panel.add(label, BorderLayout.CENTER);
+		return panel;
+	}
+
+	private static String buildTelemetryText(TickData tick)
+	{
+		long tickMs = tick.getTickDurationMs();
+		int pingMs = tick.getPingMs();
+		int lossPercent = tick.getPacketLossPercent();
+
+		if (tickMs <= 0 && pingMs <= 0 && lossPercent <= 0)
+		{
+			return null;
+		}
+
+		StringBuilder sb = new StringBuilder();
+		if (tickMs > 0)
+		{
+			sb.append(tickMs).append("ms tick");
+		}
+		if (pingMs > 0)
+		{
+			if (sb.length() > 0)
+			{
+				sb.append(" | ");
+			}
+			sb.append(pingMs).append("ms ping");
+		}
+		if (lossPercent > 0)
+		{
+			if (sb.length() > 0)
+			{
+				sb.append(" | ");
+			}
+			sb.append(lossPercent).append("% failed");
+		}
+		return sb.toString();
+	}
+
 	private static ImageIcon getActionIcon(PlayerAction action)
 	{
 		String desc = action.getDescription().toLowerCase();
@@ -223,7 +359,8 @@ public class LiveTickPanel
 		{
 			return iconHitpoints.get();
 		}
-		else if (desc.contains("prayer") || desc.startsWith("activated") || desc.startsWith("deactivated") || desc.contains("disabled"))
+		else if (desc.contains("prayer") || desc.startsWith("activated") || desc.startsWith("deactivated")
+			|| desc.contains("disabled"))
 		{
 			return iconPrayer.get();
 		}
@@ -240,10 +377,15 @@ public class LiveTickPanel
 
 	private static JLabel createIconLabel(String text, ImageIcon icon, Color color)
 	{
-		JLabel label = new JLabel(text);
+		return createIconLabel(text, icon, color, text);
+	}
+
+	private static JLabel createIconLabel(String text, ImageIcon icon, Color color, String tooltip)
+	{
+		JLabel label = new SingleLineLabel(text);
 		label.setForeground(color);
 		label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-		label.setToolTipText(text);
+		label.setToolTipText(tooltip);
 		if (icon != null)
 		{
 			label.setIcon(icon);

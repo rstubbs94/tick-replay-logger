@@ -1,397 +1,617 @@
+/*
+ * Copyright (c) 2026, rstubbs94
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.tickreplaylogger.util;
 
-import com.tickreplaylogger.model.TickRecording;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.RuneLite;
-
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import com.tickreplaylogger.model.TickRecording;
 import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.channels.FileChannel;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.util.Filepath;
 
-/**
- * Handles persistence of tick recordings to JSON files.
- * Deaths are stored in ~/.runelite/tick-replay-logger/deaths.json
- * Saved recordings are stored in ~/.runelite/tick-replay-logger/saved.json
- */
+/** One queue owns loading, mutations, serialization and publication. Callers never do disk I/O. */
 @Slf4j
-public class RecordingStorage
+public class RecordingStorage implements AutoCloseable
 {
-	private static final String FOLDER_NAME = "tick-replay-logger";
-	private static final String DEATHS_FILE_NAME = "deaths.json";
-	private static final String SAVED_FILE_NAME = "saved.json";
+	private static final Type RECORDINGS = new TypeToken<ArrayList<TickRecording>>()
+	{
+	}.getType();
+	private static final Map<String, StorageQueue> QUEUES = new HashMap<>();
+
+	private static final class StorageQueue
+	{
+		private final String key;
+		private int owners;
+		private long generation;
+		private final ExecutorService executor = Executors.newSingleThreadExecutor(task ->
+		{
+			Thread thread = new Thread(task, "tick-replay-storage");
+			thread.setDaemon(true);
+			return thread;
+		});
+
+		private StorageQueue(String key)
+		{
+			this.key = key;
+		}
+	}
+
+	private static StorageQueue acquire(Filepath folder)
+	{
+		synchronized (QUEUES)
+		{
+			StorageQueue shared = QUEUES.computeIfAbsent(folder.toString(), StorageQueue::new);
+			shared.owners++;
+			shared.generation++;
+			return shared;
+		}
+	}
+
+	private static void release(StorageQueue shared)
+	{
+		synchronized (QUEUES)
+		{
+			shared.owners--;
+			if (shared.owners != 0)
+				return;
+			long generation = shared.generation;
+			shared.executor.execute(() ->
+			{
+				synchronized (QUEUES)
+				{
+					if (shared.owners == 0 && shared.generation == generation)
+					{
+						QUEUES.remove(shared.key, shared);
+						shared.executor.shutdown();
+					}
+				}
+			});
+		}
+	}
 
 	private final Gson gson;
-	private final File deathsFile;
-	private final File savedFile;
+	private final Charset legacyCharset;
+	private final Filepath folder;
+	private final Filepath deathsFile;
+	private final Filepath savedFile;
+	private final ExecutorService queue;
+	private final StorageQueue owner;
+	private final Object snapshots = new Object();
+	private final Object admission = new Object();
+	private final CompletableFuture<Void> ready;
+	private List<TickRecording> deaths = new ArrayList<>();
+	private List<TickRecording> savedRecordings = new ArrayList<>();
+	private boolean deathsWritable;
+	private boolean savedWritable;
+	private boolean closed;
 	private int maxDeaths;
 
-	private List<TickRecording> deaths;
-	private List<TickRecording> savedRecordings;
-
-	public RecordingStorage(int maxDeaths, Gson gson)
+	public RecordingStorage(int maxDeaths, Gson gson, Filepath folder)
 	{
-		this.maxDeaths = maxDeaths;
-		this.gson = gson.newBuilder()
-			.setPrettyPrinting()
-			.create();
-
-		// Create storage directory
-		File folder = new File(RuneLite.RUNELITE_DIR, FOLDER_NAME);
-		if (!folder.exists())
-		{
-			folder.mkdirs();
-		}
-
-		this.deathsFile = new File(folder, DEATHS_FILE_NAME);
-		this.savedFile = new File(folder, SAVED_FILE_NAME);
-		this.deaths = new ArrayList<>();
-		this.savedRecordings = new ArrayList<>();
-
-		// Load existing data
-		loadDeaths();
-		loadSavedRecordings();
+		this(maxDeaths, gson, folder, Charset.defaultCharset());
 	}
 
-	/**
-	 * Load deaths from JSON file
-	 */
-	public void loadDeaths()
+	/** The previous FileWriter used the environment's default charset. Tests pin that environment. */
+	RecordingStorage(int maxDeaths, Gson gson, Filepath folder, Charset legacyCharset)
 	{
-		if (!deathsFile.exists())
+		this.maxDeaths = Math.max(0, maxDeaths);
+		this.gson = gson.newBuilder().setPrettyPrinting().create();
+		this.legacyCharset = Objects.requireNonNull(legacyCharset);
+		this.folder = Objects.requireNonNull(folder);
+		this.deathsFile = folder.join("deaths.json");
+		this.savedFile = folder.join("saved.json");
+		this.owner = acquire(folder);
+		this.queue = owner.executor;
+		ready = submit(() ->
 		{
-			log.debug("No existing deaths file found");
-			deaths = new ArrayList<>();
-			return;
-		}
-
-		try (FileReader reader = new FileReader(deathsFile))
-		{
-			Type listType = new TypeToken<ArrayList<TickRecording>>(){}.getType();
-			List<TickRecording> loaded = gson.fromJson(reader, listType);
-
-			if (loaded != null)
+			folder.createDirectories();
+			Exception failure = null;
+			try
 			{
-				deaths = loaded;
-				log.debug("Loaded {} death records from file", deaths.size());
+				List<TickRecording> loaded = load(deathsFile);
+				synchronized (snapshots)
+				{
+					deaths = loaded;
+				}
+				deathsWritable = true;
 			}
+			catch (Exception e)
+			{
+				failure = e;
+				log.error("Death recordings could not be loaded; their file is protected", e);
+			}
+			try
+			{
+				List<TickRecording> loaded = load(savedFile);
+				synchronized (snapshots)
+				{
+					savedRecordings = loaded;
+				}
+				savedWritable = true;
+			}
+			catch (Exception e)
+			{
+				if (failure == null)
+					failure = e;
+				else
+					failure.addSuppressed(e);
+				log.error("Saved recordings could not be loaded; their file is protected", e);
+			}
+			if (failure != null)
+				throw failure;
+		});
+	}
+
+	public CompletableFuture<Void> ready()
+	{
+		return ready;
+	}
+
+	/** Barrier for admitted work. Never wait for this on the client thread or EDT. */
+	public CompletableFuture<Void> flush()
+	{
+		return submit(() ->
+		{
+		});
+	}
+
+	private List<TickRecording> load(Filepath file) throws Exception
+	{
+		Filepath backup = backup(file);
+		if (!file.exists())
+			return backup.exists() ? recover(file, backup) : new ArrayList<>();
+		try
+		{
+			return read(file);
+		}
+		catch (Exception invalid)
+		{
+			if (!backup.exists())
+				throw invalid;
+			List<TickRecording> recovered = read(backup); // Validate before moving any original bytes.
+			Filepath corrupt = folder.createTempFile(file.getFileName() + ".corrupt-", ".json");
+			file.moveTo(corrupt, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			publish(file, recovered);
+			log.warn("Recovered {} from backup; original retained as {}", file.getFileName(), corrupt.getFileName());
+			return recovered;
+		}
+	}
+
+	private List<TickRecording> recover(Filepath file, Filepath backup) throws Exception
+	{
+		List<TickRecording> recovered = read(backup);
+		publish(file, recovered);
+		return recovered;
+	}
+
+	private List<TickRecording> read(Filepath file) throws Exception
+	{
+		try
+		{
+			return read(file, StandardCharsets.UTF_8);
+		}
+		catch (Exception invalid)
+		{
+			boolean malformedEncoding = false;
+			for (Throwable cause = invalid; cause != null; cause = cause.getCause())
+				if (cause instanceof CharacterCodingException)
+					malformedEncoding = true;
+			if (!malformedEncoding || legacyCharset.equals(StandardCharsets.UTF_8))
+				throw invalid;
+			List<TickRecording> recovered = read(file, legacyCharset);
+			log.warn("Read legacy {} using {}; future saves use UTF-8", file.getFileName(), legacyCharset.name());
+			return recovered;
+		}
+	}
+
+	private List<TickRecording> read(Filepath file, Charset charset) throws Exception
+	{
+		try (Reader reader = new BufferedReader(new InputStreamReader(file.openInputStream(), charset.newDecoder()
+			.onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT))))
+		{
+			List<TickRecording> loaded = gson.fromJson(reader, RECORDINGS);
+			if (loaded == null || loaded.stream().anyMatch(Objects::isNull))
+				throw new IOException("Invalid recordings collection: " + file.getFileName());
+			return loaded;
+		}
+	}
+
+	private Filepath backup(Filepath file)
+	{
+		return folder.join(file.getFileName() + ".bak");
+	}
+
+	/** An incomplete serialization never opens/truncates the primary or its last-good backup. */
+	protected void publish(Filepath file, List<TickRecording> records) throws Exception
+	{
+		Filepath temporary = folder.createTempFile(file.getFileName() + "-", ".tmp");
+		try
+		{
+			try (Writer writer = temporary.openBufferedWriter())
+			{
+				gson.toJson(records, RECORDINGS, writer);
+			}
+			force(temporary);
+			if (file.exists())
+			{
+				Filepath backupTemporary = folder.createTempFile(file.getFileName() + "-backup-", ".tmp");
+				try
+				{
+					file.copyTo(backupTemporary, StandardCopyOption.REPLACE_EXISTING);
+					force(backupTemporary);
+					backupTemporary.moveTo(backup(file), StandardCopyOption.ATOMIC_MOVE,
+						StandardCopyOption.REPLACE_EXISTING);
+				}
+				finally
+				{
+					backupTemporary.deleteIfExists();
+				}
+			}
+			temporary.moveTo(file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+		}
+		finally
+		{
+			temporary.deleteIfExists();
+		}
+	}
+
+	private static void force(Filepath file) throws IOException
+	{
+		try (FileChannel channel = file.openFileChannel(StandardOpenOption.WRITE))
+		{
+			channel.force(true);
+		}
+	}
+
+	private void writable(boolean saved) throws IOException
+	{
+		if (!(saved ? savedWritable : deathsWritable))
+			throw new IOException("Recordings could not be loaded; existing file will not be overwritten");
+	}
+
+	private List<TickRecording> current(boolean saved)
+	{
+		synchronized (snapshots)
+		{
+			return new ArrayList<>(saved ? savedRecordings : deaths);
+		}
+	}
+
+	private void commit(boolean saved, List<TickRecording> replacement) throws Exception
+	{
+		writable(saved);
+		publish(saved ? savedFile : deathsFile, replacement);
+		synchronized (snapshots)
+		{
+			if (saved)
+				savedRecordings = replacement;
 			else
-			{
-				deaths = new ArrayList<>();
-			}
-		}
-		catch (IOException e)
-		{
-			log.error("Failed to load deaths from file", e);
-			deaths = new ArrayList<>();
-		}
-		catch (Exception e)
-		{
-			log.error("Failed to parse deaths file", e);
-			deaths = new ArrayList<>();
+				deaths = replacement;
 		}
 	}
 
-	/**
-	 * Load saved recordings from JSON file
-	 */
-	public void loadSavedRecordings()
+	private static TickRecording copy(TickRecording recording)
 	{
-		if (!savedFile.exists())
-		{
-			log.debug("No existing saved recordings file found");
-			savedRecordings = new ArrayList<>();
-			return;
-		}
-
-		try (FileReader reader = new FileReader(savedFile))
-		{
-			Type listType = new TypeToken<ArrayList<TickRecording>>(){}.getType();
-			List<TickRecording> loaded = gson.fromJson(reader, listType);
-
-			if (loaded != null)
-			{
-				savedRecordings = loaded;
-				log.debug("Loaded {} saved recordings from file", savedRecordings.size());
-			}
-			else
-			{
-				savedRecordings = new ArrayList<>();
-			}
-		}
-		catch (IOException e)
-		{
-			log.error("Failed to load saved recordings from file", e);
-			savedRecordings = new ArrayList<>();
-		}
-		catch (Exception e)
-		{
-			log.error("Failed to parse saved recordings file", e);
-			savedRecordings = new ArrayList<>();
-		}
+		// Finalized tick DTOs and immutable rich JSON are shared read-only; mutable wrapper fields are detached.
+		return recording.toBuilder().ticks(recording.getTicks() == null ? null : new ArrayList<>(recording.getTicks()))
+			.build();
 	}
 
-	/**
-	 * Save deaths to JSON file
-	 */
-	public void saveDeaths()
+	private static int index(List<TickRecording> records, TickRecording sought)
 	{
-		try (FileWriter writer = new FileWriter(deathsFile))
+		if (sought == null)
+			return -1;
+		for (int i = 0; i < records.size(); i++)
 		{
-			gson.toJson(deaths, writer);
-			log.debug("Saved {} death records to file", deaths.size());
+			TickRecording record = records.get(i);
+			if (record.getTimestamp() == sought.getTimestamp()
+				&& Objects.equals(record.getRichExportJson(), sought.getRichExportJson())
+				&& Objects.equals(record.getTicks(), sought.getTicks()))
+				return i;
 		}
-		catch (IOException e)
-		{
-			log.error("Failed to save deaths to file", e);
-		}
+		return -1;
 	}
 
-	/**
-	 * Save saved recordings to JSON file
-	 */
-	public void saveSavedRecordings()
-	{
-		try (FileWriter writer = new FileWriter(savedFile))
-		{
-			gson.toJson(savedRecordings, writer);
-			log.debug("Saved {} saved recordings to file", savedRecordings.size());
-		}
-		catch (IOException e)
-		{
-			log.error("Failed to save saved recordings to file", e);
-		}
-	}
-
-	/**
-	 * Add a new death record.
-	 * Prunes old deaths if we exceed maxDeaths.
-	 */
-	public void addDeath(TickRecording death)
-	{
-		// Add to beginning of list (newest first)
-		deaths.add(0, death);
-
-		// Prune if we exceed max
-		while (deaths.size() > maxDeaths)
-		{
-			deaths.remove(deaths.size() - 1);
-		}
-
-		// Save to file
-		saveDeaths();
-
-		log.debug("Death recorded: killed by {} ({} total deaths stored)",
-			death.getKillerName(), deaths.size());
-	}
-
-	/**
-	 * Get all stored death records (newest first)
-	 */
 	public List<TickRecording> getDeaths()
 	{
-		return new ArrayList<>(deaths);
+		return snapshot(false);
 	}
 
-	/**
-	 * Get the number of stored deaths
-	 */
+	public List<TickRecording> getSavedRecordings()
+	{
+		return snapshot(true);
+	}
+
+	private List<TickRecording> snapshot(boolean saved)
+	{
+		List<TickRecording> result = new ArrayList<>();
+		for (TickRecording record : current(saved))
+			result.add(copy(record));
+		return result;
+	}
+
 	public int getDeathCount()
 	{
-		return deaths.size();
+		synchronized (snapshots)
+		{
+			return deaths.size();
+		}
 	}
 
-	/**
-	 * Set the maximum number of deaths to store.
-	 * Prunes oldest deaths if current count exceeds new max.
-	 */
-	public void setMaxDeaths(int newMax)
+	public int getSavedCount()
 	{
-		if (newMax == maxDeaths)
+		synchronized (snapshots)
 		{
-			return;
-		}
-
-		maxDeaths = newMax;
-
-		// Prune if we now exceed the limit
-		boolean pruned = false;
-		while (deaths.size() > maxDeaths)
-		{
-			deaths.remove(deaths.size() - 1);
-			pruned = true;
-		}
-
-		if (pruned)
-		{
-			saveDeaths();
-			log.debug("Death storage max changed to {}, pruned to {} deaths", maxDeaths, deaths.size());
-		}
-		else
-		{
-			log.debug("Death storage max changed to {}", maxDeaths);
+			return savedRecordings.size();
 		}
 	}
 
-	/**
-	 * Clear all stored deaths
-	 */
-	public void clearDeaths()
+	public CompletableFuture<Void> addDeath(TickRecording recording)
 	{
-		deaths.clear();
-		saveDeaths();
-		log.debug("All death records cleared");
+		TickRecording detached = copy(recording);
+		return addDeath(() -> detached);
 	}
 
-	/**
-	 * Delete a specific death record
-	 */
-	public void deleteDeath(TickRecording death)
+	public CompletableFuture<Void> addDeath(Supplier<TickRecording> supplier)
 	{
-		if (deaths.remove(death))
+		return submit(() ->
 		{
-			saveDeaths();
-			log.debug("Death record deleted: killed by {}", death.getKillerName());
-		}
+			writable(false);
+			List<TickRecording> next = current(false);
+			next.add(0, copy(Objects.requireNonNull(supplier.get())));
+			while (next.size() > maxDeaths)
+				next.remove(next.size() - 1);
+			commit(false, next);
+		});
 	}
 
-	/**
-	 * Delete a death by index
-	 */
-	public void deleteDeath(int index)
+	public CompletableFuture<Void> addSavedRecording(TickRecording recording)
 	{
-		if (index >= 0 && index < deaths.size())
-		{
-			TickRecording removed = deaths.remove(index);
-			saveDeaths();
-			log.debug("Death record deleted: killed by {}", removed.getKillerName());
-		}
+		TickRecording detached = copy(recording);
+		return addSavedRecording(() -> detached);
 	}
 
-	/**
-	 * Export all deaths as JSON string (for clipboard)
-	 */
+	public CompletableFuture<Void> addSavedRecording(Supplier<TickRecording> supplier)
+	{
+		return submit(() ->
+		{
+			writable(true);
+			List<TickRecording> next = current(true);
+			next.add(0, copy(Objects.requireNonNull(supplier.get())));
+			commit(true, next);
+		});
+	}
+
+	public CompletableFuture<Void> setMaxDeaths(int requested)
+	{
+		return submit(() ->
+		{
+			List<TickRecording> next = current(false);
+			int limit = Math.max(0, requested);
+			while (next.size() > limit)
+				next.remove(next.size() - 1);
+			if (next.size() != getDeathCount())
+				commit(false, next);
+			maxDeaths = limit;
+		});
+	}
+
+	public CompletableFuture<Void> clearDeaths()
+	{
+		return submit(() -> commit(false, new ArrayList<>()));
+	}
+
+	public CompletableFuture<Void> clearSavedRecordings()
+	{
+		return submit(() -> commit(true, new ArrayList<>()));
+	}
+
+	public CompletableFuture<Void> deleteDeath(TickRecording recording)
+	{
+		return remove(false, recording);
+	}
+
+	public CompletableFuture<Void> deleteSavedRecording(TickRecording recording)
+	{
+		return remove(true, recording);
+	}
+
+	private CompletableFuture<Void> remove(boolean saved, TickRecording recording)
+	{
+		return submit(() ->
+		{
+			List<TickRecording> next = current(saved);
+			int at = index(next, recording);
+			if (at >= 0)
+			{
+				next.remove(at);
+				commit(saved, next);
+			}
+		});
+	}
+
+	public CompletableFuture<Void> deleteDeath(int at)
+	{
+		return submit(() ->
+		{
+			List<TickRecording> next = current(false);
+			if (at >= 0 && at < next.size())
+			{
+				next.remove(at);
+				commit(false, next);
+			}
+		});
+	}
+
+	public CompletableFuture<Void> saveRecording(TickRecording recording)
+	{
+		return submit(() ->
+		{
+			writable(false);
+			writable(true);
+			List<TickRecording> recent = current(false);
+			int at = index(recent, recording);
+			if (at < 0)
+				return;
+			List<TickRecording> saved = current(true);
+			// Destination first: interruption of the second write may duplicate, never lose a recording.
+			// Retrying that interrupted move must not duplicate its already-published destination.
+			if (index(saved, recent.get(at)) < 0)
+			{
+				saved.add(0, recent.get(at));
+				commit(true, saved);
+			}
+			recent.remove(at);
+			commit(false, recent);
+		});
+	}
+
+	public CompletableFuture<Void> renameRecording(TickRecording recording, String name)
+	{
+		return submit(() ->
+		{
+			if (name == null || name.trim().isEmpty())
+				return;
+			for (boolean saved : new boolean[]
+			{ false, true })
+			{
+				List<TickRecording> next = current(saved);
+				int at = index(next, recording);
+				if (at >= 0)
+				{
+					next.set(at, next.get(at).toBuilder().killerName(name.trim()).customLabel(Boolean.TRUE).build());
+					commit(saved, next);
+				}
+			}
+		});
+	}
+
+	public CompletableFuture<Void> saveDeaths()
+	{
+		return submit(() -> commit(false, current(false)));
+	}
+
+	public CompletableFuture<Void> saveSavedRecordings()
+	{
+		return submit(() -> commit(true, current(true)));
+	}
+
 	public String exportAllAsJson()
 	{
-		return gson.toJson(deaths);
+		return gson.toJson(getDeaths());
 	}
 
-	/**
-	 * Export a single death as JSON string (for clipboard)
-	 */
 	public String exportRecordingAsJson(TickRecording recording)
 	{
 		return gson.toJson(recording);
 	}
 
-	/**
-	 * Export a single death by index as JSON string
-	 */
-	public String exportDeathAsJson(int index)
-	{
-		if (index >= 0 && index < deaths.size())
-		{
-			return gson.toJson(deaths.get(index));
-		}
-		return "{}";
-	}
-
-	// ===== SAVED RECORDINGS =====
-
-	/**
-	 * Get all saved recordings (newest first)
-	 */
-	public List<TickRecording> getSavedRecordings()
-	{
-		return new ArrayList<>(savedRecordings);
-	}
-
-	/**
-	 * Get the number of saved recordings
-	 */
-	public int getSavedCount()
-	{
-		return savedRecordings.size();
-	}
-
-	/**
-	 * Save a death - moves it from deaths list to saved recordings (no auto-delete)
-	 */
-	public void saveRecording(TickRecording death)
-	{
-		if (deaths.remove(death))
-		{
-			savedRecordings.add(0, death);
-			saveDeaths();
-			saveSavedRecordings();
-			log.debug("Death saved to permanent recordings: {}", death.getKillerName());
-		}
-	}
-
-	/**
-	 * Add a new saved recording directly (e.g., from live view snapshot)
-	 * No limit on saved recordings.
-	 */
-	public void addSavedRecording(TickRecording recording)
-	{
-		savedRecordings.add(0, recording);
-		saveSavedRecordings();
-		log.debug("Recording saved: {}", recording.getKillerName());
-	}
-
-	/**
-	 * Rename a recording (applies to both recent deaths and saved recordings).
-	 */
-	public void renameRecording(TickRecording recording, String newName)
-	{
-		if (recording == null || newName == null)
-		{
-			return;
-		}
-		String trimmed = newName.trim();
-		if (trimmed.isEmpty())
-		{
-			return;
-		}
-
-		recording.setKillerName(trimmed);
-		saveDeaths();
-		saveSavedRecordings();
-		log.debug("Recording renamed to {}", trimmed);
-	}
-
-	/**
-	 * Delete a specific saved recording
-	 */
-	public void deleteSavedRecording(TickRecording recording)
-	{
-		if (savedRecordings.remove(recording))
-		{
-			saveSavedRecordings();
-			log.debug("Saved recording deleted: {}", recording.getKillerName());
-		}
-	}
-
-	/**
-	 * Clear all saved recordings
-	 */
-	public void clearSavedRecordings()
-	{
-		savedRecordings.clear();
-		saveSavedRecordings();
-		log.debug("All saved recordings cleared");
-	}
-
-	/**
-	 * Export a saved recording as JSON string
-	 */
 	public String exportSavedRecordingAsJson(TickRecording recording)
 	{
 		return gson.toJson(recording);
+	}
+
+	public String exportDeathAsJson(int at)
+	{
+		List<TickRecording> records = getDeaths();
+		return at >= 0 && at < records.size() ? gson.toJson(records.get(at)) : "{}";
+	}
+
+	@FunctionalInterface
+	private interface Work
+	{
+		void run() throws Exception;
+	}
+
+	private CompletableFuture<Void> submit(Work work)
+	{
+		CompletableFuture<Void> future = new CompletableFuture<>();
+		synchronized (admission)
+		{
+			if (closed)
+			{
+				future.completeExceptionally(new IllegalStateException("Recording storage is closed"));
+				return future;
+			}
+			try
+			{
+				queue.execute(() ->
+				{
+					try
+					{
+						work.run();
+						future.complete(null);
+					}
+					catch (Exception failure)
+					{
+						log.error("Recording storage operation failed", failure);
+						future.completeExceptionally(failure);
+					}
+				});
+			}
+			catch (RejectedExecutionException failure)
+			{
+				future.completeExceptionally(failure);
+			}
+		}
+		return future;
+	}
+
+	/** New operations are rejected; admitted captures drain without blocking shutdown. */
+	@Override
+	public void close()
+	{
+		synchronized (admission)
+		{
+			if (!closed)
+			{
+				closed = true;
+				release(owner);
+			}
+		}
 	}
 }

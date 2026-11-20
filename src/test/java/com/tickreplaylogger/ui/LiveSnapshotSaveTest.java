@@ -119,7 +119,7 @@ public class LiveSnapshotSaveTest
 		TickReplayLoggerPanel[] result = new TickReplayLoggerPanel[1];
 		SwingUtilities.invokeAndWait(() ->
 		{
-			result[0] = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {}, DamageMap.load(gson));
+			result[0] = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {});
 			result[0].setTickRecorder(recorder);
 			result[0].setLiveCaptureRequester(requester);
 		});

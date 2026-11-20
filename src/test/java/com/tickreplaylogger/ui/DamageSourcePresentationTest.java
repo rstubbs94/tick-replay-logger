@@ -25,7 +25,6 @@
 package com.tickreplaylogger.ui;
 
 import com.google.gson.Gson;
-import com.tickreplaylogger.capture.DamageMap;
 import com.tickreplaylogger.model.DamageEvent;
 import com.tickreplaylogger.model.TickData;
 import com.tickreplaylogger.model.TickRecording;
@@ -46,9 +45,6 @@ import static org.junit.Assert.*;
 public class DamageSourcePresentationTest
 {
 	private static final Gson GSON = new Gson();
-	private static DamageMap MAP;
-	@BeforeClass public static void loadCatalog() { MAP = DamageMap.load(GSON); }
-	@AfterClass public static void releaseCatalog() { MAP = null; }
 
 	@Test
 	public void anUnknownSourceIsPlainUnknownAndIsNotAQualifiedCandidate()
@@ -128,7 +124,7 @@ public class DamageSourcePresentationTest
 		{
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, GSON);
+			}, null);
 			panel.loadRecording(recording);
 			assertNotNull(findLabel(panel, "Taken 12 Corrupted Hunllef"));
 			JList<?> ticks = findList(panel);

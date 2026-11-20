@@ -10,10 +10,14 @@ No client launch is part of this refactor.
 PR #20986 still points to public source `bf19b988b53d3ec861d732671da35e1e7cdb76aa`.
 That submission was measured by the maintainer at 302,079 tokens. The calibrated
 local counter measures the same submission at 302,075. The current local source
-measures 215,446 tokens in 107 production Java files, with 24,571 nonblank,
+measures 214,137 tokens in 107 production Java files, with 24,450 nonblank,
 comment-stripped code lines. The verified checkpoint before this refactor was
 222,270 tokens in 108 production files. Tests, resources and documentation are
 excluded from these token counts. A new official count has not run.
+
+This refactor removed 8,133 tokens and 1,037 code lines from the preceding
+verified checkpoint. Total reduction from the public submission is 87,938 tokens
+(29.1%). Those are separate comparisons; neither passes the remaining size gate.
 
 ## Recording flow
 
@@ -31,6 +35,10 @@ excluded from these token counts. A new official count has not run.
    the journal and fatal summary, prepares the encounter title, applies lossless
    encoding, and saves the result. Current Copy serializes the prepared typed
    payload directly. It does not parse and repair the producer's own JSON.
+
+Actor sampling and terrain/object/item delta encoding share their common paths.
+One ordered projectile-retention map replaces the pending list, link map and
+processed set while preserving original samples, expiry and late-callback guards.
 
 Sampling and identity/lifetime bookkeeping remain on the client thread because
 short-lived observations cannot be recovered later. Source, hitsplat, input and
@@ -59,8 +67,7 @@ unclassified HP-capable hits prevent an unsupported killer assignment.
 
 ## Validation and remaining release gate
 
-- Java 11 / RuneLite 1.13.7: full suite, 1,197 checks, zero failures.
-- Follow-up manual-world availability and atomic capture checks: five passed.
+- Java 11 / RuneLite 1.13.7: final full suite, 1,200 checks, zero failures.
 - Official RuneLite standard build: passed. Thin JAR API scan: zero findings;
   no test or RuneLite core classes packaged.
 - Official formatter: syntax-tree equivalence and idempotence checks passed.
@@ -74,7 +81,7 @@ unclassified HP-capable hits prevent an unsupported killer assignment.
   the non-atomic initial Live selection. Mutable map/object/item values remain
   sampled; structural scene membership is reused and lifecycle-invalidated.
 
-The remaining publication blocker is source size: at least 15,447 locally
+The remaining publication blocker is source size: at least 14,138 locally
 measured tokens must be removed to get strictly below 200,000, with headroom
 preferred. Do not claim this gate is passed. Small getter and extra source-wrapper
 prototypes were measured and rejected because they did not provide useful savings.

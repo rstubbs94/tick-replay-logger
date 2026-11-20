@@ -53,6 +53,24 @@ class ActorObservation
 		}
 	}
 
+	/** Generic actor callbacks retain their original getter order and the same nullable projection. */
+	void genericCallback()
+	{
+		position(true);
+		name = read("name", actor::getName);
+		level = read("combatLevel", actor::getCombatLevel);
+		animation = read("animationId", actor::getAnimation);
+		pose = read("poseAnimationId", actor::getPoseAnimation);
+		speech = read("overheadText", actor::getOverheadText);
+		orientation();
+		animationFrame = animation == null || animation == -1 ? null : read("animationFrame", actor::getAnimationFrame);
+		poseFrame = pose == null || pose == -1 ? null : read("poseAnimationFrame", actor::getPoseAnimationFrame);
+		overheadCycle = speech == null ? null : read("overheadCycle", actor::getOverheadCycle);
+		health();
+		graphics();
+		interaction(false);
+	}
+
 	void orientation()
 	{
 		orientation = read("orientation", actor::getOrientation);

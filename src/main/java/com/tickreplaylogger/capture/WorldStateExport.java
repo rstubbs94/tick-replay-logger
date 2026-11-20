@@ -27,6 +27,7 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.Function;
 
 /** Compact observed state without losing the checkpoint at the selected window's first tick. */
 final class WorldStateExport
@@ -78,9 +79,9 @@ final class WorldStateExport
 	private static List<WorldSnapshot> compactNative(List<WorldSnapshot> ticks)
 	{
 		List<WorldSnapshot> out = new ArrayList<>();
-		Map<Long, GroundItemState> previousItems = new LinkedHashMap<>();
-		Map<Long, ObservedObjectState> previousObjects = new LinkedHashMap<>();
-		Map<String, TileSurface> previousTerrain = new LinkedHashMap<>();
+		StateChanges<Long, GroundItemState> items = new StateChanges<>(GroundItemState::getItemKey);
+		StateChanges<Long, ObservedObjectState> objects = new StateChanges<>(ObservedObjectState::getObjectKey);
+		StateChanges<String, TileSurface> terrain = new StateChanges<>(TileSurface::getKey);
 		WorldSnapshot previous = null;
 		for (WorldSnapshot tick : ticks)
 		{
@@ -93,106 +94,22 @@ final class WorldStateExport
 				.nativeScene(baseline || previous.getNativeScene() == null ? tick.getNativeScene() : null);
 			compactNumeric(frame, tick.getObservedNumericVariables(),
 				previous == null ? null : previous.getObservedNumericVariables(), baseline);
+			terrain.capture(tick.getObservedTerrain(), baseline);
 			if (tick.getObservedTerrain() != null)
 			{
-				boolean checkpoint = baseline || previous.getObservedTerrain() == null;
-				if (!checkpoint && previousTerrain.size() == tick.getObservedTerrain().size()
-					&& tick.getObservedTerrain().equals(previous.getObservedTerrain()))
-				{
-					// Equal complete samples need no replacement index. The size guard retains the
-					// ordinary path for any repeated keys instead of assuming unique input rows.
-					frame.terrainBaseline(false).terrainChanges(Collections.emptyList())
-						.terrainRemovals(Collections.emptyList());
-				}
-				else
-				{
-					Map<String, TileSurface> current = new LinkedHashMap<>();
-					List<TileSurface> changes = new ArrayList<>();
-					List<String> removals = new ArrayList<>();
-					for (TileSurface tile : tick.getObservedTerrain())
-					{
-						current.put(tile.getKey(), tile);
-						if (checkpoint || !tile.equals(previousTerrain.get(tile.getKey())))
-						{
-							changes.add(tile);
-						}
-					}
-					if (!checkpoint)
-					{
-						for (String key : previousTerrain.keySet())
-						{
-							if (!current.containsKey(key))
-							{
-								removals.add(key);
-							}
-						}
-					}
-					frame.terrainBaseline(checkpoint).terrainChanges(changes).terrainRemovals(removals);
-					previousTerrain = current;
-				}
+				frame.terrainBaseline(terrain.baseline).terrainChanges(terrain.changes)
+					.terrainRemovals(terrain.removals);
 			}
+			objects.capture(tick.getObservedObjects(), baseline);
 			if (tick.getObservedObjects() != null)
 			{
-				boolean objectBaseline = baseline || previous.getObservedObjects() == null;
-				if (!objectBaseline && previousObjects.size() == tick.getObservedObjects().size()
-					&& tick.getObservedObjects().equals(previous.getObservedObjects()))
-				{
-					frame.objectBaseline(false).objectChanges(Collections.emptyList())
-						.objectRemovals(Collections.emptyList());
-				}
-				else
-				{
-					Map<Long, ObservedObjectState> current = new LinkedHashMap<>();
-					List<ObservedObjectState> changes = new ArrayList<>();
-					List<Long> removals = new ArrayList<>();
-					for (ObservedObjectState object : tick.getObservedObjects())
-					{
-						current.put(object.getObjectKey(), object);
-						if (objectBaseline || !object.equals(previousObjects.get(object.getObjectKey())))
-						{
-							changes.add(object);
-						}
-					}
-					if (!objectBaseline)
-					{
-						for (Long key : previousObjects.keySet())
-						{
-							if (!current.containsKey(key))
-							{
-								removals.add(key);
-							}
-						}
-					}
-					frame.objectBaseline(objectBaseline).objectChanges(changes).objectRemovals(removals);
-					previousObjects = current;
-				}
+				frame.objectBaseline(objects.baseline).objectChanges(objects.changes).objectRemovals(objects.removals);
 			}
+			items.capture(tick.getObservedGroundItems(), baseline);
 			if (tick.getObservedGroundItems() != null)
 			{
-				boolean checkpoint = baseline || previous.getObservedGroundItems() == null;
-				Map<Long, GroundItemState> current = new LinkedHashMap<>();
-				List<GroundItemState> changes = new ArrayList<>();
-				List<Long> removals = new ArrayList<>();
-				for (GroundItemState item : tick.getObservedGroundItems())
-				{
-					current.put(item.getItemKey(), item);
-					if (checkpoint || !item.equals(previousItems.get(item.getItemKey())))
-					{
-						changes.add(item);
-					}
-				}
-				if (!checkpoint)
-				{
-					for (Long key : previousItems.keySet())
-					{
-						if (!current.containsKey(key))
-						{
-							removals.add(key);
-						}
-					}
-				}
-				frame.groundItemBaseline(checkpoint).groundItemChanges(changes).groundItemRemovals(removals);
-				previousItems = current;
+				frame.groundItemBaseline(items.baseline).groundItemChanges(items.changes)
+					.groundItemRemovals(items.removals);
 			}
 			int[] vars = tick.getObservedVarps(), old = previous == null ? null : previous.getObservedVarps();
 			if (vars != null)
@@ -238,6 +155,54 @@ final class WorldStateExport
 			previous = tick;
 		}
 		return out;
+	}
+
+	/** Shared lossless list delta. Missing samples force the next observed sample to be a baseline. */
+	private static final class StateChanges<K, T>
+	{
+		private final Function<T, K> key;
+		private Map<K, T> indexed = new LinkedHashMap<>();
+		private List<T> previous;
+		private boolean baseline;
+		private List<T> changes;
+		private List<K> removals;
+
+		StateChanges(Function<T, K> key)
+		{
+			this.key = key;
+		}
+
+		void capture(List<T> current, boolean checkpoint)
+		{
+			baseline = checkpoint || previous == null;
+			changes = new ArrayList<>();
+			removals = new ArrayList<>();
+			if (current != null && (baseline || indexed.size() != current.size() || !current.equals(previous)))
+			{
+				Map<K, T> next = new LinkedHashMap<>();
+				for (T value : current)
+				{
+					K id = key.apply(value);
+					next.put(id, value);
+					if (baseline || !value.equals(indexed.get(id)))
+					{
+						changes.add(value);
+					}
+				}
+				if (!baseline)
+				{
+					for (K id : indexed.keySet())
+					{
+						if (!next.containsKey(id))
+						{
+							removals.add(id);
+						}
+					}
+				}
+				indexed = next;
+			}
+			previous = current;
+		}
 	}
 
 	private static void compactNumeric(WorldSnapshot.WorldSnapshotBuilder frame, NumericVariableState now,

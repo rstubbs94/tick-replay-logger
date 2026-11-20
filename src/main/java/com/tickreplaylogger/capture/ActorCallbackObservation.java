@@ -102,9 +102,7 @@ public final class ActorCallbackObservation
 		Map<String, Object> result = new LinkedHashMap<>();
 		Map<String, String> issues = new LinkedHashMap<>();
 		WorldPoint world = read(issues, "worldPosition", actor::getWorldLocation);
-		ActorObservation observation = null;
-		WorldView observedView = null;
-		LocalPoint observedLocal = null;
+		ActorObservation observation;
 		String worldIssue = issues.get("worldPosition");
 		result.put("actorKind",
 			actor instanceof NPC ? "NPC"
@@ -153,89 +151,26 @@ public final class ActorCallbackObservation
 		}
 		else
 		{
-			LocalPoint point = read(issues, "localPosition", actor::getLocalLocation);
-			WorldView view = read(issues, "worldView", actor::getWorldView);
-			observedView = view;
-			observedLocal = point;
-			coordinates(result, point, world, view == null ? null : read(issues, "worldViewId", view::getId));
-			result.put("name", read(issues, "name", actor::getName));
-			result.put("combatLevel", read(issues, "combatLevel", actor::getCombatLevel));
-			Integer animation = read(issues, "animationId", actor::getAnimation),
-				pose = read(issues, "poseAnimationId", actor::getPoseAnimation);
-			String text = read(issues, "overheadText", actor::getOverheadText);
-			motion(result, read(issues, "orientation", actor::getOrientation),
-				read(issues, "currentOrientation", actor::getCurrentOrientation), animation,
-				animation == null || animation == -1 ? null : read(issues, "animationFrame", actor::getAnimationFrame),
-				pose,
-				pose == null || pose == -1 ? null : read(issues, "poseAnimationFrame", actor::getPoseAnimationFrame),
-				text, text == null ? null : read(issues, "overheadCycle", actor::getOverheadCycle));
-			result.put("healthRatio", read(issues, "healthRatio", actor::getHealthRatio));
-			result.put("healthScale", read(issues, "healthScale", actor::getHealthScale));
-			ActorGraphicsObservation graphics = new ActorGraphicsObservation(actor);
-			result.put("graphicIds", graphics.getIds());
-			result.put("graphicsKnown", graphics.isIdsKnown());
-			result.put("graphicsState", graphics.getState());
-			if (graphics.getState().getObservationIssues() != null)
-			{
-				issues.putAll(graphics.getState().getObservationIssues());
-			}
-			Boolean interactionFlag = read(issues, "reportedInteracting", actor::isInteracting);
-			Actor target = read(issues, "interactionTarget", actor::getInteracting);
-			if (observedRefs != null && target == actor)
-			{
-				observedRefs.apply(actor, result);
-			}
-			result.put("interaction",
-				ActorInteractions.captureObserved(target, interactionFlag, !issues.containsKey("interactionTarget"),
-					local, includeOthers, refs, target == actor ? result : null, issues));
+			observation = new ActorObservation(actor, world, worldIssue);
+			issues = observation.issues;
+			observation.genericCallback();
 		}
-		if (observation != null)
+		observation.callback(result);
+		if (observedRefs != null && observation.target == actor)
 		{
-			observation.callback(result);
-			if (observedRefs != null && observation.target == actor)
-			{
-				observedRefs.apply(actor, result);
-			}
-			result.put("interaction",
-				ActorInteractions.captureObserved(observation.target, observation.interactionFlag,
-					!issues.containsKey("interactionTarget"), local, includeOthers, refs,
-					observation.target == actor ? result : null, issues));
+			observedRefs.apply(actor, result);
 		}
+		result.put("interaction",
+			ActorInteractions.captureObserved(observation.target, observation.interactionFlag,
+				!issues.containsKey("interactionTarget"), local, includeOthers, refs,
+				observation.target == actor ? result : null, issues));
 
 		if (!issues.isEmpty())
 		{
 			result.put("observationIssues", Collections.unmodifiableMap(new LinkedHashMap<>(issues)));
 			result.put("captureStatus", "PARTIAL_ACTOR_METADATA");
 		}
-		return new Sample(Collections.unmodifiableMap(result), world,
-			observation == null ? observedLocal : observation.local,
-			observation == null ? observedView : observation.view);
-	}
-
-	private static void coordinates(Map<String, Object> result, LocalPoint local, WorldPoint world, Integer viewId)
-	{
-		result.put("worldViewId", viewId);
-		result.put("localPositionKnown", local != null);
-		result.put("worldPositionKnown", world != null);
-		result.put("planeKnown", world != null);
-		result.put("localX", local == null ? null : local.getX());
-		result.put("localY", local == null ? null : local.getY());
-		result.put("worldX", world == null ? null : world.getX());
-		result.put("worldY", world == null ? null : world.getY());
-		result.put("plane", world == null ? null : world.getPlane());
-	}
-
-	private static void motion(Map<String, Object> result, Integer orientation, Integer currentOrientation,
-		Integer animation, Integer frame, Integer pose, Integer poseFrame, String speech, Integer overheadCycle)
-	{
-		result.put("orientation", orientation);
-		result.put("currentOrientation", currentOrientation);
-		result.put("animationId", animation);
-		result.put("animationFrame", frame);
-		result.put("poseAnimationId", pose);
-		result.put("poseAnimationFrame", poseFrame);
-		result.put("overheadText", speech);
-		result.put("overheadCycle", overheadCycle);
+		return new Sample(Collections.unmodifiableMap(result), world, observation.local, observation.view);
 	}
 
 }

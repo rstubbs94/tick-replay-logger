@@ -25,13 +25,11 @@
 package com.tickreplaylogger.ui.playback;
 
 import com.tickreplaylogger.ui.ReplayIcons;
-import com.google.gson.Gson;
 import com.tickreplaylogger.ui.LiveTickPanel;
 import com.tickreplaylogger.util.DisplayFormat;
 import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import static com.tickreplaylogger.ui.LiveTickPanel.buildTelemetryText;
 import com.tickreplaylogger.model.*;
-import com.tickreplaylogger.capture.DamageMap;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
@@ -72,8 +70,6 @@ public class PlaybackPanel extends JPanel
 	private static final int TICK_BADGE_WIDTH = 46;
 
 	private final Runnable onBackCallback;
-	private final DamageMap damageMap;
-	private final Gson gson;
 	private TickRecording recording;
 	private List<TickData> ticks;
 
@@ -121,11 +117,9 @@ public class PlaybackPanel extends JPanel
 	// Combat detection - ticks to look back for "In Combat" status
 	private static final int COMBAT_LOOKBACK_TICKS = 5;
 
-	public PlaybackPanel(Runnable onBackCallback, SpriteManager spriteManager, DamageMap damageMap, Gson gson)
+	public PlaybackPanel(Runnable onBackCallback, SpriteManager spriteManager)
 	{
 		this.onBackCallback = onBackCallback;
-		this.damageMap = damageMap;
-		this.gson = gson;
 
 		setLayout(new BorderLayout());
 		setBackground(ColorScheme.DARK_GRAY_COLOR);

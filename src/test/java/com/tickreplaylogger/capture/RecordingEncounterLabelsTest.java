@@ -130,10 +130,10 @@ public class RecordingEncounterLabelsTest
 		String before = GSON.toJson(recording);
 		SwingUtilities.invokeAndWait(() ->
 		{
-			RecordingEntryPanel entry = new RecordingEntryPanel(recording, 1, null, null, null, null, null, MAP, GSON);
+			RecordingEntryPanel entry = new RecordingEntryPanel(recording, 1, null, null, null, null, null);
 			assertTrue(hasLabel(entry, "#1: Corrupted Hunllef"));
 			assertTrue(hasLabel(entry, "Fatal source: Unknown"));
-			PlaybackPanel playback = new PlaybackPanel(() -> {}, null, MAP, GSON);
+			PlaybackPanel playback = new PlaybackPanel(() -> {}, null);
 			playback.loadRecording(recording);
 			assertTrue(hasLabel(playback, "Corrupted Hunllef"));
 			assertTrue(hasLabel(playback, "Fatal: 43 from Unknown"));

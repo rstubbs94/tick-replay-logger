@@ -24,13 +24,11 @@
  */
 package com.tickreplaylogger.ui;
 
-import com.google.gson.Gson;
 import com.tickreplaylogger.util.DisplayFormat;
 import com.tickreplaylogger.util.TickDisplay;
 import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import static com.tickreplaylogger.ui.LiveTickPanel.createIconLabel;
 import com.tickreplaylogger.model.*;
-import com.tickreplaylogger.capture.DamageMap;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
@@ -56,8 +54,6 @@ public class RecordingEntryPanel extends JPanel
 	private static final Color DEATH_ROW_COLOR = new Color(60, 30, 30);
 
 	private final TickRecording recording;
-	private final DamageMap damageMap;
-	private final Gson gson;
 	private final List<TickData> displayTicks;
 	private final JPanel ticksPanel;
 	private final Consumer<TickRecording> saveCallback;
@@ -73,10 +69,10 @@ public class RecordingEntryPanel extends JPanel
 	 */
 	public RecordingEntryPanel(TickRecording recording, int recordingNumber, Consumer<TickRecording> exportCallback,
 		Consumer<TickRecording> deleteCallback, Consumer<TickRecording> playbackCallback,
-		Consumer<TickRecording> renameCallback, SpriteManager spriteManager, DamageMap damageMap, Gson gson)
+		Consumer<TickRecording> renameCallback, SpriteManager spriteManager)
 	{
 		this(recording, recordingNumber, exportCallback, deleteCallback, playbackCallback, null, renameCallback,
-			spriteManager, false, damageMap, gson);
+			spriteManager, false);
 	}
 
 	/**
@@ -85,11 +81,9 @@ public class RecordingEntryPanel extends JPanel
 	public RecordingEntryPanel(TickRecording recording, int recordingNumber, Consumer<TickRecording> exportCallback,
 		Consumer<TickRecording> deleteCallback, Consumer<TickRecording> playbackCallback,
 		Consumer<TickRecording> saveCallback, Consumer<TickRecording> renameCallback, SpriteManager spriteManager,
-		boolean isSaved, DamageMap damageMap, Gson gson)
+		boolean isSaved)
 	{
 		this.recording = recording;
-		this.damageMap = damageMap;
-		this.gson = gson;
 		this.displayTicks = recording.getTicks();
 		this.saveCallback = saveCallback;
 		this.renameCallback = renameCallback;

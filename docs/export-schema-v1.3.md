@@ -2,7 +2,16 @@
 
 All new rich exports use the stable top-level discriminator `schemaVersion: "1.3"`. This applies to small inline NPC populations and large shared NPC populations alike. The current producer, schema checks and synthetic contracts qualify this latest format. Older formats are best-effort imports with a missing-details warning; they are not release blockers and are never relabelled as 1.3.
 
-The envelope contains `meta`, recorded `scenes`, ordered `ticks`, `events`, `summary`, available `idToName` references and the original `journalTicks`. Metadata retains the capture build, API/client artifact identities, catalog epoch, channel settings and clock boundaries. Missing, failed and disabled observations remain unavailable rather than becoming zero, false or observed absence.
+The envelope contains `meta`, recorded `scenes`, ordered `ticks`, `events`, `summary`, available `idToName` references and `journalTicks`. Metadata retains the capture build, API/client artifact identities, catalog epoch, channel settings and clock boundaries. Missing, failed and disabled observations remain unavailable rather than becoming zero, false or observed absence.
+
+Current capture continuously retains original observations. Death or manual Save
+selects one frozen window; background processing adds source annotations and
+derives `journalTicks` from those events and the minimal tick state. Journal hits
+follow original callback order and retain their `observationSequence` IDs. The
+summary includes `totalDamageDealtInBuffer`, summed from recorded `DEALT` hits.
+These derived views do not replace the original events or world observations.
+Plain recordings from the published plugin remain supported for local playback;
+intermediate development rich exports have best-effort compatibility.
 
 ## NPC representation
 

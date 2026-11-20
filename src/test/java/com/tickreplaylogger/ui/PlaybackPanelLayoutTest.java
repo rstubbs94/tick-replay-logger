@@ -50,9 +50,6 @@ import static org.junit.Assert.*;
 
 public class PlaybackPanelLayoutTest
 {
-	private static com.tickreplaylogger.capture.DamageMap MAP;
-	@BeforeClass public static void loadCatalog() { MAP = com.tickreplaylogger.capture.DamageMap.load(new Gson()); }
-	@AfterClass public static void releaseCatalog() { MAP = null; }
 
 	@Test
 	public void journalOnlyUnresolvedImpactDoesNotPresentAnEarlierKnownHitAsFatal() throws Exception
@@ -67,7 +64,7 @@ public class PlaybackPanelLayoutTest
 				.fatalHitBasis("UNRESOLVED_IMPACT_IN_DEATH_TICK").build();
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, new Gson());
+			}, null);
 			panel.loadRecording(recording);
 			assertNotNull(findLabel(panel, "Fatal impact not established"));
 		});
@@ -88,7 +85,7 @@ public class PlaybackPanelLayoutTest
 		{
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, new Gson());
+			}, null);
 			panel.loadRecording(recording);
 			assertNotNull(findLabel(panel, "Fatal: 43 from Unknown"));
 			panel.dispose();
@@ -115,7 +112,7 @@ public class PlaybackPanelLayoutTest
 				.build();
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, new Gson());
+			}, null);
 			panel.loadRecording(recording);
 			assertNotNull(findLabel(panel, "Fatal impact not established"));
 			recording.setRichExportJson(null);
@@ -144,7 +141,7 @@ public class PlaybackPanelLayoutTest
 				TickRecording.class);
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, new Gson());
+			}, null);
 			panel.loadRecording(recording);
 			panel.setSize(242, 900);
 			for (int i = 0; i < 4; i++)
@@ -219,7 +216,7 @@ public class PlaybackPanelLayoutTest
 			}
 			PlaybackPanel panel = new PlaybackPanel(() ->
 			{
-			}, null, MAP, new Gson());
+			}, null);
 			TickRecording recording = new Gson().fromJson(
 				new InputStreamReader(getClass().getResourceAsStream("/com/tickreplaylogger/hunllef-death-420.json"),
 					StandardCharsets.UTF_8),
@@ -289,7 +286,7 @@ public class PlaybackPanelLayoutTest
 					StandardCharsets.UTF_8), TickRecording.class);
 				PlaybackPanel panel = new PlaybackPanel(() ->
 				{
-				}, null, MAP, new Gson());
+				}, null);
 				panel.loadRecording(recording);
 				panel.setSize(242, 900);
 				for (int i = 0; i < 4; i++)

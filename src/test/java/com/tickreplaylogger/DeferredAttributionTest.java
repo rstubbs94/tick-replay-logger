@@ -478,12 +478,20 @@ public class DeferredAttributionTest
 		for (String field : java.util.Arrays.asList("projectileIds", "projectileSpawnTicks", "projectileTargets",
 			"projectileCallbackStates", "projectileLaunchObservations"))
 			assertFalse(field, ((Map<?, ?>) remainingField(plugin, field)).containsKey(shot));
-		assertFalse(((java.util.Set<?>) remainingField(plugin, "processedProjectiles")).contains(shot));
+		Map<?, ?> retained = (Map<?, ?>) remainingField(plugin, "retainedProjectiles");
+		assertEquals("Removal retains the raw sample for its original grace window", 1, retained.size());
 		com.tickreplaylogger.model.world.ObservedEvent original = export().getEvents().getObservations().stream()
 			.filter(event -> "PROJECTILE_FIRST_SEEN".equals(event.getType())).findFirst().get();
 		com.tickreplaylogger.model.world.ProjectileState preserved = (com.tickreplaylogger.model.world.ProjectileState) original.getData().get("projectile");
 		assertNotNull(preserved.getSourceHistory().getFirstObservedSource());
 		assertEquals(Integer.valueOf(1), preserved.getSourceHistory().getFirstObservedSource().getObservedTick());
+		assertEquals(preserved.getObservationId(), ((com.tickreplaylogger.model.world.ProjectileState)
+			remainingField(retained.values().iterator().next(), "latestObservation")).getObservationId());
+		for (int i = 0; i < 8; i++)
+		{
+			tick();
+		}
+		assertTrue("Removed samples leave the cache after their original retention window", retained.isEmpty());
 	}
 
 	@Test

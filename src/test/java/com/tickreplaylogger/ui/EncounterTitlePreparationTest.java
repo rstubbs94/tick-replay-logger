@@ -66,7 +66,7 @@ public class EncounterTitlePreparationTest
 			reads.set(0); armed.set(true);
 			SwingUtilities.invokeAndWait(() ->
 			{
-				TickReplayLoggerPanel panel = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {}, map);
+				TickReplayLoggerPanel panel = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {});
 				assertTrue(hasLabel(panel, "#1: Corrupted Hunllef"));
 				panel.refresh(); panel.refresh();
 				assertTrue(hasLabel(panel, "#1: Corrupted Hunllef"));
@@ -85,7 +85,7 @@ public class EncounterTitlePreparationTest
 			TickRecording original = recording(map);
 			storage.addDeath(original).get(5, TimeUnit.SECONDS);
 			TickReplayLoggerPanel[] panel = new TickReplayLoggerPanel[1];
-			SwingUtilities.invokeAndWait(() -> panel[0] = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {}, map));
+			SwingUtilities.invokeAndWait(() -> panel[0] = new TickReplayLoggerPanel(storage, null, gson, new TickReplayLoggerConfig() {}));
 			storage.renameRecording(original, "Latest custom title").get(5, TimeUnit.SECONDS);
 			SwingUtilities.invokeAndWait(() ->
 			{

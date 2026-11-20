@@ -118,7 +118,7 @@ public class TickReplayLoggerPlugin extends Plugin
 	private final IdentityHashMap<Projectile, Map<String, Object>> projectileLaunchObservations = new IdentityHashMap<>();
 	private final ProjectileSourceTracker projectileSourceTracker = new ProjectileSourceTracker();
 	private SourceAssociationNpcIndex sourceAssociationNpcs = new SourceAssociationNpcIndex(null);
-	private final Map<Long, PendingProjectile> projectileSourceLinks = new HashMap<>();
+	private final Map<Long, RetainedProjectile> retainedProjectiles = new LinkedHashMap<>();
 	private List<ProjectileState> settledProjectileSamples;
 	private long nextProjectileId;
 	private long observationSequence;
@@ -137,10 +137,7 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	// Tracks recent NPCs that have targeted the player, keyed by NPC index
 
-	// Tracks incoming projectiles for correlating with hitsplats
-	private final List<PendingProjectile> pendingProjectiles = new ArrayList<>();
 	private final List<String> projectileCaptureIssues = new ArrayList<>();
-	private final Set<Projectile> processedProjectiles = new HashSet<>();
 
 	// Game tick counter for recency calculations
 	private int currentGameTick = 0;
@@ -363,23 +360,29 @@ public class TickReplayLoggerPlugin extends Plugin
 	private boolean loginPending = false;
 
 	/**
-	 * A projectile in flight targeting (or near) the player, awaiting hitsplat correlation.
+	 * Raw samples retained for later frozen-window interpretation, including world-off capture.
+	 * Expired entries remain while their live handle exists, preventing a later callback from
+	 * restarting the same observation's retention window. No API object is retained here.
 	 */
-	private static class PendingProjectile
+	private static class RetainedProjectile
 	{
-		final Projectile observedObject;
-		final Long projectileObservationId;
 		final Integer estimatedArrivalTick;
 		Integer removedObservedTick;
+		boolean available = true;
 		ProjectileState latestObservation;
-		Map<String, Object> launchObservation = Collections.emptyMap();
+		final Map<String, Object> launchObservation;
 
-		PendingProjectile(Projectile projectile, ProjectileState original)
+		RetainedProjectile(ProjectileState original, Map<String, Object> launchObservation)
 		{
-			observedObject = projectile;
-			projectileObservationId = original.getObservationId();
 			estimatedArrivalTick = original.getEstimatedImpactTick();
 			latestObservation = original;
+			this.launchObservation = launchObservation;
+		}
+
+		boolean expired(int tick)
+		{
+			return estimatedArrivalTick != null ? tick > estimatedArrivalTick + 2
+				: removedObservedTick != null && tick > removedObservedTick + 2;
 		}
 	}
 
@@ -487,7 +490,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 
 		// Create panel
-		panel = new TickReplayLoggerPanel(recordingStorage, spriteManager, gson, config, damageMap);
+		panel = new TickReplayLoggerPanel(recordingStorage, spriteManager, gson, config);
 		panel.setTickRecorder(worldRecorder);
 		panel.setLiveCaptureRequester(this::requestLiveCapture);
 		panel.setLiveViewEnabled(config.enableLiveView());
@@ -799,12 +802,10 @@ public class TickReplayLoggerPlugin extends Plugin
 		projectileCallbackStates.clear();
 		projectileLaunchObservations.clear();
 		projectileSourceTracker.reset();
-		projectileSourceLinks.clear();
+		retainedProjectiles.clear();
 		settledProjectileSamples = null;
 		nextProjectileId = 0;
 		observationSequence = 0;
-		pendingProjectiles.clear();
-		processedProjectiles.clear();
 		pendingHits.clear();
 		resourceImpactQueueCount = 0;
 		pendingDeath = null;
@@ -1479,14 +1480,11 @@ public class TickReplayLoggerPlugin extends Plugin
 				projectileCallbackData(projectile, state, target, event.getZ()), context);
 		}
 		// A late target binding may first identify the local player after the initial visual callback.
-		if (!context.ready || !Boolean.TRUE.equals(state.getTargetsPlayer()) || !processedProjectiles.add(projectile))
+		if (context.ready && Boolean.TRUE.equals(state.getTargetsPlayer()))
 		{
-			return;
+			retainedProjectiles.computeIfAbsent(state.getObservationId(), id -> new RetainedProjectile(state,
+				projectileLaunchObservations.getOrDefault(projectile, Collections.emptyMap())));
 		}
-		PendingProjectile pending = new PendingProjectile(projectile, state);
-		pending.launchObservation = projectileLaunchObservations.getOrDefault(projectile, Collections.emptyMap());
-		pendingProjectiles.add(pending);
-		projectileSourceLinks.put(state.getObservationId(), pending);
 	}
 
 	private Map<String, Object> projectileCallbackData(Projectile projectile, ProjectileState state, LocalPoint target,
@@ -1538,19 +1536,15 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void forgetProjectile(Projectile projectile)
 	{
-		projectileIds.remove(projectile);
+		RetainedProjectile retained = retainedProjectiles.get(projectileIds.remove(projectile));
 		projectileSpawnTicks.remove(projectile);
 		projectileTargets.remove(projectile);
 		projectileCallbackStates.remove(projectile);
 		projectileLaunchObservations.remove(projectile);
-		processedProjectiles.remove(projectile);
 		projectileSourceTracker.forget(projectile);
-		for (PendingProjectile pending : pendingProjectiles)
+		if (retained != null && retained.removedObservedTick == null)
 		{
-			if (pending.observedObject == projectile && pending.removedObservedTick == null)
-			{
-				pending.removedObservedTick = currentGameTick;
-			}
+			retained.removedObservedTick = currentGameTick;
 		}
 	}
 
@@ -1604,10 +1598,10 @@ public class TickReplayLoggerPlugin extends Plugin
 				return projectileSourceTracker.observe(projectile, original.build(), source, local, causalSceneEpoch,
 					includeOthers);
 			});
-		PendingProjectile pending = projectileSourceLinks.get(sample.getState().getObservationId());
-		if (pending != null && pending.observedObject == projectile)
+		RetainedProjectile retained = retainedProjectiles.get(sample.getState().getObservationId());
+		if (retained != null)
 		{
-			pending.latestObservation = sample.getState();
+			retained.latestObservation = sample.getState();
 		}
 		return sample;
 	}
@@ -2368,16 +2362,11 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void captureReadyGameTick(Player localPlayer, List<String> settledIssues)
 	{
-		// Expire old pending projectiles (arrival tick + grace window passed)
-		pendingProjectiles
-			.removeIf(pp -> pp.estimatedArrivalTick != null ? currentGameTick > pp.estimatedArrivalTick + 2
-				: pp.removedObservedTick != null && currentGameTick > pp.removedObservedTick + 2);
-		Set<Long> activePendingIds = new HashSet<>();
-		for (PendingProjectile candidate : pendingProjectiles)
+		retainedProjectiles.values().removeIf(projectile ->
 		{
-			activePendingIds.add(candidate.projectileObservationId);
-		}
-		projectileSourceLinks.keySet().retainAll(activePendingIds);
+			projectile.available &= !projectile.expired(currentGameTick);
+			return !projectile.available && projectile.removedObservedTick != null;
+		});
 
 		// Cleanup is also required when rich world snapshots are disabled.
 		runSettledStage("projectileExpiry", () ->
@@ -3467,13 +3456,13 @@ public class TickReplayLoggerPlugin extends Plugin
 				hit.captureIssues.add("selfInputObservation: " + unavailable.getClass().getSimpleName());
 			}
 		}
-		for (PendingProjectile projectile : pendingProjectiles)
+		for (RetainedProjectile projectile : retainedProjectiles.values())
 		{
-			if (projectile.latestObservation != null)
+			if (projectile.available)
 			{
 				Map<String, Object> witness = new LinkedHashMap<>(projectile.launchObservation);
 				witness.put("kind", "PROJECTILE_OBSERVATION");
-				witness.put("projectileObservationId", projectile.projectileObservationId);
+				witness.put("projectileObservationId", projectile.latestObservation.getObservationId());
 				witness.put("projectile", projectile.latestObservation);
 				witness.put("projectileId", projectile.latestObservation.getProjectileId());
 				witness.put("sourceHistory", projectile.latestObservation.getSourceHistory());

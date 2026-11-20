@@ -32,7 +32,6 @@ import com.tickreplaylogger.ui.playback.PlaybackPanel;
 import com.tickreplaylogger.util.RecordingStorage;
 import com.tickreplaylogger.util.TickRecorder;
 import com.google.gson.Gson;
-import com.tickreplaylogger.capture.DamageMap;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
@@ -63,7 +62,6 @@ public class TickReplayLoggerPanel extends PluginPanel
 
 	private final RecordingStorage recordingStorage;
 	private final SpriteManager spriteManager;
-	private final DamageMap damageMap;
 	private TickRecorder tickRecorder;
 
 	// View switching
@@ -104,12 +102,11 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private final com.tickreplaylogger.TickReplayLoggerConfig config;
 
 	public TickReplayLoggerPanel(RecordingStorage recordingStorage, SpriteManager spriteManager, Gson gson,
-		com.tickreplaylogger.TickReplayLoggerConfig config, DamageMap damageMap)
+		com.tickreplaylogger.TickReplayLoggerConfig config)
 	{
 		super(false);
 		this.recordingStorage = recordingStorage;
 		this.spriteManager = spriteManager;
-		this.damageMap = damageMap;
 		this.gson = gson;
 		this.config = config;
 
@@ -255,7 +252,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 		liveViewPanel.add(liveScrollPane, BorderLayout.CENTER);
 
 		// === Playback View ===
-		playbackPanel = new PlaybackPanel(this::returnFromPlayback, spriteManager, damageMap, gson);
+		playbackPanel = new PlaybackPanel(this::returnFromPlayback, spriteManager);
 
 		// Add views to card layout
 		contentPanel.add(recordingsViewPanel, RECORDINGS_VIEW);
@@ -489,7 +486,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 				TickRecording death = deaths.get(i);
 				RecordingEntryPanel entryPanel = new RecordingEntryPanel(death, i + 1, this::exportRecording,
 					this::deleteDeath, this::showPlayback, this::saveRecording, // Save callback to move to saved
-					this::renameRecording, spriteManager, false, damageMap, gson // isSaved = false
+					this::renameRecording, spriteManager, false // isSaved = false
 				);
 				entryPanel.setCollapseUnchanged(config.collapseUnchangedTicks());
 				recordingsListContainer.add(entryPanel, gbc);
@@ -517,7 +514,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 				TickRecording recording = saved.get(i);
 				RecordingEntryPanel entryPanel = new RecordingEntryPanel(recording, i + 1, this::exportRecording,
 					this::deleteSavedRecording, this::showPlayback, null, // No save callback for already-saved items
-					this::renameRecording, spriteManager, true, damageMap, gson // isSaved = true
+					this::renameRecording, spriteManager, true // isSaved = true
 				);
 				entryPanel.setCollapseUnchanged(config.collapseUnchangedTicks());
 				recordingsListContainer.add(entryPanel, gbc);

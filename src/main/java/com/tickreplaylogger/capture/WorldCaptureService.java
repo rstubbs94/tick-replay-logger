@@ -696,8 +696,8 @@ public class WorldCaptureService
 		}
 		PlayerState player = captureChannel("player", coverage, () -> capturePlayer(client, local, null, includeOthers),
 			null);
-		List<NpcState> npcs = captureChannel("npcs", coverage, () -> captureUnscopedNpcs(client, local, includeOthers),
-			new ArrayList<>());
+		List<NpcState> npcs = captureChannel("npcs", coverage,
+			() -> captureNpcs(client, local, tick, includeOthers, true), new ArrayList<>());
 		coverage.put("npcsScope", "TOP_LEVEL_API_COLLECTION_WITHOUT_REPLAY_FRAME_ASSIGNMENT");
 		List<OtherPlayerState> others = includeOthers
 			? captureChannel("otherPlayers", coverage, () -> captureOtherPlayers(client, local, true),
@@ -720,62 +720,6 @@ public class WorldCaptureService
 			.nativeContextKnown(false).player(player).players(others).npcs(npcs).hazards(new ArrayList<>())
 			.projectiles(projectiles == null ? new ArrayList<>() : projectiles).captureCoverage(coverage)
 			.captureIssues(new ArrayList<>(captureIssues)).build();
-	}
-
-	private List<NpcState> captureUnscopedNpcs(Client client, Player local, boolean includeOthers)
-	{
-		List<NpcState> rows = new ArrayList<>();
-		try
-		{
-			Iterable<? extends NPC> actors = client.getNpcs();
-			if (actors == null)
-			{
-				captureIssues.add("npcs: collection unavailable");
-				return rows;
-			}
-			for (NPC npc : actors)
-			{
-				if (npc != null)
-				{
-					WorldPoint point = null;
-					String issue = null;
-					try
-					{
-						point = npc.getWorldLocation();
-					}
-					catch (RuntimeException unavailable)
-					{
-						issue = unavailable.getClass().getSimpleName();
-					}
-					NpcSnapshotObservation sample = new NpcSnapshotObservation(npc, point, issue);
-					sample.state.actorRef(sample.read("actorRef", () -> actorRef(npc, local)))
-						.interaction(sample.read("interaction",
-							() -> ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
-								!sample.issues.containsKey("interactionTarget"), local, includeOthers,
-								target -> actorRef(target, local))))
-						.interactingNpcIndex(sample.target instanceof NPC
-							? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())
-							: null)
-						.interactingWithPlayer(
-							sample.issues.containsKey("interactionTarget") ? null : sample.target == local);
-					if (!sample.issues.isEmpty())
-					{
-						sample.state.observationIssues(Collections.unmodifiableMap(new LinkedHashMap<>(sample.issues)));
-						for (Map.Entry<String, String> item : sample.issues.entrySet())
-						{
-							captureIssues
-								.add("npcs: " + item.getKey() + " (index " + sample.index + "): " + item.getValue());
-						}
-					}
-					rows.add(sample.state.build());
-				}
-			}
-		}
-		catch (RuntimeException unavailable)
-		{
-			captureIssues.add("npcs: collection " + unavailable.getClass().getSimpleName());
-		}
-		return rows;
 	}
 
 	private static boolean projectileMatches(ProjectileState projectile, Integer view, int plane)
@@ -813,8 +757,8 @@ public class WorldCaptureService
 		{
 			coverage.put("player", "partial");
 		}
-		List<NpcState> npcs = captureChannel("npcs", coverage, () -> captureNpcs(client, lp, tick, includeOtherPlayers),
-			new ArrayList<>());
+		List<NpcState> npcs = captureChannel("npcs", coverage,
+			() -> captureNpcs(client, lp, tick, includeOtherPlayers, false), new ArrayList<>());
 		List<OtherPlayerState> others = includeOtherPlayers
 			? captureChannel("otherPlayers", coverage, () -> captureOtherPlayers(client, lp), new ArrayList<>())
 			: new ArrayList<>();
@@ -1330,188 +1274,234 @@ public class WorldCaptureService
 		return out;
 	}
 
-	private List<NpcState> captureNpcs(Client client, Player lp, int tick, boolean includeOthers)
+	private List<NpcState> captureNpcs(Client client, Player lp, int tick, boolean includeOthers, boolean unscoped)
 	{
 		List<NpcState> out = new ArrayList<>();
 		Set<Integer> seen = new HashSet<>();
-		List<NPC> currentNpcs = npcList(client);
-		int reportedPlane = plane(client);
-		WorldView nativeView = view(client);
+		List<NPC> currentNpcs = unscoped ? null : npcList(client);
+		int reportedPlane = unscoped ? -1 : plane(client);
+		WorldView nativeView = unscoped ? null : view(client);
 		boolean retainUnknownPlane = nativeView == null || reportedPlane == nativeView.getPlane();
-		for (NPC npc : currentNpcs)
+		try
 		{
-			WorldPoint w = null;
-			String worldIssue = null;
-			try
+			Iterable<? extends NPC> actors = unscoped ? client.getNpcs() : currentNpcs;
+			if (actors == null)
 			{
-				w = npc.getWorldLocation();
+				captureIssues.add("npcs: collection unavailable");
+				return out;
 			}
-			catch (RuntimeException unavailable)
+			for (NPC npc : actors)
 			{
-				worldIssue = unavailable.getClass().getSimpleName();
-			}
-			if (w != null && w.getPlane() != reportedPlane)
-			{
-				continue;
-			}
-			if (w == null)
-			{
-				captureIssues.add("npcs: actor plane unavailable");
-			}
-			if (w == null && !retainUnknownPlane)
-			{
-				continue;
-			}
-			NpcSnapshotObservation sample = new NpcSnapshotObservation(npc, w, worldIssue);
-			LocalPoint l = sample.local;
-			Integer idx = sample.index;
-			if (idx != null)
-			{
-				seen.add(idx);
-			}
-			NpcTiming timing = idx == null ? null : npcTimings.get(idx);
-			if (timing == null || timing.actor != npc || !Objects.equals(timing.definition, sample.id))
-			{
-				forgetNpcTiming(npc, idx);
-				timing = new NpcTiming(npc, sample.id);
-			}
-			if (idx != null)
-			{
-				npcTimings.put(idx, timing);
-			}
-			CombatCatalog catalog = damageMap == null ? null : damageMap.catalog();
-			boolean normalContext = NpcIdentityContext.normalWorldObservedWithoutOverrides(client,
-				!sample.issues.containsKey("modelOverrides") && sample.overrides == null);
-			boolean referenceContext = normalContext && catalog != null && sample.id != null
-				&& catalog.observedNameCompatible(sample.id, sample.name, !sample.issues.containsKey("name"));
-			ObservedMechanics.Phase phase = null;
-			if (sample.id == null || sample.level == null || !referenceContext)
-			{
-				mechanics.clear(npc);
-			}
-			else
-			{
-				phase = sample.read("phaseEvaluation", () ->
+				if (npc == null)
 				{
-					mechanics.validateIdentity(catalog, npc, sample.id, true);
-					if (!sample.issues.containsKey("overheadText"))
-					{
-						mechanics.observe(catalog, npc, sample.id, "overheadEquals", sample.speech,
-							sample.animation == null ? -1 : sample.animation, currentNpcs, tick,
-							"OVERHEAD_TEXT_SNAPSHOT");
-					}
-					if (sample.animation != null)
-					{
-						mechanics.observe(catalog, npc, sample.id, "animationIn", null, sample.animation, currentNpcs,
-							tick, "ANIMATION_SNAPSHOT");
-					}
-					mechanics.observe(catalog, npc, sample.id, "npcPresent", null,
-						sample.animation == null ? -1 : sample.animation, currentNpcs, tick, "RELATED_NPC_OBSERVED");
-					return mechanics.phase(npc);
-				});
-				if (sample.issues.containsKey("phaseEvaluation"))
+					continue;
+				}
+				WorldPoint w = null;
+				String worldIssue = null;
+				try
+				{
+					w = npc.getWorldLocation();
+				}
+				catch (RuntimeException unavailable)
+				{
+					worldIssue = unavailable.getClass().getSimpleName();
+				}
+				if (!unscoped && w != null && w.getPlane() != reportedPlane)
+				{
+					continue;
+				}
+				if (!unscoped && w == null)
+				{
+					captureIssues.add("npcs: actor plane unavailable");
+				}
+				if (w == null && !retainUnknownPlane)
+				{
+					continue;
+				}
+				NpcSnapshotObservation sample = new NpcSnapshotObservation(npc, w, worldIssue);
+				if (unscoped)
+				{
+					sample.state.actorRef(sample.read("actorRef", () -> actorRef(npc, lp)))
+						.interaction(sample.read("interaction",
+							() -> ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
+								!sample.issues.containsKey("interactionTarget"), lp, includeOthers,
+								target -> actorRef(target, lp))))
+						.interactingNpcIndex(sample.target instanceof NPC
+							? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())
+							: null)
+						.interactingWithPlayer(
+							sample.issues.containsKey("interactionTarget") ? null : sample.target == lp);
+					finishNpc(out, sample);
+					continue;
+				}
+				LocalPoint l = sample.local;
+				Integer idx = sample.index;
+				if (idx != null)
+				{
+					seen.add(idx);
+				}
+				NpcTiming timing = idx == null ? null : npcTimings.get(idx);
+				if (timing == null || timing.actor != npc || !Objects.equals(timing.definition, sample.id))
+				{
+					forgetNpcTiming(npc, idx);
+					timing = new NpcTiming(npc, sample.id);
+				}
+				if (idx != null)
+				{
+					npcTimings.put(idx, timing);
+				}
+				CombatCatalog catalog = damageMap == null ? null : damageMap.catalog();
+				boolean normalContext = NpcIdentityContext.normalWorldObservedWithoutOverrides(client,
+					!sample.issues.containsKey("modelOverrides") && sample.overrides == null);
+				boolean referenceContext = normalContext && catalog != null && sample.id != null
+					&& catalog.observedNameCompatible(sample.id, sample.name, !sample.issues.containsKey("name"));
+				ObservedMechanics.Phase phase = null;
+				if (sample.id == null || sample.level == null || !referenceContext)
 				{
 					mechanics.clear(npc);
 				}
-			}
-			String animationKind = catalog != null && sample.id != null && sample.animation != null
-				? sample.read("animationMeaning",
-					() -> catalog.animationKind(sample.id, sample.animation, sample.level, referenceContext))
-				: "unknown";
-			boolean timingKnown = sample.timingInputsKnown() && !sample.issues.containsKey("animationMeaning");
-			boolean attackStart = false, frameReset = false;
-			Integer cooldown = null;
-			LocalPoint priorPosition = null;
-			if (timingKnown)
-			{
-				String context = sample.level + ":" + normalContext + ":" + referenceContext + ":" + sample.name + ":"
-					+ (phase == null ? "" : phase.getRule() + ":" + phase.getLabel());
-				if (!Objects.equals(timing.context, context))
+				else
 				{
-					timing.animation = null;
-					timing.frame = null;
-					timing.attackTick = null;
+					phase = sample.read("phaseEvaluation", () ->
+					{
+						mechanics.validateIdentity(catalog, npc, sample.id, true);
+						if (!sample.issues.containsKey("overheadText"))
+						{
+							mechanics.observe(catalog, npc, sample.id, "overheadEquals", sample.speech,
+								sample.animation == null ? -1 : sample.animation, currentNpcs, tick,
+								"OVERHEAD_TEXT_SNAPSHOT");
+						}
+						if (sample.animation != null)
+						{
+							mechanics.observe(catalog, npc, sample.id, "animationIn", null, sample.animation,
+								currentNpcs, tick, "ANIMATION_SNAPSHOT");
+						}
+						mechanics.observe(catalog, npc, sample.id, "npcPresent", null,
+							sample.animation == null ? -1 : sample.animation, currentNpcs, tick,
+							"RELATED_NPC_OBSERVED");
+						return mechanics.phase(npc);
+					});
+					if (sample.issues.containsKey("phaseEvaluation"))
+					{
+						mechanics.clear(npc);
+					}
 				}
-				timing.context = context;
-				Integer lastAnim = timing.animation, lastFrame = timing.frame;
-				timing.animation = sample.animation;
-				timing.frame = sample.animationFrame;
-				frameReset = lastAnim != null && lastAnim.equals(sample.animation) && sample.animationFrame != null
-					&& lastFrame != null && sample.animationFrame >= 0 && lastFrame >= 0
-					&& sample.animationFrame < lastFrame;
-				attackStart = sample.animation != -1 && lastAnim != null
-					&& (!lastAnim.equals(sample.animation) || frameReset) && "attack".equals(animationKind);
-				if (!"attack".equals(animationKind) && sample.animation != -1)
+				String animationKind = catalog != null && sample.id != null && sample.animation != null
+					? sample.read("animationMeaning",
+						() -> catalog.animationKind(sample.id, sample.animation, sample.level, referenceContext))
+					: "unknown";
+				boolean timingKnown = sample.timingInputsKnown() && !sample.issues.containsKey("animationMeaning");
+				boolean attackStart = false, frameReset = false;
+				Integer cooldown = null;
+				LocalPoint priorPosition = null;
+				if (timingKnown)
 				{
-					timing.attackTick = null;
+					String context = sample.level + ":" + normalContext + ":" + referenceContext + ":" + sample.name
+						+ ":" + (phase == null ? "" : phase.getRule() + ":" + phase.getLabel());
+					if (!Objects.equals(timing.context, context))
+					{
+						timing.animation = null;
+						timing.frame = null;
+						timing.attackTick = null;
+					}
+					timing.context = context;
+					Integer lastAnim = timing.animation, lastFrame = timing.frame;
+					timing.animation = sample.animation;
+					timing.frame = sample.animationFrame;
+					frameReset = lastAnim != null && lastAnim.equals(sample.animation) && sample.animationFrame != null
+						&& lastFrame != null && sample.animationFrame >= 0 && lastFrame >= 0
+						&& sample.animationFrame < lastFrame;
+					attackStart = sample.animation != -1 && lastAnim != null
+						&& (!lastAnim.equals(sample.animation) || frameReset) && "attack".equals(animationKind);
+					if (!"attack".equals(animationKind) && sample.animation != -1)
+					{
+						timing.attackTick = null;
+					}
+					if (attackStart)
+					{
+						timing.attackTick = tick;
+					}
+					Integer speed = damageMap == null ? 0
+						: sample.read("attackSpeedReference",
+							() -> damageMap.attackSpeedForNpc(sample.id, sample.level, referenceContext));
+					Integer lastAttack = timing.attackTick;
+					cooldown = speed == null ? null
+						: speed > 0 && lastAttack != null ? Math.max(0, speed - (tick - lastAttack)) : 0;
+					priorPosition = timing.position;
+					timing.position = l;
 				}
-				if (attackStart)
+				else
 				{
-					timing.attackTick = tick;
+					forgetNpcTiming(npc, idx);
 				}
-				Integer speed = damageMap == null ? 0
-					: sample.read("attackSpeedReference",
-						() -> damageMap.attackSpeedForNpc(sample.id, sample.level, referenceContext));
-				Integer lastAttack = timing.attackTick;
-				cooldown = speed == null ? null
-					: speed > 0 && lastAttack != null ? Math.max(0, speed - (tick - lastAttack)) : 0;
-				priorPosition = timing.position;
-				timing.position = l;
-			}
-			else
-			{
-				forgetNpcTiming(npc, idx);
-			}
-			boolean moved = priorPosition != null && l != null && !priorPosition.equals(l);
-			String action = sample.animation == null ? (moved ? "MOVING" : null)
-				: deriveAction(moved, attackStart, cooldown == null ? 0 : cooldown, sample.animation != -1,
-					priorPosition != null);
-			Integer targetIndex = sample.target instanceof NPC
-				? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())
-				: null;
-			String actionEvidence = catalog != null && sample.id != null && sample.animation != null
-				? sample.read("actionEvidence",
-					() -> catalog.animationEvidence(sample.id, sample.animation, sample.level, referenceContext))
-				: "UNCLASSIFIED_ANIMATION";
-			List<String> researchReferences = catalog != null && sample.id != null
-				? sample.read("researchReferences", () -> catalog.referenceKeys(sample.id))
-				: null;
-			sample.state.actorRef(sample.read("actorRef", () -> actorRef(npc, lp)))
-				.definitionStateReference(catalog == null ? null
-					: sample.read("definitionStateReference",
-						() -> catalog.definitionStateReference(sample.id, sample.name,
-							!sample.issues.containsKey("name"), sample.level, sample.size, normalContext)))
-				.interaction(ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
-					!sample.issues.containsKey("interactionTarget"), lp, includeOthers, target -> actorRef(target, lp)))
-				.interactingNpcIndex(targetIndex)
-				.interactingWithPlayer(
-					sample.issues.containsKey("interactionTarget") || lp == null ? null : sample.target == lp)
-				.normalWorldContextObserved(normalContext)
-				.variantCandidates(catalog != null && sample.id != null
-					? sample.read("variantReferences", () -> catalog.variants(sample.id))
-					: null)
-				.researchReferenceKeys(researchReferences).actionEvidence(actionEvidence)
-				.attackOnsetEvidence(
-					attackStart ? (frameReset ? "OBSERVED_ANIMATION_FRAME_DECREASE" : "OBSERVED_ANIMATION_ID_CHANGE")
+				boolean moved = priorPosition != null && l != null && !priorPosition.equals(l);
+				String action = sample.animation == null ? (moved ? "MOVING" : null)
+					: deriveAction(moved, attackStart, cooldown == null ? 0 : cooldown, sample.animation != -1,
+						priorPosition != null);
+				Integer targetIndex = sample.target instanceof NPC
+					? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())
+					: null;
+				String actionEvidence = catalog != null && sample.id != null && sample.animation != null
+					? sample.read("actionEvidence",
+						() -> catalog.animationEvidence(sample.id, sample.animation, sample.level, referenceContext))
+					: "UNCLASSIFIED_ANIMATION";
+				List<String> researchReferences = catalog != null && sample.id != null
+					? sample.read("researchReferences", () -> catalog.referenceKeys(sample.id))
+					: null;
+				sample.state.actorRef(sample.read("actorRef", () -> actorRef(npc, lp)))
+					.definitionStateReference(catalog == null ? null
+						: sample.read("definitionStateReference",
+							() -> catalog.definitionStateReference(sample.id, sample.name,
+								!sample.issues.containsKey("name"), sample.level, sample.size, normalContext)))
+					.interaction(ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
+						!sample.issues.containsKey("interactionTarget"), lp, includeOthers,
+						target -> actorRef(target, lp)))
+					.interactingNpcIndex(targetIndex)
+					.interactingWithPlayer(
+						sample.issues.containsKey("interactionTarget") || lp == null ? null : sample.target == lp)
+					.normalWorldContextObserved(normalContext)
+					.variantCandidates(catalog != null && sample.id != null
+						? sample.read("variantReferences", () -> catalog.variants(sample.id))
 						: null)
-				.observedPhase(phase == null ? null : phase.getLabel())
-				.phaseRule(phase == null ? null : phase.getRule())
-				.phaseEvidence(phase == null ? null : phase.getEvidence())
-				.phaseObservedTick(phase == null ? null : phase.getObservedTick())
-				.phaseLastObservedTick(phase == null ? null : phase.getLastObservedTick()).derivedAction(action)
-				.attackCooldownTicksRemaining(cooldown);
-			if (!sample.issues.isEmpty())
-			{
-				sample.state.observationIssues(Collections.unmodifiableMap(new LinkedHashMap<>(sample.issues)));
-				for (Map.Entry<String, String> issue : sample.issues.entrySet())
-				{
-					captureIssues.add("npcs: " + issue.getKey() + " (index " + idx + "): " + issue.getValue());
-				}
+					.researchReferenceKeys(researchReferences).actionEvidence(actionEvidence)
+					.attackOnsetEvidence(attackStart
+						? (frameReset ? "OBSERVED_ANIMATION_FRAME_DECREASE" : "OBSERVED_ANIMATION_ID_CHANGE")
+						: null)
+					.observedPhase(phase == null ? null : phase.getLabel())
+					.phaseRule(phase == null ? null : phase.getRule())
+					.phaseEvidence(phase == null ? null : phase.getEvidence())
+					.phaseObservedTick(phase == null ? null : phase.getObservedTick())
+					.phaseLastObservedTick(phase == null ? null : phase.getLastObservedTick()).derivedAction(action)
+					.attackCooldownTicksRemaining(cooldown);
+				finishNpc(out, sample);
 			}
-			out.add(sample.state.build());
 		}
-		npcTimings.keySet().retainAll(seen);
+		catch (RuntimeException unavailable)
+		{
+			if (!unscoped)
+			{
+				throw unavailable;
+			}
+			captureIssues.add("npcs: collection " + unavailable.getClass().getSimpleName());
+		}
+		if (!unscoped)
+		{
+			npcTimings.keySet().retainAll(seen);
+		}
 		return out;
+	}
+
+	private void finishNpc(List<NpcState> out, NpcSnapshotObservation sample)
+	{
+		if (!sample.issues.isEmpty())
+		{
+			sample.state.observationIssues(Collections.unmodifiableMap(new LinkedHashMap<>(sample.issues)));
+			for (Map.Entry<String, String> issue : sample.issues.entrySet())
+			{
+				captureIssues.add("npcs: " + issue.getKey() + " (index " + sample.index + "): " + issue.getValue());
+			}
+		}
+		out.add(sample.state.build());
 	}
 
 	private void forgetNpcTiming(NPC npc, Integer index)

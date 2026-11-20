@@ -35,6 +35,26 @@ public class ActorSamplingParityTest
     }
 
     @Test
+    public void genericSelfInteractionUsesTheSameOriginalFieldsAndIndependentReadOrder()
+    {
+        for (String unavailable : Arrays.asList("", "getWorldLocation", "getLocalLocation", "getWorldView", "getId",
+            "getName", "getCombatLevel", "getAnimation", "getPoseAnimation", "getOverheadText", "getOrientation",
+            "getCurrentOrientation", "getAnimationFrame", "getPoseAnimationFrame", "getOverheadCycle", "getHealthRatio",
+            "getHealthScale", "getSpotAnims", "isInteracting", "getInteracting"))
+        {
+            Sample before = new Sample(Actor.class, unavailable, true), after = new Sample(Actor.class, unavailable, true);
+            List<com.google.gson.JsonElement> oldSelf = new ArrayList<>(), currentSelf = new ArrayList<>();
+            Map<String, Object> expected = LegacyActorCallbackObservation22.captureSample(before.actor, null, null, true,
+                actor -> "recorded", (actor, fields) -> { oldSelf.add(gson.toJsonTree(fields)); return "recorded"; }).data();
+            Map<String, Object> actual = ActorCallbackObservation.captureSample(after.actor, null, null, true,
+                actor -> "recorded", (actor, fields) -> { currentSelf.add(gson.toJsonTree(fields)); return "recorded"; }).data();
+            assertEquals(unavailable, gson.toJsonTree(expected), gson.toJsonTree(actual));
+            assertEquals(unavailable, oldSelf, currentSelf);
+            assertEquals(unavailable, before.calls, after.calls);
+        }
+    }
+
+    @Test
     public void snapshotNpcSamplesMatchTheFrozenReaderWithoutReusingCallbackSamples()
     {
         for (String unavailable : Arrays.asList("", "getWorldView", "getName", "getAnimationFrame", "getWorldArea"))
@@ -68,6 +88,11 @@ public class ActorSamplingParityTest
 
         Sample(Class<? extends Actor> kind, String unavailable)
         {
+            this(kind, unavailable, false);
+        }
+
+        Sample(Class<? extends Actor> kind, String unavailable, boolean self)
+        {
             WorldView view = stub(WorldView.class, "view", unavailable);
             NPCComposition composition = stub(NPCComposition.class, "definition", unavailable);
             actor = (Actor) Proxy.newProxyInstance(kind.getClassLoader(), new Class<?>[] { kind }, (proxy, method, args) ->
@@ -79,6 +104,8 @@ public class ActorSamplingParityTest
                 if (name.equals(unavailable)) throw new IllegalStateException("unavailable");
                 switch (name)
                 {
+                    case "getInteracting": return self ? proxy : null;
+                    case "isInteracting": return self;
                     case "getWorldLocation": return new WorldPoint(3201, 3202, 0);
                     case "getLocalLocation": return new LocalPoint(64, 192);
                     case "getWorldView": return view;

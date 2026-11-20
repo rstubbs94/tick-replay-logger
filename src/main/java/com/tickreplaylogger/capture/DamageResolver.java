@@ -19,7 +19,8 @@ import lombok.*;
 final class DamageResolver
 {
 	static final String METHOD = "RESOLVER_V2";
-	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10, LAUNCH_CYCLES = 60, VENOM = 1_000_000;
+	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10, LAUNCH_CYCLES = 60, VENOM = 1_000_000,
+		CLICK_TICKS = 6;
 
 	private final ResolverCatalog catalog;
 
@@ -115,6 +116,22 @@ final class DamageResolver
 		return out;
 	}
 
+	/**
+	 * A poison- or venom-coloured splat while the recorded counter shows no such status, this tick and the one
+	 * before, is a one-off hit in that colour (nettles, some attacks), not a poison tick.
+	 */
+	private static boolean oneOffColouredHit(Window w, DamageRecord hit, String status)
+	{
+		boolean venom = "Venom".equals(status);
+		if (!venom && !"Poison".equals(status))
+		{
+			return false;
+		}
+		WorldSnapshot now = w.frames.get(hit.getImpactTick()), before = w.frames.get(hit.getImpactTick() - 1);
+		return now != null && before != null && Boolean.FALSE.equals(poisoned(now, venom))
+			&& Boolean.FALSE.equals(poisoned(before, venom));
+	}
+
 	/** Poison or venom start ticks resolved in this recording, with what hit the player then. */
 	private final Map<Integer, String> applied = new HashMap<>();
 
@@ -181,7 +198,8 @@ final class DamageResolver
 	{
 		SourceResolution resolution = result(found);
 		Candidate only = "IDENTIFIED".equals(resolution.getStatus()) ? found.get(0) : null;
-		String status = catalog.getStatuses().get(hit.getHitsplatType()), style = only == null ? null
+		String colour = catalog.getStatuses().get(hit.getHitsplatType());
+		String status = only != null && only.evidence.startsWith("STATUS") ? colour : null, style = only == null ? null
 			: only.evidence.startsWith("PROJECTILE:")
 				? catalog.getProjectileStyles().get(Integer.parseInt(only.evidence.substring(11)))
 				: only.evidence.startsWith("ATTACK_TIMING:")
@@ -192,7 +210,7 @@ final class DamageResolver
 			.attribution(status != null ? "ENVIRONMENTAL" : only != null ? "OBSERVED" : "UNKNOWN")
 			.attributionEvidence(status != null ? "STATUS_HITSPLAT" : only != null ? only.evidence
 				: found.isEmpty() ? "UNRESOLVED_OBSERVATIONS" : "MULTIPLE_POSSIBLE_DAMAGE_SOURCES")
-			.damageType(status != null ? status.toLowerCase(Locale.ROOT) : style != null ? style : hit.getDamageType())
+			.damageType(colour != null ? colour.toLowerCase(Locale.ROOT) : style != null ? style : hit.getDamageType())
 			.build();
 	}
 
@@ -301,7 +319,7 @@ final class DamageResolver
 	{
 		int tick = hit.getImpactTick(), amount = hit.getAmount();
 		String status = catalog.getStatuses().get(hit.getHitsplatType());
-		if (status != null)
+		if (status != null && !oneOffColouredHit(w, hit, status))
 		{
 			return List.of(new Candidate(status, null, null, true, "STATUS"));
 		}
@@ -327,7 +345,9 @@ final class DamageResolver
 		ObservedActorState player = w.player(tick);
 		List<Candidate> area = player == null ? List.of() : area(w, hit, player);
 		List<Candidate> attacks = player == null ? List.of() : attacks(w, tick, amount, player);
-		List<Candidate> peers = distinct(Stream.of(projectiles, strong(area, true), attacks, ownActions(w, tick))
+		List<Candidate> actions = ownActions(w, tick);
+		List<Candidate> items = actions.stream().filter(c -> "SELF_ITEM".equals(c.evidence)).collect(Collectors.toList());
+		List<Candidate> peers = distinct(Stream.of(projectiles, strong(area, true), attacks, items)
 			.flatMap(List::stream).collect(Collectors.toList()));
 		if (!peers.isEmpty())
 		{
@@ -338,8 +358,17 @@ final class DamageResolver
 			kept.forEach(c -> c.strong = certain);
 			return certain || !sure.isEmpty() ? kept : distinct(concat(kept, area));
 		}
+		// Nothing attacked the player: their own click (pickpocket, nettles, an obstacle) is next.
+		List<Candidate> clicks = actions.stream().filter(c -> !"SELF_ITEM".equals(c.evidence))
+			.collect(Collectors.toList());
+		if (!clicks.isEmpty())
+		{
+			return possibleIfSeveral(distinct(clicks));
+		}
 		List<Candidate> weak = player == null ? area : distinct(concat(area, nearbyAttacks(w, tick, amount, player)));
-		return weak.isEmpty() ? messages(w, tick) : weak;
+		List<Candidate> rest = weak.isEmpty() ? messages(w, tick) : weak;
+		// A status-coloured splat with nothing else to explain it is still most likely that status.
+		return rest.isEmpty() && status != null ? List.of(new Candidate(status, null, null, true, "STATUS")) : rest;
 	}
 
 	/** Surfaces and contact NPCs under the player, hazard graphics on the tile, projectiles aimed at it. */
@@ -431,7 +460,7 @@ final class DamageResolver
 				continue;
 			}
 			int d = w.closest(animation.getTick(), player, npc);
-			if (hitDelays(d).contains(tick - animation.getTick())
+			if (hitDelays(d).contains(tick - animation.getTick()) && !landedEarlier(w, animation.getTick(), d, tick)
 				&& catalog.canDeal(npc.getNpcId(), amount, catalog.getAnimationStyles().get(id)))
 			{
 				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known || d <= 1,
@@ -457,6 +486,17 @@ final class DamageResolver
 	private static String graphicKey(HazardState h)
 	{
 		return h.getId() + ":" + h.getWorldX() + ":" + h.getWorldY() + ":" + h.getStartCycle();
+	}
+
+	/**
+	 * One attack lands on one tick (several splats on that tick are fine): an animation whose attack already
+	 * matched an earlier hit cannot explain a later one.
+	 */
+	private boolean landedEarlier(Window w, int animationTick, int distance, int tick)
+	{
+		Set<Integer> delays = hitDelays(distance);
+		return w.hits.stream().anyMatch(h -> h.getImpactTick() >= animationTick && h.getImpactTick() < tick
+			&& delays.contains(h.getImpactTick() - animationTick) && !catalog.getStatuses().containsKey(h.getHitsplatType()));
 	}
 
 	/** Melee lands immediately; bows, thrown weapons and magic by distance; one tick of processing slack. */
@@ -494,10 +534,17 @@ final class DamageResolver
 	private List<Candidate> ownActions(Window w, int tick)
 	{
 		boolean confirmed = !messages(w, tick).isEmpty();
+		// With a confirming message, walking to the object first is allowed: the latest click of the last few ticks.
+		int latest = !confirmed ? tick - 1 : w.clicks.stream().filter(c -> c.getTick() <= tick && c.getTick() >= tick - CLICK_TICKS
+			&& interaction(c.getData())).mapToInt(ObservedEvent::getTick).max().orElse(tick - 1);
 		List<Candidate> out = new ArrayList<>();
 		for (ObservedEvent click : w.clicks)
 		{
 			int age = tick - click.getTick();
+			if (confirmed && click.getTick() >= latest && age >= 0 && interaction(click.getData()))
+			{
+				age = 0;
+			}
 			Map<String, Object> data = click.getData();
 			String option = text(data.get("option")), target = text(data.get("target"));
 			Object item = data.get("itemId");
@@ -510,8 +557,7 @@ final class DamageResolver
 			{
 				out.add(new Candidate(selfItem, null, null, true, "SELF_ITEM"));
 			}
-			else if (target != null && !Set.of("Walk here", "Attack", "Cancel", "Examine").contains(option)
-				&& String.valueOf(data.get("menuAction")).matches(".*(GAME_OBJECT|NPC_).*"))
+			else if (target != null && interaction(data))
 			{
 				NpcState npc = w.npc(click.getTick(), click.getRelatedActorRef());
 				out.add(new Candidate(target.replaceAll("\\s*\\(level-\\d+\\)", "").trim(), npc == null ? null
@@ -521,6 +567,15 @@ final class DamageResolver
 			}
 		}
 		return out;
+	}
+
+	/** A click on scenery or an NPC that is not walking, attacking or examining. */
+	private static boolean interaction(Map<String, Object> data)
+	{
+		String option = text(data.get("option"));
+		return option != null && text(data.get("target")) != null
+			&& !Set.of("Walk here", "Attack", "Cancel", "Examine").contains(option)
+			&& String.valueOf(data.get("menuAction")).matches(".*(GAME_OBJECT|NPC_).*");
 	}
 
 	private List<Candidate> messages(Window w, int tick)

@@ -323,6 +323,49 @@ public class DamageResolverTest
 		assertEquals("poison", poison.getDamageType());
 	}
 
+	/** Nettles sting in poison colour while unpoisoned; the pick click came while walking over, a few ticks before. */
+	@Test
+	public void nettleStingIsTheNettlesNotPoison()
+	{
+		List<WorldSnapshot> frames = new ArrayList<>();
+		for (int t = TICK - 5; t < TICK; t++)
+		{
+			frames.add(WorldSnapshot.builder().tick(t).gameCycle(CYCLE - 30 * (TICK - t)).sceneKey("scene")
+				.player(PlayerState.builder().worldX(3200).worldY(3200).plane(0).worldPositionKnown(true)
+					.poisonValueKnown(true).poisonValue(0).build()).build());
+		}
+		Map<String, Object> pick = new HashMap<>(Map.of("option", "Pick", "target", "Nettles", "itemId", -1,
+			"menuAction", "GAME_OBJECT_FIRST_OPTION"));
+		observations.add(ObservedEvent.builder().tick(TICK - 4).sequence(10).type("MENU_OPTION").actorRef("player")
+			.data(pick).build());
+		message("You have been stung by the nettles!", TICK);
+		hit(1, 2, 65);
+		DeathRecordingV2 recording = recording(frames.toArray(new WorldSnapshot[0]));
+		List<WorldSnapshot> all = new ArrayList<>(recording.getTicks());
+		all.set(all.size() - 1, all.get(all.size() - 1).toBuilder().player(PlayerState.builder().worldX(3200)
+			.worldY(3200).plane(0).worldPositionKnown(true).poisonValueKnown(true).poisonValue(0).build()).build());
+		DamageRecord result = resolver.resolve(recording.toBuilder().ticks(all).build()).get(1L);
+		assertEquals("Nettles", result.getAttackerName());
+		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
+		assertEquals("poison", result.getDamageType());
+	}
+
+	/** Opening a door while an adjacent skeleton's attack lands: the skeleton, not the door. */
+	@Test
+	public void anAttackerOutranksTheDoorThePlayerOpened()
+	{
+		attacker(7000, 100, TICK);
+		Map<String, Object> open = new HashMap<>(Map.of("option", "Open", "target", "Door", "itemId", -1,
+			"menuAction", "GAME_OBJECT_FIRST_OPTION"));
+		observations.add(ObservedEvent.builder().tick(TICK).sequence(10).type("MENU_OPTION").actorRef("player")
+			.data(open).build());
+		message("You hear the doors' locking mechanism grind open.", TICK);
+		hit(1, 0, 12);
+		DamageRecord result = resolve().get(1L);
+		assertEquals("Goblin warlord", result.getAttackerName());
+		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
+	}
+
 	@Test
 	public void aMessageAloneIsNeverNamedAsTheSource()
 	{

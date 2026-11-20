@@ -4950,8 +4950,8 @@ public class DeferredAttributionTest
 		assertNull(capturedLastDamage());
 		hit(HitsplatID.VENOM, 4);
 		tick();
-		assertEquals("Venom", capturedLastDamage().getAttackerName());
-		assertEquals("ENVIRONMENTAL", capturedLastDamage().getAttribution());
+		// Not envenomed: the venom-coloured hit follows eating the sac, a listed self-damage item.
+		assertEquals("Araxyte venom sac", capturedLastDamage().getAttackerName());
 		assertEquals("venom", capturedLastDamage().getDamageType());
 	}
 

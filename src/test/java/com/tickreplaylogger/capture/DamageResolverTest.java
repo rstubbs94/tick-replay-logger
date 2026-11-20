@@ -366,6 +366,22 @@ public class DamageResolverTest
 		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
 	}
 
+	/** Wintertodt's cold uses an unlisted hitsplat type kept as a resource impact; the game message names it. */
+	@Test
+	public void resourceImpactOnTheHitsplatIsResolvedFromTheMessage()
+	{
+		DamageRecord impact = DamageRecord.builder().direction("RESOURCE_IMPACT").defenderRef("player").impactTick(TICK)
+			.observedCycle(CYCLE).observationSequence(7L).amount(6).hitsplatType(75).damageType("unknown").build();
+		Map<String, Object> data = new HashMap<>(Map.of("amount", 6, "hitsplatType", 75, "attributionContext", impact));
+		observations.add(ObservedEvent.builder().tick(TICK).gameCycle(CYCLE).sequence(7).type("HITSPLAT")
+			.actorRef("player").data(data).build());
+		message("You get a bruma root.", TICK);
+		message("The cold of the Wintertodt seeps into your bones.", TICK);
+		SourceResolution resolution = resolve().get(7L).getSourceResolution();
+		assertEquals(1, resolution.getCandidates().size());
+		assertEquals("The cold of the Wintertodt seeps into your bones", resolution.getCandidates().get(0).getName());
+	}
+
 	@Test
 	public void aMessageAloneIsNeverNamedAsTheSource()
 	{

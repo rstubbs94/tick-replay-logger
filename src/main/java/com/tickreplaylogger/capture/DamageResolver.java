@@ -426,7 +426,7 @@ final class DamageResolver
 			// Landing exactly where the player stood (this tick or the one before) is certain; next to them, possible.
 			int d = w.closestTo(hit.getImpactTick(), player, p.getEndWorldX(), p.getEndWorldY());
 			String graphic = catalog.getHazardGraphics().get(p.getProjectileId());
-			if (d <= 1)
+			if (d <= 1 && (graphic != null || SourceResolutionLabels.usableName(p.getSourceName()) != null))
 			{
 				out.add(new Candidate(graphic != null ? graphic.replaceAll("(?i)\\s+travel$", "")
 					: p.getSourceName() == null ? "Area attack" : p.getSourceName() + " (area attack)", p.getSourceRef(),
@@ -533,7 +533,9 @@ final class DamageResolver
 	 */
 	private List<Candidate> ownActions(Window w, int tick)
 	{
-		boolean confirmed = !messages(w, tick).isEmpty();
+		List<String> said = messageTexts(w, tick), harm = said.stream().filter(m -> HARM.matcher(m).find())
+			.collect(Collectors.toList());
+		boolean confirmed = !said.isEmpty();
 		// With a confirming message, walking to the object first is allowed: the latest click of the last few ticks.
 		int latest = !confirmed ? tick - 1 : w.clicks.stream().filter(c -> c.getTick() <= tick && c.getTick() >= tick - CLICK_TICKS
 			&& interaction(c.getData())).mapToInt(ObservedEvent::getTick).max().orElse(tick - 1);
@@ -559,8 +561,14 @@ final class DamageResolver
 			}
 			else if (target != null && interaction(data))
 			{
+				// A harm message naming something else ("the Wintertodt's magic hits you") explains the hit instead.
+				String name = target.replaceAll("\\s*\\(level-\\d+\\)", "").trim();
+				if (!harm.isEmpty() && harm.stream().noneMatch(m -> mentions(m, name)))
+				{
+					continue;
+				}
 				NpcState npc = w.npc(click.getTick(), click.getRelatedActorRef());
-				out.add(new Candidate(target.replaceAll("\\s*\\(level-\\d+\\)", "").trim(), npc == null ? null
+				out.add(new Candidate(name, npc == null ? null
 					: npc.getActorRef(), npc == null ? null : npc.getNpcId(), confirmed, "OWN_ACTION:" + option)
 					.at(npc == null ? null : w.sceneKey(click.getTick()), npc == null ? null : npc.getWorldViewId(),
 						npc == null ? null : npc.getPlane()));
@@ -578,13 +586,36 @@ final class DamageResolver
 			&& String.valueOf(data.get("menuAction")).matches(".*(GAME_OBJECT|NPC_).*");
 	}
 
+	/**
+	 * Game messages at the hit, as the last resort: the message describes the cause ("The brazier is broken and
+	 * shrapnel damages you."). Messages that speak of harm are preferred over routine ones on the same tick.
+	 */
 	private List<Candidate> messages(Window w, int tick)
+	{
+		List<String> all = messageTexts(w, tick);
+		List<String> harm = all.stream().filter(m -> HARM.matcher(m).find()).collect(Collectors.toList());
+		return (harm.isEmpty() ? all : harm).stream().map(m -> new Candidate(m, null, null, false, "MESSAGE"))
+			.collect(Collectors.toList());
+	}
+
+	private static List<String> messageTexts(Window w, int tick)
 	{
 		return w.messages.stream().filter(m -> tick - m.getTick() >= 0 && tick - m.getTick() <= 1)
 			.map(m -> text(m.getData().get("message"))).filter(Objects::nonNull)
-			.map(m -> new Candidate("Message: " + m.replaceAll("<[^>]+>", ""), null, null, false, "MESSAGE"))
-			.collect(Collectors.toList());
+			.map(m -> m.replaceAll("<[^>]+>", "").replaceAll("[.!]+$", "").trim()).filter(m -> !m.isEmpty())
+			.distinct().collect(Collectors.toList());
 	}
+
+	/** The message names the clicked thing ("stung by the nettles", "the brazier is broken"). */
+	private static boolean mentions(String message, String target)
+	{
+		String lower = message.toLowerCase(Locale.ROOT);
+		return Arrays.stream(target.toLowerCase(Locale.ROOT).split("[^a-z]+")).anyMatch(word -> word.length() >= 4
+			&& lower.contains(word));
+	}
+
+	private static final java.util.regex.Pattern HARM = java.util.regex.Pattern.compile(
+		"(?i)damag|hits? you|hurt|injur|burn|sting|poison|venom|cold|freez|shock|explo|shrapnel|bones|ouch|\\bow\\b");
 
 	/**
 	 * Matches projectiles aimed at the player to hits landing on the same cycle. Every one-to-one assignment
@@ -818,6 +849,22 @@ final class DamageResolver
 				.sorted(Comparator.comparing((DamageRecord h) -> h.getObservedCycle() == null ? 0 : h.getObservedCycle())
 					.thenComparing(h -> h.getObservationSequence() == null ? 0 : h.getObservationSequence()))
 				.collect(Collectors.toList());
+			// Hits whose HP effect is unknown (unlisted hitsplat types) are kept on their hitsplat observation.
+			Set<Long> listed = hits.stream().map(DamageRecord::getObservationSequence).filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+			for (ObservedEvent e : list(events.getObservations()))
+			{
+				Object impact = e.getData() == null ? null : e.getData().get("attributionContext");
+				if ("HITSPLAT".equals(e.getType()) && impact instanceof DamageRecord
+					&& "player".equals(((DamageRecord) impact).getDefenderRef())
+					&& "RESOURCE_IMPACT".equals(((DamageRecord) impact).getDirection())
+					&& listed.add(((DamageRecord) impact).getObservationSequence()))
+				{
+					hits.add((DamageRecord) impact);
+				}
+			}
+			hits.sort(Comparator.comparing((DamageRecord h) -> h.getObservedCycle() == null ? 0 : h.getObservedCycle())
+				.thenComparing(h -> h.getObservationSequence() == null ? 0 : h.getObservationSequence()));
 			for (ObservedEvent e : list(events.getObservations()))
 			{
 				if ("ANIMATION_CHANGED".equals(e.getType()) && e.getActorRef() != null && e.getActorRef().startsWith("npc")

@@ -24,11 +24,9 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.world.ContextBlock;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
 
 /** Classify an observed client level under a pinned reference, never active modifiers or damage. */
 final class EncounterModeCapture

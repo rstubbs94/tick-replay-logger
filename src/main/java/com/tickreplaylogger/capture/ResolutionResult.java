@@ -4,9 +4,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonObject;
-import java.util.ArrayList;
-import java.util.List;
+import com.google.gson.*;
+import java.util.*;
 
 /** Evaluated components shared directly with the recording projector. */
 final class ResolutionResult

@@ -4,11 +4,9 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import com.google.gson.*;
+import java.io.*;
+import java.nio.charset.*;
 
 /** One immutable bundled mechanics package shared by capture and interpretation. */
 public final class RuntimeCatalog
@@ -40,7 +38,7 @@ public final class RuntimeCatalog
 					bundled = new RuntimeCatalog(input == null ? null
 						: gson.fromJson(new InputStreamReader(input, StandardCharsets.UTF_8), JsonObject.class));
 				}
-				catch (RuntimeException | java.io.IOException unavailable)
+				catch (RuntimeException | IOException unavailable)
 				{
 					bundled = new RuntimeCatalog(null);
 				}

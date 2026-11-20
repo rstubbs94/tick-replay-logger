@@ -24,13 +24,15 @@
  */
 package com.tickreplaylogger.ui;
 
-import com.tickreplaylogger.util.DisplayFormat;
 import com.tickreplaylogger.model.*;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.ui.ColorScheme;
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
+import com.tickreplaylogger.util.*;
 import java.awt.*;
+import java.util.*;
+import java.util.function.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.game.*;
+import net.runelite.client.ui.*;
 
 /**
  * Utility class for creating tick panels in the live timeline view.
@@ -99,8 +101,7 @@ public class LiveTickPanel
 			gbc.gridy++;
 			hasContent = true;
 		}
-		for (String prayer : Boolean.FALSE.equals(tick.getPrayerStateKnown())
-			? java.util.Collections.<String>emptyList()
+		for (String prayer : Boolean.FALSE.equals(tick.getPrayerStateKnown()) ? Collections.<String>emptyList()
 			: tick.getActivePrayers())
 		{
 			JLabel label = createIconLabel(prayer, icons.prayer(), PRAYER_COLOR);
@@ -124,7 +125,7 @@ public class LiveTickPanel
 		}
 
 		// Telemetry (tick duration and ping)
-		JLabel telLabel = com.tickreplaylogger.ui.LiveTickPanel.createTelemetryLabel(tick);
+		JLabel telLabel = LiveTickPanel.createTelemetryLabel(tick);
 		if (telLabel != null)
 		{
 			panel.add(telLabel, gbc);
@@ -210,7 +211,7 @@ public class LiveTickPanel
 	}
 
 	public static boolean appendCombatRows(JPanel panel, GridBagConstraints gbc, TickData tick, ImageIcon agilityIcon,
-		java.util.function.Function<PlayerAction, ImageIcon> actionIcons)
+		Function<PlayerAction, ImageIcon> actionIcons)
 	{
 		boolean hasContent = false;
 		// Movement
@@ -241,7 +242,7 @@ public class LiveTickPanel
 		// Damage events — icon = type (sword/bow/wand/dot), colour = direction (red in / green out).
 		for (DamageEvent damage : tick.getDamageEvents())
 		{
-			JLabel label = com.tickreplaylogger.ui.LiveTickPanel.createDamageLabel(damage, 12);
+			JLabel label = LiveTickPanel.createDamageLabel(damage, 12);
 			panel.add(label, gbc);
 			gbc.gridy++;
 			hasContent = true;

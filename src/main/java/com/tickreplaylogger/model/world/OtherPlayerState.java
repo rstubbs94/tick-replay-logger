@@ -25,7 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import lombok.*;
-import lombok.experimental.SuperBuilder;
+import lombok.experimental.*;
 
 /**
  * Another player's per-tick state (PvP + bystanders). Captured locally so PvP deaths reconstruct;

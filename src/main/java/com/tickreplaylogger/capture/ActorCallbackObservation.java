@@ -24,14 +24,14 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.NpcState;
-import static com.tickreplaylogger.capture.ObservationReads.read;
-import lombok.*;
-import lombok.experimental.Accessors;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
 import java.util.function.*;
+import lombok.*;
+import lombok.experimental.*;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 
 /** Callback-time actor fields. Optional reads cannot erase an independently observed field. */
 public final class ActorCallbackObservation

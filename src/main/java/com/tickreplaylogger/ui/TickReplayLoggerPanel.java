@@ -24,27 +24,25 @@
  */
 package com.tickreplaylogger.ui;
 
-import com.tickreplaylogger.util.TickDisplay;
-import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
-import com.tickreplaylogger.model.TickRecording;
-import com.tickreplaylogger.model.TickData;
-import com.tickreplaylogger.ui.playback.PlaybackPanel;
-import com.tickreplaylogger.util.RecordingStorage;
-import com.tickreplaylogger.util.TickRecorder;
-import com.google.gson.Gson;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.PluginPanel;
-import javax.swing.*;
-import javax.swing.Timer;
-import javax.swing.border.EmptyBorder;
+import com.google.gson.*;
+import com.tickreplaylogger.*;
+import com.tickreplaylogger.capture.*;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.ui.playback.*;
+import com.tickreplaylogger.util.*;
 import java.awt.*;
-import java.awt.Cursor;
-import java.awt.datatransfer.StringSelection;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.awt.datatransfer.*;
+import java.time.*;
+import java.time.format.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.*;
+import javax.swing.*;
+import javax.swing.Timer;
+import javax.swing.border.*;
+import net.runelite.client.game.*;
+import net.runelite.client.ui.*;
+import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 
 /**
  * Main panel for Tick Replay Logger plugin.
@@ -83,7 +81,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private boolean liveRecording = true; // Controls display updates
 	private boolean liveViewEnabled = true;
 	private TickRecording.CapturedWindow pausedCapture;
-	private java.util.function.Consumer<java.util.function.Consumer<TickRecording.CapturedWindow>> liveCaptureRequester;
+	private Consumer<Consumer<TickRecording.CapturedWindow>> liveCaptureRequester;
 	private long pauseGeneration;
 	private boolean liveSavePending;
 	private volatile boolean disposed;
@@ -99,10 +97,10 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private SwingWorker<String, Void> clipboardExport;
 
 	// Config, for display options like collapsing unchanged ticks
-	private final com.tickreplaylogger.TickReplayLoggerConfig config;
+	private final TickReplayLoggerConfig config;
 
 	public TickReplayLoggerPanel(RecordingStorage recordingStorage, SpriteManager spriteManager, Gson gson,
-		com.tickreplaylogger.TickReplayLoggerConfig config)
+		TickReplayLoggerConfig config)
 	{
 		super(false);
 		this.recordingStorage = recordingStorage;
@@ -653,7 +651,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 			@Override
 			protected String doInBackground()
 			{
-				return com.tickreplaylogger.capture.RecordingExport.forClipboard(recording, gson);
+				return RecordingExport.forClipboard(recording, gson);
 			}
 
 			@Override
@@ -844,13 +842,12 @@ public class TickReplayLoggerPanel extends PluginPanel
 		}));
 	}
 
-	public void setLiveCaptureRequester(
-		java.util.function.Consumer<java.util.function.Consumer<TickRecording.CapturedWindow>> requester)
+	public void setLiveCaptureRequester(Consumer<Consumer<TickRecording.CapturedWindow>> requester)
 	{
 		liveCaptureRequester = requester;
 	}
 
-	private void requestCapture(java.util.function.Consumer<TickRecording.CapturedWindow> ready)
+	private void requestCapture(Consumer<TickRecording.CapturedWindow> ready)
 	{
 		if (liveCaptureRequester == null)
 		{

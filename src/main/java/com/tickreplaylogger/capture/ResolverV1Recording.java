@@ -1,11 +1,12 @@
 /* Copyright (c) 2026, rstubbs94. SPDX-License-Identifier: BSD-2-Clause */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
+import com.google.gson.*;
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import lombok.Getter;
+import java.util.function.*;
+import lombok.*;
 
 /** The same detached original evidence window supplies live, saved and exported results. */
 public final class ResolverV1Recording
@@ -69,7 +70,7 @@ public final class ResolverV1Recording
 				&& (hit.getObservationSequence() == null || hit.getObservationSequence() <= cutoffSequence);
 		}
 
-		private static <T> List<T> selected(List<T> values, java.util.function.Predicate<T> keep)
+		private static <T> List<T> selected(List<T> values, Predicate<T> keep)
 		{
 			List<T> result = new ArrayList<>();
 			if (values != null)

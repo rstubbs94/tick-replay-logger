@@ -24,14 +24,13 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.util.RecordingLimits;
-import com.tickreplaylogger.util.TickRecorder;
+import com.google.gson.*;
 import com.tickreplaylogger.model.*;
-import com.google.gson.Gson;
 import com.tickreplaylogger.model.world.*;
+import com.tickreplaylogger.util.*;
 import java.util.*;
-import java.util.function.ToIntFunction;
-import lombok.extern.slf4j.Slf4j;
+import java.util.function.*;
+import lombok.extern.slf4j.*;
 
 /**
  * The single bounded capture owner: minimal tick state, optional world samples, scenes and original events.

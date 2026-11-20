@@ -24,11 +24,11 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ActorInteractionState;
-import java.util.function.Function;
-import static com.tickreplaylogger.capture.ObservationReads.read;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
+import java.util.function.*;
 import net.runelite.api.*;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 
 public final class ActorInteractions
 {

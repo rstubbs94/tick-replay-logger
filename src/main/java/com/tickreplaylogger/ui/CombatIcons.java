@@ -24,18 +24,17 @@
  */
 package com.tickreplaylogger.ui;
 
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.util.DisplayFormat;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.util.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicReference;
-import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
-import net.runelite.api.SpriteID;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.util.ImageUtil;
+import java.awt.image.*;
+import java.io.*;
+import java.util.concurrent.atomic.*;
+import javax.imageio.*;
+import javax.swing.*;
+import net.runelite.api.*;
+import net.runelite.client.game.*;
+import net.runelite.client.util.*;
 
 /**
  * Shared, lazily-loaded combat-style icons so every view (live timeline, playback, recording

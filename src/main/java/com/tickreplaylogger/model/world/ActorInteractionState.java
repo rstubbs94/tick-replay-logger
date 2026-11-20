@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.*;
 import lombok.*;
 
 /** Observed interaction pointer; it can mean combat, following or trading, not damage causality. */
@@ -38,5 +39,5 @@ public class ActorInteractionState
 	private final Integer worldViewId;
 	private final String evidence;
 	private final String targetEvidence;
-	private final java.util.Map<String, String> observationIssues;
+	private final Map<String, String> observationIssues;
 }

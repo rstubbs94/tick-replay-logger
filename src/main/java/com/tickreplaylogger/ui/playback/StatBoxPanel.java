@@ -24,11 +24,11 @@
  */
 package com.tickreplaylogger.ui.playback;
 
-import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
-import net.runelite.client.ui.ColorScheme;
+import java.awt.*;
 import javax.swing.*;
 import javax.swing.border.*;
-import java.awt.*;
+import net.runelite.client.ui.*;
+import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 
 /**
  * Reusable stat box showing a label, progress bar, and value.

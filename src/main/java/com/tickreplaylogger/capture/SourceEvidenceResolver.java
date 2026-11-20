@@ -25,13 +25,14 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import com.tickreplaylogger.util.SourceResolutionLabels;
-import static com.tickreplaylogger.capture.ResolverEvidence.*;
-import com.tickreplaylogger.model.world.*;
 import com.tickreplaylogger.model.*;
-import com.tickreplaylogger.model.world.SourceResolution.Candidate;
+import com.tickreplaylogger.model.world.*;
+import com.tickreplaylogger.model.world.SourceResolution.*;
+import com.tickreplaylogger.util.*;
+import java.math.*;
 import java.util.*;
-import java.math.BigDecimal;
+import java.util.function.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.*;
 
 /** Groups already evaluated source alternatives for consistent retrospective presentation. */
 public final class SourceEvidenceResolver
@@ -147,7 +148,7 @@ public final class SourceEvidenceResolver
 		if (!typed && typeSupported && type != null && !type.contains("|"))
 		{
 			String evidence = annotation(rows, "damageTypeEvidence");
-			display.damageType(type.toLowerCase(java.util.Locale.ROOT))
+			display.damageType(type.toLowerCase(Locale.ROOT))
 				.damageTypeEvidence(evidence == null ? "SOURCE_REFERENCE" : evidence);
 		}
 		if (!typed && scalar && timing != null && !"UNKNOWN".equals(timing) && !"typeless".equalsIgnoreCase(type))
@@ -203,8 +204,7 @@ public final class SourceEvidenceResolver
 		return consensus(rows, row -> text(object(row.derivedAnnotations), field));
 	}
 
-	private static <T> T consensus(List<ResolutionCandidate> rows,
-		java.util.function.Function<ResolutionCandidate, T> field)
+	private static <T> T consensus(List<ResolutionCandidate> rows, Function<ResolutionCandidate, T> field)
 	{
 		if (rows.isEmpty())
 		{
@@ -471,7 +471,7 @@ public final class SourceEvidenceResolver
 		Map<String, List<Candidate>> retained = new LinkedHashMap<>();
 		int count = 0;
 		List<Candidate> ordered = evaluated == null ? new ArrayList<>() : new ArrayList<>(evaluated);
-		ordered.sort(java.util.Comparator
+		ordered.sort(Comparator
 			.comparing(candidate -> candidate == null || candidate.getKey() == null ? "" : candidate.getKey()));
 		for (Candidate original : ordered)
 		{
@@ -485,7 +485,7 @@ public final class SourceEvidenceResolver
 				unidentifiedPossible = true;
 				continue;
 			}
-			String name = com.tickreplaylogger.util.SourceResolutionLabels.usableName(original.getName());
+			String name = SourceResolutionLabels.usableName(original.getName());
 			if (name == null && original.getNpcId() != null)
 			{
 				name = "NPC #" + original.getNpcId();
@@ -521,7 +521,7 @@ public final class SourceEvidenceResolver
 		{
 			candidates.add(merge(values, values.size() > 1));
 		}
-		java.util.Comparator<Candidate> canonicalOrder = java.util.Comparator
+		Comparator<Candidate> canonicalOrder = Comparator
 			.comparingInt((Candidate c) -> "STRONG".equals(c.getStrength()) ? 0 : 1).thenComparing(Candidate::getKey);
 		candidates.sort(canonicalOrder);
 		excluded = distinctExclusions(excluded, candidates);
@@ -586,7 +586,7 @@ public final class SourceEvidenceResolver
 		Set<String> evidence = new LinkedHashSet<>(), names = new LinkedHashSet<>();
 		boolean strong = false;
 		Integer npcId = first.getNpcId();
-		values.sort(java.util.Comparator.comparing(Candidate::getKey).thenComparing(Candidate::getName));
+		values.sort(Comparator.comparing(Candidate::getKey).thenComparing(Candidate::getName));
 		first = values.get(0);
 		for (Candidate candidate : values)
 		{
@@ -644,7 +644,7 @@ public final class SourceEvidenceResolver
 		return values == null ? new ArrayList<>() : new ArrayList<>(values);
 	}
 
-	private static List<String> immutable(java.util.Collection<String> values)
+	private static List<String> immutable(Collection<String> values)
 	{
 		return Collections.unmodifiableList(new ArrayList<>(new LinkedHashSet<>(values)));
 	}

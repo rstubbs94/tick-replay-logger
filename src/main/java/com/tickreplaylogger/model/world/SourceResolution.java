@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
+import java.util.*;
 import lombok.*;
 
 /** Retrospective source hypotheses. Identity agreement does not identify an attack or prove causality. */

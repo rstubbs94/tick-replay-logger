@@ -24,8 +24,8 @@
  */
 package com.tickreplaylogger.ui;
 
-import java.awt.Dimension;
-import javax.swing.JLabel;
+import java.awt.*;
+import javax.swing.*;
 
 /** One row at every sidebar width; Swing ellipsizes text and the tooltip retains full details. */
 public class SingleLineLabel extends JLabel

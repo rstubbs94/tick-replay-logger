@@ -1,7 +1,7 @@
 # Standard-build and single-resolver consolidation plan
 
 Status, 20 November: the continuous-capture refactor passes 1,200 checks and
-the standard build/API checks. Production source measures 214,137 tokens;
+the standard build/API checks. Production source measures 212,967 tokens;
 the strict below-200,000 review gate remains open. The public candidate is
 unchanged. See HANDOFF.md for the current checkpoint and validation scope.
 

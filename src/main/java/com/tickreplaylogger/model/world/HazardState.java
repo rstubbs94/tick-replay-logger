@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.Map;
+import java.util.*;
 import lombok.*;
 
 /**
@@ -71,5 +71,5 @@ public class HazardState
 	private final Boolean finished;
 	private final Map<String, Boolean> fieldAvailability;
 	private final Map<String, String> observationIssues;
-	private final java.util.List<String> nullFields;
+	private final List<String> nullFields;
 }

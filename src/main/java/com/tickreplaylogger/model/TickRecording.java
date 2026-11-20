@@ -24,7 +24,9 @@
  */
 package com.tickreplaylogger.model;
 
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
+import java.util.function.*;
 import lombok.*;
 
 /**
@@ -43,9 +45,9 @@ public class TickRecording
 	private final String killerConfidence;
 	private final String killerBasis;
 	private final String fatalHitBasis;
-	private final com.tickreplaylogger.model.world.SourceResolution fatalSourceResolution;
+	private final SourceResolution fatalSourceResolution;
 	private final List<DamageEvent> fatalHitCandidates;
-	private final List<java.util.Map<String, Object>> unresolvedImpactObservations;
+	private final List<Map<String, Object>> unresolvedImpactObservations;
 	private final int unresolvedImpactObservationCount;
 
 	// Where the recording was made (region/location name if available)
@@ -68,7 +70,7 @@ public class TickRecording
 	// Opaque best-effort input from intermediate recordings; current captures use preparedExport.
 	private volatile String richExportJson;
 	// Current captures retain the completed typed payload. JSON is produced only when saving/copying.
-	private volatile com.tickreplaylogger.model.world.DeathRecordingV2 preparedExport;
+	private volatile DeathRecordingV2 preparedExport;
 
 	public boolean hasRichExport()
 	{
@@ -85,26 +87,24 @@ public class TickRecording
 	public static final class CapturedWindow
 	{
 		private final List<TickData> ticks;
-		private final java.util.function.Supplier<com.tickreplaylogger.model.world.DeathRecordingV2> completion;
+		private final Supplier<DeathRecordingV2> completion;
 
-		public CapturedWindow(List<TickData> ticks,
-			java.util.function.Supplier<com.tickreplaylogger.model.world.DeathRecordingV2> completion)
+		public CapturedWindow(List<TickData> ticks, Supplier<DeathRecordingV2> completion)
 		{
 			this.ticks = Collections.unmodifiableList(new ArrayList<>(ticks));
 			this.completion = Objects.requireNonNull(completion);
 		}
 	}
 
-	public static TickRecording fromPrepared(com.tickreplaylogger.model.world.DeathRecordingV2 completed,
-		long timestamp, String location, boolean death)
+	public static TickRecording fromPrepared(DeathRecordingV2 completed, long timestamp, String location, boolean death)
 	{
 		List<TickData> ticks = completed.getJournalTicks() == null ? Collections.emptyList()
 			: completed.getJournalTicks();
-		com.tickreplaylogger.model.world.DeathRecordingV2.Summary summary = completed.getSummary();
+		DeathRecordingV2.Summary summary = completed.getSummary();
 		List<DamageEvent> fatal = new ArrayList<>();
 		if (summary != null && summary.getFatalHitCandidates() != null)
 		{
-			for (com.tickreplaylogger.model.world.DamageRecord hit : summary.getFatalHitCandidates())
+			for (DamageRecord hit : summary.getFatalHitCandidates())
 			{
 				fatal.add(DamageEvent.builder().direction(DamageEvent.DamageDirection.RECEIVED).amount(hit.getAmount())
 					.damageType(DamageEvent.DamageType.fromReference(hit.getDamageType())).source(hit.getAttackerName())

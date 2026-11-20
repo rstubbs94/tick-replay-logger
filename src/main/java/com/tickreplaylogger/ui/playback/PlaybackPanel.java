@@ -24,21 +24,20 @@
  */
 package com.tickreplaylogger.ui.playback;
 
-import com.tickreplaylogger.ui.ReplayIcons;
-import com.tickreplaylogger.ui.LiveTickPanel;
-import com.tickreplaylogger.util.DisplayFormat;
-import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
-import static com.tickreplaylogger.ui.LiveTickPanel.buildTelemetryText;
+import com.tickreplaylogger.capture.*;
 import com.tickreplaylogger.model.*;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.ui.ColorScheme;
+import com.tickreplaylogger.ui.*;
+import com.tickreplaylogger.util.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.Timer;
-import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.event.KeyEvent;
-import java.util.ArrayList;
-import java.util.List;
+import javax.swing.border.*;
+import net.runelite.client.game.*;
+import net.runelite.client.ui.*;
+import static com.tickreplaylogger.ui.LiveTickPanel.*;
 
 /**
  * Main playback panel for replaying tick recordings tick-by-tick.
@@ -167,12 +166,12 @@ public class PlaybackPanel extends JPanel
 		headerPanel.add(locationLabel);
 
 		// Death summary: the fatal hit's source, confidence and reactability.
-		deathSummaryLabel = new com.tickreplaylogger.ui.SingleLineLabel(" ");
+		deathSummaryLabel = new SingleLineLabel(" ");
 		deathSummaryLabel.setForeground(DAMAGE_RECEIVED_COLOR);
 		deathSummaryLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
 		deathSummaryLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		headerPanel.add(deathSummaryLabel);
-		deathTimingLabel = new com.tickreplaylogger.ui.SingleLineLabel(" ");
+		deathTimingLabel = new SingleLineLabel(" ");
 		deathTimingLabel.setForeground(DAMAGE_RECEIVED_COLOR);
 		deathTimingLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
 		deathTimingLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -396,7 +395,7 @@ public class PlaybackPanel extends JPanel
 		getActionMap().put("playPause", new AbstractAction()
 		{
 			@Override
-			public void actionPerformed(java.awt.event.ActionEvent e)
+			public void actionPerformed(ActionEvent e)
 			{
 				togglePlayback();
 			}
@@ -407,7 +406,7 @@ public class PlaybackPanel extends JPanel
 		getActionMap().put("prevTick", new AbstractAction()
 		{
 			@Override
-			public void actionPerformed(java.awt.event.ActionEvent e)
+			public void actionPerformed(ActionEvent e)
 			{
 				prevTick();
 			}
@@ -418,7 +417,7 @@ public class PlaybackPanel extends JPanel
 		getActionMap().put("nextTick", new AbstractAction()
 		{
 			@Override
-			public void actionPerformed(java.awt.event.ActionEvent e)
+			public void actionPerformed(ActionEvent e)
 			{
 				nextTick();
 			}
@@ -441,9 +440,9 @@ public class PlaybackPanel extends JPanel
 		prayerBar.reset();
 
 		// Update header
-		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.title(recording);
+		String displayName = RecordingEncounterLabels.title(recording);
 		titleLabel.setText(DisplayFormat.humanize(displayName));
-		titleLabel.setToolTipText(java.util.Objects.equals(displayName, recording.getKillerName()) ? null
+		titleLabel.setToolTipText(Objects.equals(displayName, recording.getKillerName()) ? null
 			: "Observed encounter; fatal source: " + DisplayFormat.fatalSourceName(recording));
 		locationLabel.setText(recording.getLocation() + " - " + recording.getTimeSinceRecording());
 		deathSummaryLabel.setText(buildDeathSummary());
@@ -498,7 +497,7 @@ public class PlaybackPanel extends JPanel
 	public void dispose()
 	{
 		stopPlayback();
-		ticks = java.util.Collections.emptyList();
+		ticks = Collections.emptyList();
 		recording = null;
 		eventLogModel.clear();
 		removeAll();
@@ -896,7 +895,7 @@ public class PlaybackPanel extends JPanel
 			boolean isCurrent = (index == currentTickIndex);
 
 			// Collect event colors for this tick
-			List<Color> eventColors = new java.util.ArrayList<>();
+			List<Color> eventColors = new ArrayList<>();
 
 			if (hasDamageReceived(tick))
 			{
@@ -926,7 +925,7 @@ public class PlaybackPanel extends JPanel
 			panel.setCurrentTick(isCurrent);
 
 			// Add label for text
-			JLabel label = new com.tickreplaylogger.ui.SingleLineLabel(summary.isEmpty() ? " " : summary);
+			JLabel label = new SingleLineLabel(summary.isEmpty() ? " " : summary);
 			label.setToolTipText(tooltip);
 			label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
 			label.setForeground(isDeathTick ? DAMAGE_RECEIVED_COLOR : Color.WHITE);

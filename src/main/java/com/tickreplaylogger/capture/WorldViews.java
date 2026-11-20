@@ -24,11 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import net.runelite.api.*;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
 import java.util.*;
-import java.util.List;
+import java.util.Deque;
+import net.runelite.api.*;
+import net.runelite.api.coords.*;
 
 /** Resolve native coordinate frames explicitly; client convenience getters are top-level only. */
 public final class WorldViews
@@ -319,7 +318,7 @@ public final class WorldViews
 	{
 		Discovery result = new Discovery();
 		Set<WorldView> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-		java.util.Deque<WorldView> pending = new ArrayDeque<>();
+		Deque<WorldView> pending = new ArrayDeque<>();
 		WorldView active = null, top = null;
 		try
 		{

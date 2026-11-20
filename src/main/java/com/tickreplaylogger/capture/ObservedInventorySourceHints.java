@@ -22,13 +22,13 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import java.math.BigDecimal;
+import com.google.gson.*;
+import java.math.*;
 import java.util.*;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import net.runelite.api.*;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.*;
 
 /**
  * Bounded original-callback item facts. The bundled catalog is validated when compiled;

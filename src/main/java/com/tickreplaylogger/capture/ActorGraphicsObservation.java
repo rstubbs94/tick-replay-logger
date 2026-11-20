@@ -24,11 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ActorGraphicsState;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
-import static com.tickreplaylogger.capture.ObservationReads.read;
 import net.runelite.api.*;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 
 /** Sample each channel once, preserving delayed animations and independent getter failures. */
 public final class ActorGraphicsObservation

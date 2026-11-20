@@ -24,6 +24,8 @@
  */
 package com.tickreplaylogger.model;
 
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
 import lombok.*;
 
 /**
@@ -41,7 +43,7 @@ public class DamageEvent
 	private final String confidence; // attribution confidence for received damage, or null
 	private final String determination; // LAUNCH | IMPACT | UNKNOWN reactability, or null
 	private final Long observationSequence;
-	private volatile com.tickreplaylogger.model.world.SourceResolution sourceResolution;
+	private volatile SourceResolution sourceResolution;
 
 	public enum DamageDirection
 	{
@@ -63,7 +65,7 @@ public class DamageEvent
 			}
 			try
 			{
-				return valueOf(value.toUpperCase(java.util.Locale.ROOT));
+				return valueOf(value.toUpperCase(Locale.ROOT));
 			}
 			catch (IllegalArgumentException ignored)
 			{

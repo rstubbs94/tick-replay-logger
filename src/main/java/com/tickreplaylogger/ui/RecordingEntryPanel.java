@@ -24,19 +24,19 @@
  */
 package com.tickreplaylogger.ui;
 
-import com.tickreplaylogger.util.DisplayFormat;
-import com.tickreplaylogger.util.TickDisplay;
-import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
-import static com.tickreplaylogger.ui.LiveTickPanel.createIconLabel;
+import com.tickreplaylogger.capture.*;
 import com.tickreplaylogger.model.*;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.ui.ColorScheme;
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
+import com.tickreplaylogger.util.*;
 import java.awt.*;
-import java.awt.Cursor;
+import java.awt.event.*;
+import java.util.*;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import net.runelite.client.game.*;
+import net.runelite.client.ui.*;
+import static com.tickreplaylogger.ui.LiveTickPanel.*;
 
 /**
  * Panel displaying a single recording entry with expandable tick timeline.
@@ -127,8 +127,8 @@ public class RecordingEntryPanel extends JPanel
 		titleRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		titleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.title(recording);
-		boolean encounterTitle = !java.util.Objects.equals(displayName, recording.getKillerName());
+		String displayName = RecordingEncounterLabels.title(recording);
+		boolean encounterTitle = !Objects.equals(displayName, recording.getKillerName());
 		JLabel titleLabel = new JLabel("#" + recordingNumber + ": " + DisplayFormat.humanize(displayName));
 		if (encounterTitle)
 		{
@@ -265,10 +265,10 @@ public class RecordingEntryPanel extends JPanel
 
 		// Click non-button areas to expand
 		titleRow.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		titleRow.addMouseListener(new java.awt.event.MouseAdapter()
+		titleRow.addMouseListener(new MouseAdapter()
 		{
 			@Override
-			public void mouseClicked(java.awt.event.MouseEvent e)
+			public void mouseClicked(MouseEvent e)
 			{
 				toggleExpanded(expandBtn);
 			}

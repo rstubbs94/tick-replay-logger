@@ -4,9 +4,8 @@ package com.tickreplaylogger.capture;
 import com.google.gson.*;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.Accessors;
+import lombok.*;
+import lombok.experimental.*;
 import static com.tickreplaylogger.capture.ResolverEvidence.*;
 
 /** Indexes detached original observations. It neither selects mechanics nor creates evidence facts. */

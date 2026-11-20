@@ -26,12 +26,12 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
 import com.tickreplaylogger.model.world.*;
-import static com.tickreplaylogger.capture.ResolverEvidence.array;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.nio.charset.*;
 import java.util.*;
-import lombok.extern.slf4j.Slf4j;
+import lombok.*;
+import lombok.extern.slf4j.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.array;
 
 /** Bundled factual identity and state references; never treats prose as an event. */
 @Slf4j
@@ -604,7 +604,7 @@ public final class CombatCatalog
 	}
 
 	/** A definition binding is distinct from a raw cache-symbol name or an observed hit cause. */
-	@lombok.Value
+	@Value
 	public static class GraphicSurface
 	{
 		String name;

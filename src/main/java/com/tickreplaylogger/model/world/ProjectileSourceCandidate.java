@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
+import java.util.*;
 import lombok.*;
 
 /** Primitive proximity hypothesis; never substitutes for a null/unavailable API source actor. */

@@ -22,8 +22,8 @@
  */
 package com.tickreplaylogger.capture;
 
+import java.math.*;
 import java.util.*;
-import java.math.BigDecimal;
 
 /** Qualifies the recorded static world facts required by reference limits. */
 public final class ObservedHpCallbackContext

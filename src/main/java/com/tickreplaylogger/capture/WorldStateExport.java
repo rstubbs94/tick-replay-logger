@@ -26,8 +26,7 @@ package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
-import java.util.function.Function;
+import java.util.function.*;
 
 /** Compact observed state without losing the checkpoint at the selected window's first tick. */
 final class WorldStateExport

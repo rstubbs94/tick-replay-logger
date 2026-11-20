@@ -1,0 +1,108 @@
+rank,path,area,tokens,percent,codeLines,sha256
+1,src/main/java/com/tickreplaylogger/TickReplayLoggerPlugin.java,Plugin lifecycle and callbacks,39160,18.29,4221,1f5fbb1c21a32d168c8c91eb80d0796c82324c224acfe9f71a02561e0f0a0b24
+2,src/main/java/com/tickreplaylogger/capture/ResolverV1.java,Resolver and completed-recording projection,19740,9.22,2092,4db3047de9ea1eb9e4098d2486b5ce33c00c2b7b0765b214ab39630ad3bf22da
+3,src/main/java/com/tickreplaylogger/capture/WorldCaptureService.java,Capture and reference lookup,17665,8.25,1828,2f8c83dfaf66ee3f1e16e027d3630d08c98ded92a45e1b7748a03e3d12486430
+4,src/main/java/com/tickreplaylogger/capture/OriginalSourceProof.java,Resolver and completed-recording projection,8660,4.04,781,887cfc0d6ed70dc9362676b02f82cabdfb298235b171e96b8ea87aecfbdf276c
+5,src/main/java/com/tickreplaylogger/ui/playback/PlaybackPanel.java,User interface,8613,4.02,964,7621f087f4fcbebba7f9cf974b969f335e88d09eab6acdc4bae6c5f5b027fa79
+6,src/main/java/com/tickreplaylogger/capture/RawEvidenceWindow.java,Resolver and completed-recording projection,8060,3.76,850,e625a64c9829970967edd6fdd6422fc17c250b873c605f122e2263a76cc44b12
+7,src/main/java/com/tickreplaylogger/capture/CombatCatalog.java,Capture and reference lookup,6747,3.15,838,1e0bed8f7067c8bbf9c33e4586a1962673b74132987a27b71bc33d79ee6a4973
+8,src/main/java/com/tickreplaylogger/capture/SourceEvidenceResolver.java,Resolver and completed-recording projection,6185,2.89,595,b3174c8e279dd094563e42c33c8825fd745641d0237ef74835e7921d1e292a8f
+9,src/main/java/com/tickreplaylogger/ui/TickReplayLoggerPanel.java,User interface,5804,2.71,722,35e7cf93f95d620f68fd36b4c8a311e95266dc256ce67353ac1dd1b2433f9100
+10,src/main/java/com/tickreplaylogger/capture/WorldSnapshotRecorder.java,Capture and reference lookup,4805,2.24,509,103b7cf5711d8d811cbcefab52724987924deb84d0fe6c1f3cf1f9360ace6b95
+11,src/main/java/com/tickreplaylogger/capture/RecordingProjection.java,Resolver and completed-recording projection,3930,1.84,382,a7599e69b61966eb83b5a5a146141ef68d5e15d707cab05e6b56928420db6ddd
+12,src/main/java/com/tickreplaylogger/capture/TerrainCapture.java,Capture and reference lookup,3673,1.72,379,ac1a80051f94428039f22e45557633906c46959990bfa5f6d4ed28842d6fec3d
+13,src/main/java/com/tickreplaylogger/ui/RecordingEntryPanel.java,User interface,3560,1.66,350,279e460dc18683f5e4acff68d590ad94fb6acb66b78a9445063c006b7da732c9
+14,src/main/java/com/tickreplaylogger/util/RecordingStorage.java,Storage and display utilities,3378,1.58,539,f913c5a6eaf4759874f1aed5b695ec86d065f9484166bb3e79f7e3c61d04c721
+15,src/main/java/com/tickreplaylogger/capture/ObjectStateTracker.java,Capture and reference lookup,3299,1.54,369,4e48938260b3d253b22aba46b78e49ffa631e6b7dc92da3e40413f5816aaea1c
+16,src/main/java/com/tickreplaylogger/capture/SceneCaptureTraversal.java,Capture and reference lookup,3248,1.52,497,33d7a559fabfe591c6a13d59819a6961e19731b5d924439898763dedbadb7ffa
+17,src/main/java/com/tickreplaylogger/capture/ObservedInventorySourceHints.java,Capture and reference lookup,2855,1.33,344,e32ec0d6eff8f4d5d57f7c00d9d489cc3c3b4fe30c4b212a9be28da09e7d1bac
+18,src/main/java/com/tickreplaylogger/capture/EncounterContextCapture.java,Capture and reference lookup,2633,1.23,345,7b04937167061b299e97338bba312e828a7eb5c03bb9a49d9cd9c19f8fc2ecb6
+19,src/main/java/com/tickreplaylogger/capture/WorldViews.java,Capture and reference lookup,2555,1.19,371,e19506a0768f6b8f7018acb383d4efe18828b8a2fd4df0a7b7bb351499ac077d
+20,src/main/java/com/tickreplaylogger/capture/ProjectileObservation.java,Capture and reference lookup,2495,1.17,174,3121c573a3d61bef38091d033c7444718a00f6fe5c53aad110509a1dc6ab7f7d
+21,src/main/java/com/tickreplaylogger/ui/LiveTickPanel.java,User interface,2343,1.09,247,8a534030bfdce9187d200442d8250d4aae28b80fd767229ee6afe05ea5042fa4
+22,src/main/java/com/tickreplaylogger/capture/WorldStateExport.java,Capture and reference lookup,2258,1.05,276,fa775905ef742003648bd2b1021148fee90f657ad4f38b113b9b058c3f8dfe2a
+23,src/main/java/com/tickreplaylogger/util/DisplayFormat.java,Storage and display utilities,2131,1.0,238,dac8d061bbe2b47ad7bd7113bd7ed72a914c63b07f5423e34a31aa8f175cfa7f
+24,src/main/java/com/tickreplaylogger/capture/CaptureBuild.java,Capture and reference lookup,2033,0.95,280,26ad40e395153d0e076c0f92beef78cef7bffb3ca66e45dd09e57bc474e58410
+25,src/main/java/com/tickreplaylogger/capture/ActorObservation.java,Capture and reference lookup,1875,0.88,202,1bb5d5d1d514df0ac7d8652aacc14a9fb903e2bc35d9f8a9d80fd046c8ea5faa
+26,src/main/java/com/tickreplaylogger/util/TickRecorder.java,Storage and display utilities,1709,0.8,244,0886c146cb87593f21897c023f08c40f4e835d0d9cc5b3ea0794e1ce770b694c
+27,src/main/java/com/tickreplaylogger/capture/PrayerObservation.java,Capture and reference lookup,1525,0.71,193,92043d118d7b8c35493b35a6733efb0178a07205022c837f6a73739340b7e5ad
+28,src/main/java/com/tickreplaylogger/capture/ResolverV1Recording.java,Resolver and completed-recording projection,1367,0.64,151,64ba7fef0f582cdb480690e7a2a75bf6c3917ae8364dc5cd2652df6a46cf4d4c
+29,src/main/java/com/tickreplaylogger/TickReplayLoggerConfig.java,Plugin lifecycle and callbacks,1358,0.63,113,dc3005b2d9753a4a613045fcc1b8c3f8f9cfa125e9382f2e57c916078822a41b
+30,src/main/java/com/tickreplaylogger/capture/GroundItemTracker.java,Capture and reference lookup,1338,0.62,170,cf0334612206335ba5a0118aa17759fa94c2614167c29b8c7d4e258ddcf05855
+31,src/main/java/com/tickreplaylogger/capture/ProjectileSourceTracker.java,Capture and reference lookup,1338,0.62,133,4531329f1562c3c17636de3a166aef26f1fe6196606da82b6a73f429ca52adcd
+32,src/main/java/com/tickreplaylogger/capture/ActorCallbackObservation.java,Capture and reference lookup,1331,0.62,137,485355b8aa0544f418213c16f9cfdeb5269e1574056783abc657610d1d86360a
+33,src/main/java/com/tickreplaylogger/capture/ObservedMechanics.java,Capture and reference lookup,1301,0.61,189,b08c461431c658724a06bd22d9fb5937569eeba803809d7580a636ffb7a420e7
+34,src/main/java/com/tickreplaylogger/capture/EncounterWaveCueTracker.java,Capture and reference lookup,1269,0.59,155,a0319b85fb00e15349ebba7abf29c4c264e18ef00d0a9e3594e9dd0f79a141a2
+35,src/main/java/com/tickreplaylogger/capture/EncounterModeCapture.java,Capture and reference lookup,1250,0.58,136,ae2c322d206cccc2f041075136f3514fb8df9504b4f99a450155da4ffa85360a
+36,src/main/java/com/tickreplaylogger/capture/NpcStateEncoding.java,Capture and reference lookup,1203,0.56,155,e75f5c1ac1bab5117ea441786ee3d41a33d5cf3e59fe5651d6af46336870aec7
+37,src/main/java/com/tickreplaylogger/ui/playback/StatBoxPanel.java,User interface,1201,0.56,139,5a314455f8fb89e397ccc620c8c6fe08cad259aafbee9732214c14a3fcfe4426
+38,src/main/java/com/tickreplaylogger/capture/ObjectHazards.java,Capture and reference lookup,1160,0.54,135,e4191915d845b72aa671273a96d5afc14d562062c8031746abd4f38f044117df
+39,src/main/java/com/tickreplaylogger/capture/ResolverEvidence.java,Resolver and completed-recording projection,1130,0.53,169,a97b70b688603d82de5bfdd20f3201e0e91bee54feda4bed94578e6ae55d015d
+40,src/main/java/com/tickreplaylogger/capture/SourceAnnotations.java,Resolver and completed-recording projection,1110,0.52,140,2bd59cd51f17da627558478eb22c7a14c8023c3620326ee1d5d2b9cfb90dedcb
+41,src/main/java/com/tickreplaylogger/model/TickRecording.java,Data models,1100,0.51,121,4af609c8bcab734457450018327975ac208eeef7fdcba80df24fce6eb82170d2
+42,src/main/java/com/tickreplaylogger/capture/SoundCallbackObservation.java,Capture and reference lookup,1069,0.5,98,910b4fdec836ecb083cc993e09faa571bb9206d815613f445f2d51d30f4f664b
+43,src/main/java/com/tickreplaylogger/capture/RecordingExport.java,Capture and reference lookup,1064,0.5,147,fb27a66f645572222c5abb80ef56676451df25264155c3689fd1bbc9a2995c2d
+44,src/main/java/com/tickreplaylogger/capture/SelfDamageInputs.java,Capture and reference lookup,994,0.46,130,7a5cc2ad4398f8b70cc64ae7b457543ef4e56eb570a6a1353fa5f45dc28482e1
+45,src/main/java/com/tickreplaylogger/capture/ActorInteractions.java,Capture and reference lookup,973,0.45,100,46dce100120dabe5273674b16a2276becfffe4bd8f91e91bd3e53e82049bc75b
+46,src/main/java/com/tickreplaylogger/model/world/DeathRecordingV2.java,Data models,939,0.44,138,811c08f7b3d97982d43f13d9e93d621ab7cf0d021db2ff0a51faebac76cd748b
+47,src/main/java/com/tickreplaylogger/util/TickDisplay.java,Storage and display utilities,884,0.41,129,92f063b46eb5b21a8339c837465fed4c3957410cc707ebe26fdfe4cd1f88614e
+48,src/main/java/com/tickreplaylogger/ui/CombatIcons.java,User interface,874,0.41,138,06178e76c1869008e904a120ccac81d06154ce6478ecde8399b13d3a091b58ac
+49,src/main/java/com/tickreplaylogger/capture/DamageMap.java,Capture and reference lookup,846,0.4,117,7de2418b89c148f520a6d0dcd29ccfd2b078521b742dc444efb11d2a08230ff4
+50,src/main/java/com/tickreplaylogger/capture/SceneFieldObservation.java,Capture and reference lookup,834,0.39,112,c77c3b64e4d0c56a516a31be33e51c6617c57724d1a51b37614cde357de2f9e6
+51,src/main/java/com/tickreplaylogger/capture/ClientStatusCapture.java,Capture and reference lookup,738,0.34,84,b2b26f4c1440f5249032a6a2331683ff504e14d594b1db00440b799cd1007c36
+52,src/main/java/com/tickreplaylogger/capture/ResolutionCandidate.java,Resolver and completed-recording projection,735,0.34,79,d251bd412c99c243e76015a8916d9275c1da1a429d9f4a0d25976a41a562a40e
+53,src/main/java/com/tickreplaylogger/capture/ActorGraphicsObservation.java,Capture and reference lookup,731,0.34,86,76ad431adc9aeccb97bf4d5ad75fad1384521771552d8f646973c81c06165738
+54,src/main/java/com/tickreplaylogger/capture/PlayerAppearance.java,Capture and reference lookup,721,0.34,109,503d3c629938fd5e5e2fb648c9e6b80a85d2de3d5e3bde12a58e31b8a210c835
+55,src/main/java/com/tickreplaylogger/model/world/DamageRecord.java,Data models,717,0.33,88,43273f04cb7715a94a6e7fbcd7cf45fca8c45b5313f0d7cf6c1fca50b4f28845
+56,src/main/java/com/tickreplaylogger/capture/NpcSnapshotObservation.java,Capture and reference lookup,638,0.3,66,c0fb0715f38574085f73432a702257861db6f4f54f233793f2df07389d19971c
+57,src/main/java/com/tickreplaylogger/capture/ActorIdentity.java,Capture and reference lookup,591,0.28,94,08a9eb8d05dcd928d9658f1247cfb7051920715799ab909daf7ad59a50281d07
+58,src/main/java/com/tickreplaylogger/model/DamageEvent.java,Data models,581,0.27,84,8821699fd30f10a5c919324fdc9fb6f89f5a0fb95b2b594406c29a876ca21f7e
+59,src/main/java/com/tickreplaylogger/model/world/WorldSnapshot.java,Data models,565,0.26,66,2348875ce20b9094bc778ab77c4efee2a65ef0efbbcf4af1f144770523dd3c71
+60,src/main/java/com/tickreplaylogger/capture/NpcDefinitionObservation.java,Capture and reference lookup,535,0.25,44,efd7b5d883a7ba4489e07ad5cf78a10f064d225a02db08d3b2487e741bb1e97a
+61,src/main/java/com/tickreplaylogger/capture/RecordingEncounterLabels.java,Capture and reference lookup,533,0.25,65,b9858dc98a0184ad9fd6778a7780be8b972b075c1f5e9d42813230213729a9ff
+62,src/main/java/com/tickreplaylogger/model/PlayerAction.java,Data models,532,0.25,57,7111895059089a5a5c4390e8986a56f908ea9c408de9a1a9c87f6073bc48c3dc
+63,src/main/java/com/tickreplaylogger/model/TickData.java,Data models,529,0.25,81,164f7ce3cec2c0a74bd2d3aeada2aba6f3bac1e05bacf129afd411fc930a9ee3
+64,src/main/java/com/tickreplaylogger/model/world/ProjectileState.java,Data models,499,0.23,77,5f44deff9ebe5e9e68e1144eecf102c8f8e1382fc3043ba41b34cbbed0ea0030
+65,src/main/java/com/tickreplaylogger/capture/VarbitLayoutCapture.java,Capture and reference lookup,490,0.23,54,e39c818b5ecca3b8b315fd25708db2e96b38c50579c1b3015977c6b5c49f384e
+66,src/main/java/com/tickreplaylogger/ui/ReplayIcons.java,User interface,485,0.23,60,eddd4982e447ee4c1c95bfbd0ee1d021b4b5889b332fd75847f8a5cfdbc65f73
+67,src/main/java/com/tickreplaylogger/capture/CallbackFieldObservation.java,Capture and reference lookup,415,0.19,64,96cb49a920eb38f03131fa64807391b7687d4119c9c27f1fd197b834ee917d83
+68,src/main/java/com/tickreplaylogger/capture/ObservedHpCallbackContext.java,Capture and reference lookup,398,0.19,61,41c7dd03b4f190f4fdc1b85d2e01432e5187530f56b78be8602049a432e70b69
+69,src/main/java/com/tickreplaylogger/capture/SourceAssociationNpcIndex.java,Capture and reference lookup,368,0.17,50,5d8d8d80a1d596b177ac05de2b98cf5fb1b706582ffae928e1697481f5cd86dc
+70,src/main/java/com/tickreplaylogger/capture/RuntimeCatalog.java,Resolver and completed-recording projection,357,0.17,50,3d1c9288d75eebfd2aadb9e1ae7147c715df457f74537b8d568d9b7d3345f63d
+71,src/main/java/com/tickreplaylogger/model/world/ContextBlock.java,Data models,355,0.17,64,fe72a0ac51a6d6f77e68465288d9194d5b623dadc5fdfeaed83301771b664b6d
+72,src/main/java/com/tickreplaylogger/capture/WeakIdentityIds.java,Capture and reference lookup,347,0.16,62,072df7a54a148759e09176280fd9d924334d19d6ea275f7226f19ef3dbbaae48
+73,src/main/java/com/tickreplaylogger/model/world/ProjectileSourceHistory.java,Data models,347,0.16,45,9f754c58db53071b5bb4fcaf2f35f7c0db510bd4d343923f934625de526378a4
+74,src/main/java/com/tickreplaylogger/model/world/PlayerState.java,Data models,340,0.16,50,9d67599764ae1825ac5f1d3393e208bc989366a96e496a1ce01e49233b00e941
+75,src/main/java/com/tickreplaylogger/model/world/NpcState.java,Data models,321,0.15,47,65ab49520aaf620304b3b44fd652d1167d17be87eef40133dc4f819b36302c24
+76,src/main/java/com/tickreplaylogger/model/MovementData.java,Data models,308,0.14,47,c6a26b45787ee29f92617a9b8f0ead708e073f9f78844392ec9163e908afb1fd
+77,src/main/java/com/tickreplaylogger/util/SourceResolutionLabels.java,Storage and display utilities,306,0.14,42,5f5114039d843d4fd2d43e7552850184bf72a8932862240e71c95781ab484db9
+78,src/main/java/com/tickreplaylogger/capture/NpcIdentityContext.java,Capture and reference lookup,302,0.14,53,f207b913c1933e5ed0b66e840e6140a0dfcc9fa5d1a21ada60854be26f46cdd9
+79,src/main/java/com/tickreplaylogger/model/world/HazardState.java,Data models,263,0.12,44,4244b6882628b511c912144cd5b3bb150c71c36c9d3e52f5aa5ae4db3880661d
+80,src/main/java/com/tickreplaylogger/capture/SnapshotPrayerObservation.java,Capture and reference lookup,245,0.11,31,dabc6e787ffb1b42a6b21da7458bc6a8cef847033af816f75d7273bfe80bbb73
+81,src/main/java/com/tickreplaylogger/model/world/ObservedActorState.java,Data models,208,0.1,35,895ce86ee3d3ca6484d8c3660df4287b444ff4ecf6d7bce50e8219df88bc88c2
+82,src/main/java/com/tickreplaylogger/model/world/SceneData.java,Data models,206,0.1,40,ad6adff8765dd6f306d4ca5e9b453124f6a351e595a5247d5cae77ef11a47b7d
+83,src/main/java/com/tickreplaylogger/model/world/ObservedObjectState.java,Data models,183,0.09,41,62cf0dd909ed2eecb981d44896488126bfbd037f1449e770279f373cd7206415
+84,src/main/java/com/tickreplaylogger/model/world/SourceResolution.java,Data models,146,0.07,33,1c6a0567aa8442b033e7db8ce2d06b3807de0d347ec0d3c955e28d5b3db0e9fd
+85,src/main/java/com/tickreplaylogger/model/world/ActorGraphicsState.java,Data models,144,0.07,27,5c06751f05f21c1acbd2a5babd568b04d97541ae07fac8efa0ad437e4c8ff35a
+86,src/main/java/com/tickreplaylogger/capture/PlayerSnapshotObservation.java,Capture and reference lookup,142,0.07,22,4012c29bdd43dba6b07916532918963f35c2427992ea76e2bc1db4e39003b855
+87,src/main/java/com/tickreplaylogger/model/world/TileSurface.java,Data models,142,0.07,22,bd945637b4800411a14a0380f7d501debaf1d68d3bc4c4450053be1eb3f0cd05
+88,src/main/java/com/tickreplaylogger/model/world/EffectEvent.java,Data models,140,0.07,26,87141b61a341a4003297daf1d830bd2f034ed0ff943ac3bc59a0a5beda95bcf6
+89,src/main/java/com/tickreplaylogger/model/world/OtherPlayerState.java,Data models,134,0.06,22,3b9b224a967427103a4a4263bc7323c7811f7eacae8025ad983b2329a375ebab
+90,src/main/java/com/tickreplaylogger/model/world/PrayerState.java,Data models,125,0.06,22,3b4738308177ea52cd693f95cf43e4f907303874a3fddd62ed0d8cf6384188dd
+91,src/main/java/com/tickreplaylogger/model/world/ObservedStatusState.java,Data models,109,0.05,22,ebd54079f282fd18381713959872209a0c42bfaa5585f7bd4a7159aef8ffdf59
+92,src/main/java/com/tickreplaylogger/capture/ObservationReads.java,Capture and reference lookup,104,0.05,21,e7357c58daf2bfaf1f7cb1554a3d5c983d2e6a512c79a551fe851633a2bfa5af
+93,src/main/java/com/tickreplaylogger/ui/SingleLineLabel.java,User interface,96,0.04,20,ac081aff83f2a23bf887927ffff682f513f4550dbe53b40aaa2ba4d9ca41d7e9
+94,src/main/java/com/tickreplaylogger/model/world/ProjectileSourceCandidate.java,Data models,94,0.04,22,60dfa31ebadd10ece2099b9377f08d02c22faed725296e505b04329f9a9540fd
+95,src/main/java/com/tickreplaylogger/model/world/EncounterWaveCue.java,Data models,93,0.04,13,2d08eb4984d246781a146f7b9fe55cf79fc94381cb615ebbc50426733b184962
+96,src/main/java/com/tickreplaylogger/model/world/GroundItemState.java,Data models,86,0.04,14,28e275aa3ed5ec8bb3fdebcd86875457233e2e28affa0d518fb4c74dd1aa0a81
+97,src/main/java/com/tickreplaylogger/model/world/ObservedEvent.java,Data models,84,0.04,17,e98af5ff4718b4fe3389ec02e4c83d08ac2dabf4a72cd43008c38cc2cbef91f8
+98,src/main/java/com/tickreplaylogger/model/world/ActorInteractionState.java,Data models,83,0.04,15,216daca76db163fba5056a9f1262f078e6b801c8b5e5a33a208d4b62733020bd
+99,src/main/java/com/tickreplaylogger/model/world/NpcDefinitionStateReference.java,Data models,82,0.04,17,5d46c260ce3b9f04081fd503fdab2df24a208c1ca7c9db8c9aff19543aed87de
+100,src/main/java/com/tickreplaylogger/model/world/ObservedVarbitLayout.java,Data models,82,0.04,15,217098649bd244ad4200cb319aee5e871618811b5e87f8f02988d06bb352d3e7
+101,src/main/java/com/tickreplaylogger/model/world/WorldEntityState.java,Data models,82,0.04,19,b55f081f769a4543f129460acd93641c8c8988466ef8e0cbcb654a044868b982
+102,src/main/java/com/tickreplaylogger/model/world/PlayerAppearanceState.java,Data models,79,0.04,15,4016853598e72f1325111967fafca3340a0963a4fe174cb28b09f199e561f5a1
+103,src/main/java/com/tickreplaylogger/model/world/NpcStateTable.java,Data models,77,0.04,15,b893245f7448b1434c51cd7292dbfec1db53aed8cbb156d6c557be132efa0770
+104,src/main/java/com/tickreplaylogger/capture/ResolutionResult.java,Resolver and completed-recording projection,66,0.03,12,eb3f844e9d26cd1e6996660aa55dc82c46d813f29cd7d838d38404d91d0cd85c
+105,src/main/java/com/tickreplaylogger/model/world/NumericVariableState.java,Data models,65,0.03,12,1408483ae0d69c4c5b8c53f56c70bf479655a7ba117fc2a0f9fe05adcb6deb14
+106,src/main/java/com/tickreplaylogger/util/RecordingLimits.java,Storage and display utilities,62,0.03,12,f8841a4f3c293287ae544b764bf55b771ab679332a9dcbb32844bd2eba4a4240
+107,src/main/java/com/tickreplaylogger/model/world/ObservedEventLink.java,Data models,59,0.03,13,c55920d05beb86db52cddda922a2f3dc671ff7015ad04a8f8b2c255d2ec67d74

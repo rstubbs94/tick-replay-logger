@@ -102,13 +102,13 @@ public class ObjectHazardsTest
 			assertEquals(36046, r.getBaseId());
 			assertEquals("Corrupted Hunllef floor", r.getName());
 			assertEquals("TRANSFORMED_OBJECT_DEFINITION", r.getEvidence());
-			assertEquals(id == 36048, r.isDamageCandidate());
+			assertEquals(id == 36048, Boolean.TRUE.equals(r.getDamaging()));
 		}
 		missingTransform = true;
 		ObjectHazards.Resolved unknown = ObjectHazards.resolve(client, floor(), map);
 		assertEquals("unknown", unknown.getState());
 		assertNull(unknown.getDamaging());
-		assertFalse(unknown.isDamageCandidate());
+		assertFalse(Boolean.TRUE.equals(unknown.getDamaging()));
 	}
 
 	@Test

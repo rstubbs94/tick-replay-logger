@@ -1,13 +1,12 @@
 /* Copyright (c) 2026, rstubbs94. SPDX-License-Identifier: BSD-2-Clause */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ActorGraphicsState;
 import com.tickreplaylogger.model.world.*;
-import static com.tickreplaylogger.capture.ObservationReads.read;
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 
 /** One independent actor sample. Read groups run at their existing capture points and in their existing order. */
 class ActorObservation

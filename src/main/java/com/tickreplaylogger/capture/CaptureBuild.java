@@ -26,12 +26,11 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
 import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import java.nio.charset.*;
+import java.security.*;
 import java.util.*;
-import java.util.List;
-import net.runelite.api.Client;
-import net.runelite.client.RuneLiteProperties;
+import net.runelite.api.*;
+import net.runelite.client.*;
 
 /** Reviewed runtime references, separate from compile provenance unavailable in standard packaging. */
 public final class CaptureBuild
@@ -313,7 +312,7 @@ public final class CaptureBuild
 		StringBuilder out = new StringBuilder(64);
 		for (byte value : values)
 		{
-			out.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
+			out.append(String.format(Locale.ROOT, "%02x", value & 255));
 		}
 		return out.toString();
 	}

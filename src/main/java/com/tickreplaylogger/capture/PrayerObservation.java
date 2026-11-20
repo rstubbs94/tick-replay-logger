@@ -24,11 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
-import java.util.function.Supplier;
-import com.tickreplaylogger.model.world.PrayerState;
-import lombok.Getter;
+import java.util.function.*;
+import lombok.*;
 import net.runelite.api.*;
 
 /** Preserve raw flags and visible overhead separately; never choose between conflicting flags by enum order. */
@@ -63,7 +62,7 @@ public final class PrayerObservation
 	public PrayerObservation(Client client)
 	{
 		captureFlags(client);
-		net.runelite.api.Player local = read("localPlayer", () -> client.getLocalPlayer());
+		Player local = read("localPlayer", () -> client.getLocalPlayer());
 		iconSource = "DIRECT_LOCAL_PLAYER_SAMPLE";
 		if (local != null)
 		{
@@ -204,11 +203,6 @@ public final class PrayerObservation
 	private <T> T read(String field, Supplier<T> getter)
 	{
 		return ObservationReads.read(observationIssues, field, getter);
-	}
-
-	static String prayerForIcon(HeadIcon icon)
-	{
-		return prayerForIconName(icon == null ? null : icon.name());
 	}
 
 	private static String prayerForIconName(String icon)

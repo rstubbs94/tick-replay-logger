@@ -67,8 +67,8 @@ public class DamageRecord
 	private final String impactSceneKey;
 	private final Integer impactWorldViewId;
 	private final Integer impactPlane;
-	private final java.util.List<java.util.Map<String, Object>> attributionCandidates;
-	private final java.util.List<java.util.Map<String, Object>> observedHazardContacts; // concurrent spatial observations, not a causal assignment; also retained for status hits
+	private final List<Map<String, Object>> attributionCandidates;
+	private final List<Map<String, Object>> observedHazardContacts; // concurrent spatial observations, not a causal assignment; also retained for status hits
 
 	private final int amount; // observed hitsplat callback value; not a reconstructed hidden roll or per-hit net HP loss
 	private final int hitsplatType;
@@ -80,7 +80,7 @@ public class DamageRecord
 	private final String npcDamageReductionStyle; // sourced NPC reduction category, not an accuracy roll
 	private final String damageReferenceKey;
 	private final String damagePropertyEvidence; // SOURCE_REFERENCE, not an observed mitigation outcome
-	private final java.util.List<String> damageTypeCandidates; // reference hints, not proof of this hit's style
+	private final List<String> damageTypeCandidates; // reference hints, not proof of this hit's style
 	private final String attackStyleName; // from gameval name semantics, or null
 
 	private final String determination; // LAUNCH | IMPACT | UNKNOWN (reactability)

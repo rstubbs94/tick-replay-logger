@@ -26,10 +26,10 @@ package com.tickreplaylogger.util;
 
 import com.tickreplaylogger.model.*;
 import java.awt.*;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
 import java.util.*;
 import java.util.List;
-import javax.swing.ImageIcon;
+import javax.swing.*;
 
 /**
  * Shared presentation helpers for the UI: turns the raw, coded names we capture (gameval constants
@@ -150,7 +150,7 @@ public final class DisplayFormat
 				: humanize(source);
 	}
 
-	public static String fatalSourceName(com.tickreplaylogger.model.TickRecording recording)
+	public static String fatalSourceName(TickRecording recording)
 	{
 		String resolved = SourceResolutionLabels.label(recording.getFatalSourceResolution());
 		return resolved == null ? humanize(recording.getKillerName()) : resolved;

@@ -24,14 +24,13 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
 import com.google.gson.*;
-import com.tickreplaylogger.model.world.EncounterWaveCue;
-import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
+import java.util.regex.*;
 import net.runelite.api.*;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.coords.*;
+import static net.runelite.client.util.Text.removeTags;
 
 /** Retains a source-qualified system-message anchor across a trimmed recording window.
  * Missing observations/lifetime boundaries invalidate the anchor. A cue is never a hit predicate.

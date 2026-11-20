@@ -4,17 +4,11 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.world.DamageRecord;
-import com.tickreplaylogger.model.world.ObservedEvent;
-import com.tickreplaylogger.model.world.SceneData;
-import com.tickreplaylogger.model.world.WorldSnapshot;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Objects;
-import lombok.RequiredArgsConstructor;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
+import java.math.*;
+import java.util.*;
+import lombok.*;
 
 /** Original observation references shared by ingestion, interpretation and presentation. */
 final class ResolverEvidence

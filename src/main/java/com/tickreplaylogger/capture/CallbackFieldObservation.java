@@ -25,7 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 /** Independent callback reads. Native dependencies are sampled without entering export data. */
 public final class CallbackFieldObservation

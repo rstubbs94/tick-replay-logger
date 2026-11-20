@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.TickRecording;
+import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
 

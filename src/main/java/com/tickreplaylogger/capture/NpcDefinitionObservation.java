@@ -24,10 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.Map;
-import static com.tickreplaylogger.capture.ObservationReads.read;
-import lombok.Getter;
+import java.util.*;
+import lombok.*;
 import net.runelite.api.*;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 
 /** Base identity and a nullable effective definition are independent observations. */
 @Getter

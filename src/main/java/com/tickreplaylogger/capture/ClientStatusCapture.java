@@ -24,12 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.world.ObservedStatusState;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
-import net.runelite.api.Client;
+import net.runelite.api.*;
 
 /** Independent local status reads. Failure of one variable does not erase another sample. */
 final class ClientStatusCapture

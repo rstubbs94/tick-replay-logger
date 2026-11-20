@@ -24,15 +24,14 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
 import com.google.gson.*;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
+import java.util.function.*;
+import lombok.*;
 import net.runelite.api.*;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.coords.*;
+import static net.runelite.client.util.Text.removeTags;
 
 /**
  * Builds a {@link WorldSnapshot} from the live client each tick, and a {@link SceneData} collision

@@ -24,9 +24,9 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ObservedVarbitLayout;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 import net.runelite.api.*;
 
 /** No bundle fallback: a failed composition/field cannot become an observed zero. */

@@ -58,14 +58,6 @@ public class MovementData
 	}
 
 	/**
-	 * Create movement data for no movement this tick
-	 */
-	public static MovementData none()
-	{
-		return MovementData.builder().tilesIntended(0).tilesCompleted(0).wasCancelled(false).build();
-	}
-
-	/**
 	 * Get a human-readable description
 	 */
 	public String getDescription()

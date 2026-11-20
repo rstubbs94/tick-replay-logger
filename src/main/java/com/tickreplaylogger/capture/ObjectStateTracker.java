@@ -24,13 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ObservedObjectState;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
 import net.runelite.api.*;
-import net.runelite.api.Point;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.coords.*;
 
 /** Reconcile exposed scene membership every settled snapshot; callbacks remain separate observations. */
 public final class ObjectStateTracker

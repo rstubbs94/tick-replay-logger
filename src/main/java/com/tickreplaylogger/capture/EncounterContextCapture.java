@@ -25,11 +25,10 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import com.tickreplaylogger.model.world.ContextBlock;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
 import net.runelite.api.*;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.coords.*;
 
 /** Named observed values and source-backed activity gating; selected settings are not presence. */
 final class EncounterContextCapture
@@ -41,7 +40,7 @@ final class EncounterContextCapture
 		Boolean inInstance = null;
 		try
 		{
-			net.runelite.api.WorldView active = WorldViews.active(client);
+			WorldView active = WorldViews.active(client);
 			inInstance = active == null ? client.isInInstancedRegion() : active.isInstance();
 			evidence.put("inInstance",
 				active == null ? "OBSERVED_CLIENT_INSTANCE_FLAG" : "OBSERVED_NATIVE_VIEW_INSTANCE_FLAG");
@@ -53,11 +52,11 @@ final class EncounterContextCapture
 		List<String> worldTypes = null;
 		try
 		{
-			java.util.EnumSet<net.runelite.api.WorldType> types = client.getWorldType();
+			EnumSet<WorldType> types = client.getWorldType();
 			if (types != null)
 			{
 				worldTypes = new ArrayList<>();
-				for (net.runelite.api.WorldType type : types)
+				for (WorldType type : types)
 				{
 					worldTypes.add(type.name());
 				}

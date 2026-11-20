@@ -24,10 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
+import com.google.gson.*;
 import java.util.*;
-import lombok.extern.slf4j.Slf4j;
-import lombok.Getter;
+import lombok.*;
+import lombok.extern.slf4j.*;
 
 /**
  * Bundled factual capture lookups for NPC attack speeds and named object/graphic surfaces.
@@ -53,7 +53,7 @@ public class DamageMap
 		private String mapRef;
 		private String surfaceOperator;
 		private String contactMode;
-		private com.google.gson.JsonObject contactAdmission;
+		private JsonObject contactAdmission;
 		private List<String> conditions;
 		private ObjectSurfaceDefinition requiredDefinition;
 	}

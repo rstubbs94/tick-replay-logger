@@ -25,13 +25,10 @@
 package com.tickreplaylogger.capture;
 
 import java.util.*;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 import net.runelite.api.*;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.AreaSoundEffectPlayed;
-import net.runelite.api.events.SoundEffectPlayed;
+import net.runelite.api.coords.*;
+import net.runelite.api.events.*;
 
 /** Reported callback values, not proof of audio playback, attack execution or damage. */
 public final class SoundCallbackObservation

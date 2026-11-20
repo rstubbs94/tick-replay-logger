@@ -26,9 +26,8 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
 import com.tickreplaylogger.model.world.*;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.*;
 import java.util.*;
-import java.util.List;
 
 /** Export-time wire sharing only. Every reference resolves to one complete recorded NPC value. */
 final class NpcStateEncoding

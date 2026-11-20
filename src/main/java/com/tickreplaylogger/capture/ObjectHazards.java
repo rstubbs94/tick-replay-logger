@@ -24,9 +24,10 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
-import lombok.Value;
+import java.util.*;
+import lombok.*;
 import net.runelite.api.*;
+import static net.runelite.client.util.Text.removeTags;
 
 /** Resolves the currently observed object definition, including varbit/varp-driven floors. */
 public final class ObjectHazards
@@ -45,7 +46,7 @@ public final class ObjectHazards
 			return observations.id(object);
 		}
 
-		public long id(net.runelite.api.GraphicsObject graphic)
+		public long id(GraphicsObject graphic)
 		{
 			return observations.id(graphic);
 		}
@@ -65,11 +66,6 @@ public final class ObjectHazards
 		String ruleKey;
 		boolean potentialSource;
 
-		public boolean isDamageCandidate()
-		{
-			// Known warning/inactive/unresolved floors are never treated as active hazards.
-			return Boolean.TRUE.equals(damaging);
-		}
 	}
 
 	public static Resolved resolve(Client client, TileObject object, DamageMap map)
@@ -168,6 +164,6 @@ public final class ObjectHazards
 
 	private static String clean(String value)
 	{
-		return value == null ? "" : removeTags(value).trim().toLowerCase(java.util.Locale.ROOT);
+		return value == null ? "" : removeTags(value).trim().toLowerCase(Locale.ROOT);
 	}
 }

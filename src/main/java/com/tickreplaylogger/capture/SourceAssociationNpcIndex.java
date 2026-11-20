@@ -24,8 +24,8 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.io.*;
+import java.nio.charset.*;
 import java.util.*;
 
 /** Small capture eligibility index. Presence never establishes a damage source or activation. */
@@ -71,7 +71,7 @@ public final class SourceAssociationNpcIndex
 				}
 			}
 		}
-		catch (RuntimeException | java.io.IOException unavailable)
+		catch (RuntimeException | IOException unavailable)
 		{
 			// Optional source observations remain absent; raw damage capture remains enabled.
 		}

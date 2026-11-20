@@ -2,7 +2,8 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import java.math.BigDecimal;
+import com.tickreplaylogger.model.world.*;
+import java.math.*;
 import java.util.*;
 import static com.tickreplaylogger.capture.ResolverEvidence.*;
 
@@ -458,7 +459,7 @@ final class OriginalSourceProof
 		{
 			return nativeFields;
 		}
-		com.tickreplaylogger.model.world.WorldSnapshot frame = source.frame();
+		WorldSnapshot frame = source.frame();
 		return nativeFields && frame != null && Boolean.TRUE.equals(frame.getNativeContextKnown())
 			&& Boolean.TRUE.equals(frame.getGameCycleKnown()) && source.receipt() != null
 			&& Objects.equals(frame.getTick(), source.receipt().clock.tick)

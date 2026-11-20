@@ -25,10 +25,9 @@
 package com.tickreplaylogger.capture;
 
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 import net.runelite.api.*;
-import net.runelite.api.coords.LocalPoint;
-import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.coords.*;
 
 /** Independent actor reads shared by local and enabled other-player snapshots. */
 final class PlayerSnapshotObservation extends ActorObservation

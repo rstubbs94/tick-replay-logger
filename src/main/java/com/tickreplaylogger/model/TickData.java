@@ -24,9 +24,8 @@
  */
 package com.tickreplaylogger.model;
 
-import lombok.*;
 import java.util.*;
-import java.util.List;
+import lombok.*;
 
 /**
  * Represents all data captured for a single game tick.

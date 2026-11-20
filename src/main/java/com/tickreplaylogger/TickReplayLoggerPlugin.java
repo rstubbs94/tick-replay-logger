@@ -24,40 +24,34 @@
  */
 package com.tickreplaylogger;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.inject.Provides;
+import com.google.gson.*;
+import com.google.inject.*;
 import com.tickreplaylogger.capture.*;
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.*;
-import com.tickreplaylogger.ui.TickReplayLoggerPanel;
+import com.tickreplaylogger.ui.*;
 import com.tickreplaylogger.util.*;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+import java.util.function.*;
 import javax.inject.Inject;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.*;
+import lombok.extern.slf4j.*;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
 import net.runelite.api.events.*;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.config.ConfigManager;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.game.WorldService;
-import net.runelite.client.plugins.Plugin;
-import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.plugins.worldhopper.ping.Ping;
-import net.runelite.client.ui.ClientToolbar;
-import net.runelite.client.ui.NavigationButton;
-import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.Text;
+import net.runelite.client.callback.*;
+import net.runelite.client.config.*;
+import net.runelite.client.eventbus.*;
+import net.runelite.client.events.*;
+import net.runelite.client.game.*;
+import net.runelite.client.plugins.*;
+import net.runelite.client.plugins.worldhopper.ping.*;
+import net.runelite.client.ui.*;
+import net.runelite.client.util.*;
+import net.runelite.http.api.worlds.*;
 import net.runelite.http.api.worlds.World;
-import net.runelite.http.api.worlds.WorldResult;
 
 @Slf4j
 @PluginDescriptor(name = "Tick Replay Logger", description = "Records tick-by-tick combat actions for post-death analysis and replay", tags =

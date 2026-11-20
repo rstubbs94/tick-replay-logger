@@ -25,14 +25,13 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import com.tickreplaylogger.model.*;
-import com.tickreplaylogger.model.world.DeathRecordingV2;
-import java.util.*;
-import java.io.*;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
-import java.util.zip.GZIPOutputStream;
 import com.google.gson.stream.*;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.model.world.*;
+import java.io.*;
+import java.nio.charset.*;
+import java.util.*;
+import java.util.zip.*;
 
 /** Serializes completed captures once; historical payloads are opaque best-effort input. */
 public final class RecordingExport

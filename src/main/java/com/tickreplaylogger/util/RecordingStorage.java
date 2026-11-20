@@ -24,21 +24,19 @@
  */
 package com.tickreplaylogger.util;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.tickreplaylogger.model.TickRecording;
+import com.google.gson.*;
+import com.google.gson.reflect.*;
+import com.tickreplaylogger.model.*;
 import java.io.*;
-import java.lang.reflect.Type;
-import java.nio.channels.FileChannel;
+import java.lang.reflect.*;
+import java.nio.channels.*;
 import java.nio.charset.*;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.util.*;
-import java.util.List;
 import java.util.concurrent.*;
-import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.client.util.Filepath;
+import java.util.function.*;
+import lombok.extern.slf4j.*;
+import net.runelite.client.util.*;
 
 /** One queue owns loading, mutations, serialization and publication. Callers never do disk I/O. */
 @Slf4j

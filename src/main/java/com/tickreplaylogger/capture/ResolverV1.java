@@ -4,10 +4,13 @@ package com.tickreplaylogger.capture;
 import com.google.gson.*;
 import com.tickreplaylogger.model.world.*;
 import java.math.*;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.*;
+import java.security.*;
 import java.util.*;
-import java.util.function.BiFunction;
+import java.util.function.*;
+import java.util.regex.*;
 import static com.tickreplaylogger.capture.ResolverEvidence.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.Identity;
 
 /** Retrospective interpretation of original recorded receipts and declarative mechanics. */
 public final class ResolverV1
@@ -15,7 +18,6 @@ public final class ResolverV1
 	public static final int MAX_CUES = 2048, MAX_RESULTS = 1024;
 	private static volatile ResolverV1 bundled;
 	private final Map<String, List<JsonObject>> index = new HashMap<>();
-	private final Map<String, JsonObject> declarations = new HashMap<>();
 	private final JsonObject document;
 	private final CombatCatalog references;
 	private final Gson gson;
@@ -30,7 +32,6 @@ public final class ResolverV1
 		for (JsonElement value : array(this.document.get("resolutionRules")))
 		{
 			JsonObject rule = object(value), selector = object(rule.get("source"));
-			declarations.put(text(rule, "id"), rule);
 			JsonArray ids = array(selector.get("ids"));
 			if (ids.size() == 0)
 			{
@@ -80,11 +81,6 @@ public final class ResolverV1
 	public String id()
 	{
 		return id;
-	}
-
-	public JsonObject matchedRule(String key)
-	{
-		return declarations.get(key);
 	}
 
 	ResolutionResult evaluate(Hit hit)
@@ -689,7 +685,7 @@ public final class ResolverV1
 		{
 			return null;
 		}
-		java.util.regex.Matcher match = java.util.regex.Pattern.compile(regex).matcher(text.replaceAll("<[^>]*>", ""));
+		Matcher match = Pattern.compile(regex).matcher(text.replaceAll("<[^>]*>", ""));
 		if (!match.matches())
 		{
 			return null;
@@ -2179,15 +2175,15 @@ public final class ResolverV1
 	{
 		try
 		{
-			byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes);
+			byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
 			StringBuilder result = new StringBuilder();
 			for (byte value : digest)
 			{
-				result.append(String.format(java.util.Locale.ROOT, "%02x", value & 255));
+				result.append(String.format(Locale.ROOT, "%02x", value & 255));
 			}
 			return result.toString();
 		}
-		catch (java.security.NoSuchAlgorithmException unavailable)
+		catch (NoSuchAlgorithmException unavailable)
 		{
 			throw new IllegalStateException(unavailable);
 		}

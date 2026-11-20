@@ -24,9 +24,8 @@
  */
 package com.tickreplaylogger.util;
 
-import com.tickreplaylogger.model.TickData;
+import com.tickreplaylogger.model.*;
 import java.util.*;
-import java.util.List;
 
 /**
  * Turns a chronological list of ticks into display rows, optionally collapsing runs of

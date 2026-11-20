@@ -25,7 +25,8 @@
 package com.tickreplaylogger.capture;
 
 import java.util.*;
-import java.util.List;
+import java.util.Deque;
+import java.util.function.*;
 import net.runelite.api.*;
 
 /** Native scene membership, seeded once and refreshed only for lifecycle-event tiles. */
@@ -119,7 +120,7 @@ final class SceneCaptureTraversal
 			return unavailable(client, view, "worldPlanes: scene arrays unavailable");
 		}
 		Set<Tile> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-		java.util.Deque<Tile> pending = new ArrayDeque<>();
+		Deque<Tile> pending = new ArrayDeque<>();
 		Map<Integer, Integer> counts = new LinkedHashMap<>();
 		List<TileSlot> slots = new ArrayList<>();
 		for (int plane = 0; plane < arrays.length; plane++)
@@ -339,8 +340,7 @@ final class SceneCaptureTraversal
 		return rows;
 	}
 
-	private void readObject(Tile tile, List<ObjectRow> rows, String kind, String issue,
-		java.util.function.Supplier<TileObject> read)
+	private void readObject(Tile tile, List<ObjectRow> rows, String kind, String issue, Supplier<TileObject> read)
 	{
 		try
 		{

@@ -3,7 +3,7 @@ package com.tickreplaylogger.model.world;
 
 import java.util.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
+import lombok.experimental.*;
 
 /** Shared observed actor fields. Gson keeps inherited values in the existing flat recording shape. */
 @Getter

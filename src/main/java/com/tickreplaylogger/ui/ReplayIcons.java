@@ -1,14 +1,14 @@
 /* Copyright (c) 2026, rstubbs94. SPDX-License-Identifier: BSD-2-Clause */
 package com.tickreplaylogger.ui;
 
-import com.tickreplaylogger.model.PlayerAction;
-import java.awt.Image;
-import java.awt.image.BufferedImage;
-import javax.swing.ImageIcon;
-import lombok.Getter;
-import lombok.experimental.Accessors;
-import net.runelite.api.SpriteID;
-import net.runelite.client.game.SpriteManager;
+import com.tickreplaylogger.model.*;
+import java.awt.*;
+import java.awt.image.*;
+import javax.swing.*;
+import lombok.*;
+import lombok.experimental.*;
+import net.runelite.api.*;
+import net.runelite.client.game.*;
 
 /** The same recorded-stat and action icons are shared by every replay view. */
 @Getter

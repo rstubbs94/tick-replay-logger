@@ -24,12 +24,12 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
-import com.tickreplaylogger.model.world.NpcState;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.function.Supplier;
+import java.util.function.*;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
+import static net.runelite.client.util.Text.removeTags;
 
 /** Independent reads of one reported NPC; a failed field cannot erase another observation. */
 final class NpcSnapshotObservation extends ActorObservation

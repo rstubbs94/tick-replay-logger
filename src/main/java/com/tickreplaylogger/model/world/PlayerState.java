@@ -26,7 +26,7 @@ package com.tickreplaylogger.model.world;
 
 import java.util.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
+import lombok.experimental.*;
 
 /**
  * The local player's full per-tick state for death reconstruction. Unlike the lightweight

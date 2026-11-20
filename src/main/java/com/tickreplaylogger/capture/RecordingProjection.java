@@ -3,8 +3,9 @@ package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.*;
-import com.tickreplaylogger.util.SourceResolutionLabels;
+import com.tickreplaylogger.util.*;
 import java.util.*;
+import lombok.*;
 
 /** Projects completed retrospective results without changing original callback measurements. */
 final class RecordingProjection
@@ -391,7 +392,7 @@ final class RecordingProjection
 		return values == null ? Collections.emptyList() : values;
 	}
 
-	@lombok.RequiredArgsConstructor
+	@RequiredArgsConstructor
 	private static final class JournalRow
 	{
 		final TickData state;

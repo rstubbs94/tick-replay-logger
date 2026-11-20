@@ -25,8 +25,7 @@
 package com.tickreplaylogger.capture;
 
 import java.util.*;
-import java.util.List;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 /** Independent current scene reads. Successful samples allocate no diagnostic maps or lists. */
 final class SceneFieldObservation

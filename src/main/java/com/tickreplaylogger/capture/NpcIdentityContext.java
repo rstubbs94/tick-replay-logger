@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.EnumSet;
+import java.util.*;
 import net.runelite.api.*;
 
 /** Positive context evidence required before applying base-mode rules to shared IDs. */

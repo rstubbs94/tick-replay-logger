@@ -24,7 +24,7 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.IdentityHashMap;
+import java.util.*;
 import net.runelite.api.*;
 
 /** Session-local lifetime identity; names and cache slots are not actor lifetimes. */

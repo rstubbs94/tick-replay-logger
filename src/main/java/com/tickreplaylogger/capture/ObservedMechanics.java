@@ -24,12 +24,11 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import java.util.*;
-import net.runelite.api.NPC;
-import lombok.Value;
+import lombok.*;
+import net.runelite.api.*;
+import static net.runelite.client.util.Text.removeTags;
 
 /** State changes tied to reviewed, actually observed cues; no HP-threshold/rotation simulation. */
 public final class ObservedMechanics
@@ -49,8 +48,8 @@ public final class ObservedMechanics
 
 	private static final class Scope
 	{
-		final net.runelite.api.WorldView view;
-		final net.runelite.api.Scene scene;
+		final WorldView view;
+		final Scene scene;
 		final int baseX, baseY;
 		final String chunks;
 
@@ -94,7 +93,7 @@ public final class ObservedMechanics
 		scopes.remove(npc);
 	}
 
-	public void clearView(net.runelite.api.WorldView view)
+	public void clearView(WorldView view)
 	{
 		for (NPC npc : new ArrayList<>(scopes.keySet()))
 		{

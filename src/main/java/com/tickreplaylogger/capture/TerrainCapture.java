@@ -24,9 +24,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.TileSurface;
+import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
 import net.runelite.api.*;
 
 /** Immutable terrain snapshots; no object-name, boss or hazard whitelist. */

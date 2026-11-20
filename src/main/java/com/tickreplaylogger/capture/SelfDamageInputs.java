@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import java.util.*;
-import java.util.List;
 
 /** Input candidates only: no synthetic hits, amount guesses or claims that a click executed. */
 public final class SelfDamageInputs

@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
+import java.util.*;
 import lombok.*;
 
 /**
@@ -56,7 +57,7 @@ public class ProjectileState
 	private final Boolean targetActorKnown;
 	private final Boolean samplePlaneKnown;
 	private final String collectionEvidence;
-	private final java.util.Map<String, String> observationIssues;
+	private final Map<String, String> observationIssues;
 	private final Boolean originKnown;
 	private final Boolean destinationKnown;
 	private final Double localX; // actual sampled projectile position, not its target

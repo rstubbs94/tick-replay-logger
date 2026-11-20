@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger;
 
+import com.tickreplaylogger.util.*;
 import net.runelite.client.config.*;
 
 @ConfigGroup("tickreplaylogger")
@@ -40,7 +41,7 @@ public interface TickReplayLoggerConfig extends Config
 	String reconstructionSection = "reconstruction";
 
 	@ConfigItem(keyName = "ticksToRecord", name = "Ticks to Record", description = "Number of ticks to keep in memory before death", position = 0, section = generalSection)
-	@Range(min = 1, max = com.tickreplaylogger.util.RecordingLimits.MAX_TICKS)
+	@Range(min = 1, max = RecordingLimits.MAX_TICKS)
 	default int ticksToRecord()
 	{
 		return 100;

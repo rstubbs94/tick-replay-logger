@@ -24,8 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
+import com.tickreplaylogger.model.*;
 import java.util.*;
-import com.tickreplaylogger.model.TickData;
 import lombok.*;
 
 /**

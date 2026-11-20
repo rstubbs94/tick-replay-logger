@@ -1,8 +1,8 @@
 /* Copyright (c) 2026, rstubbs94. SPDX-License-Identifier: BSD-2-Clause */
 package com.tickreplaylogger.capture;
 
-import java.util.Map;
-import java.util.function.Supplier;
+import java.util.*;
+import java.util.function.*;
 
 /** Isolates one optional API read without caching or inferring unavailable fields. */
 final class ObservationReads

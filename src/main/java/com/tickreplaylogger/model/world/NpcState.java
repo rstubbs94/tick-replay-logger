@@ -26,7 +26,7 @@ package com.tickreplaylogger.model.world;
 
 import java.util.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
+import lombok.experimental.*;
 
 /**
  * One NPC's per-tick state in a {@link WorldSnapshot}. Captured for every NPC in the loaded scene

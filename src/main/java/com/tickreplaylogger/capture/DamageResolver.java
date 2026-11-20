@@ -76,8 +76,13 @@ final class DamageResolver
 	static DeathRecordingV2 resolveRecording(DeathRecordingV2 recording, Gson gson)
 	{
 		ResolverCatalog catalog = ResolverCatalog.bundled(gson);
-		return recording == null || recording.getEvents() == null ? recording
-			: RecordingProjection.apply(recording, new DamageResolver(catalog).resolve(recording), catalog.getId());
+		if (recording == null || recording.getEvents() == null)
+		{
+			return recording;
+		}
+		DamageResolver resolver = new DamageResolver(catalog);
+		DeathRecordingV2 explained = resolver.explainPrayerLoss(recording);
+		return RecordingProjection.apply(explained, resolver.resolve(explained), catalog.getId());
 	}
 
 	/** Each hit on the player, with its source resolution and display fields, keyed by observation sequence. */
@@ -113,6 +118,67 @@ final class DamageResolver
 				: found.isEmpty() ? "UNRESOLVED_OBSERVATIONS" : "MULTIPLE_POSSIBLE_DAMAGE_SOURCES")
 			.damageType(status != null ? status.toLowerCase(Locale.ROOT) : style != null ? style : hit.getDamageType())
 			.build();
+	}
+
+	/**
+	 * A prayer switched off without the player's click, while they still had prayer points, is explained by the
+	 * projectile that landed on them that tick. A projectile the cache names as a prayer attack is stated as the
+	 * cause; any other names the attack that landed. Several sources, or none, leave the original wording.
+	 */
+	DeathRecordingV2 explainPrayerLoss(DeathRecordingV2 recording)
+	{
+		DeathRecordingV2.Events events = recording.getEvents();
+		Window w = new Window(recording);
+		Map<Integer, String[]> causes = new HashMap<>();
+		List<DeathRecordingV2.Events.PlayerActionRecord> actions = new ArrayList<>();
+		for (DeathRecordingV2.Events.PlayerActionRecord action : list(events.getPlayerActions()))
+		{
+			String[] cause = action != null && "PRAYER_DEACTIVATED".equals(action.getType()) && action.getDetail() != null
+				&& action.getDetail().endsWith("cause not established)") ? prayerCause(w, action.getTick()) : null;
+			if (cause != null)
+			{
+				causes.put(action.getTick(), cause);
+				action = action.toBuilder().detail(action.getTarget() + " (" + cause[1] + ")").build();
+			}
+			actions.add(action);
+		}
+		if (causes.isEmpty())
+		{
+			return recording;
+		}
+		List<EffectEvent> effects = list(events.getEffectEvents()).stream().map(e -> e == null
+			|| !"prayer_state_change".equals(e.getType()) || !causes.containsKey(e.getStartTick()) ? e
+				: e.toBuilder().sourceName(causes.get(e.getStartTick())[0]).evidence(causes.get(e.getStartTick())[2])
+					.build())
+			.collect(Collectors.toList());
+		return recording.toBuilder().events(events.toBuilder().playerActions(actions).effectEvents(effects).build())
+			.build();
+	}
+
+	/** {source name, journal wording, evidence} for the projectile that landed on the player in this tick. */
+	private String[] prayerCause(Window w, int tick)
+	{
+		WorldSnapshot frame = w.frames.get(tick);
+		if (frame == null)
+		{
+			return null;
+		}
+		// Same landing window as damage: the visual end can trail the registered impact by about a tick.
+		List<ProjectileState> landed = w.projectiles.stream().filter(p -> "player".equals(p.getTargetRef())
+			&& p.getEndCycle() != null && lands(p, frame.getGameCycle()) && p.getSourceName() != null)
+			.collect(Collectors.toList());
+		List<ProjectileState> prayer = landed.stream()
+			.filter(p -> catalog.getPrayerDisablers().contains(p.getProjectileId())).collect(Collectors.toList());
+		Set<String> sources = (prayer.isEmpty() ? landed : prayer).stream().map(ProjectileState::getSourceName)
+			.collect(Collectors.toSet());
+		if (sources.size() != 1)
+		{
+			return null;
+		}
+		String source = sources.iterator().next();
+		return prayer.isEmpty()
+			? new String[]{source, "deactivated as " + source + "'s attack landed", "PROJECTILE_LANDED_SAME_TICK"}
+			: new String[]{source, "disabled by " + source + "'s prayer attack", "PRAYER_ATTACK_PROJECTILE"};
 	}
 
 	/** Every source behind the hits in one tick (the death tick); a single shared resolution is kept as is. */
@@ -189,11 +255,13 @@ final class DamageResolver
 			{
 				continue;
 			}
+			// Compare with where the player stood in this same frame; running moves them every tick.
+			ObservedActorState here = w.located(frame) ? frame.getPlayer() : player;
 			for (HazardState h : list(frame.getHazards()))
 			{
 				int width = span(h.getMinSceneX(), h.getMaxSceneX()), height = span(h.getMinSceneY(), h.getMaxSceneY());
-				if (h.getPlane() != player.getPlane()
-					|| distance(player, h.getWorldX(), h.getWorldY(), Math.max(width, height)) != 0)
+				if (h.getPlane() != here.getPlane()
+					|| distance(here, h.getWorldX(), h.getWorldY(), Math.max(width, height)) != 0)
 				{
 					continue;
 				}
@@ -211,7 +279,7 @@ final class DamageResolver
 			for (NpcState npc : list(frame.getNpcs()))
 			{
 				String contact = catalog.getContactNpcs().get(npc.getNpcId());
-				if (contact != null && distance(player, npc.getWorldX(), npc.getWorldY(), size(npc)) == 0)
+				if (contact != null && distance(here, npc.getWorldX(), npc.getWorldY(), size(npc)) == 0)
 				{
 					out.add(new Candidate(contact, npc.getActorRef(), npc.getNpcId(), true, "CONTACT_NPC")
 						.at(frame.getSceneKey(), npc.getWorldViewId(), npc.getPlane()));
@@ -255,7 +323,7 @@ final class DamageResolver
 			{
 				continue;
 			}
-			int d = distance(player, npc.getWorldX(), npc.getWorldY(), size(npc));
+			int d = w.closest(animation.getTick(), player, npc);
 			if (hitDelays(d).contains(tick - animation.getTick()) && catalog.canDeal(npc.getNpcId(), amount))
 			{
 				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known || d <= 1,
@@ -296,7 +364,7 @@ final class DamageResolver
 			int age = tick - animation.getTick();
 			if (npc != null && named(npc) && !launchedProjectile(w, animation, npc) && age >= 0 && age <= 2 && npc.getPlane() == player.getPlane()
 				&& catalog.getAttackAnimations().contains(number(animation.getData().get("animationId")))
-				&& distance(player, npc.getWorldX(), npc.getWorldY(), size(npc)) <= NEARBY_TILES
+				&& w.closest(animation.getTick(), player, npc) <= NEARBY_TILES
 				&& catalog.canDeal(npc.getNpcId(), amount))
 			{
 				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), false, "NEARBY_ATTACK")
@@ -606,6 +674,26 @@ final class DamageResolver
 				}
 			}
 			return null;
+		}
+
+		boolean located(WorldSnapshot frame)
+		{
+			return frame.getPlayer() != null && Boolean.TRUE.equals(frame.getPlayer().getWorldPositionKnown());
+		}
+
+		/** Distance to the NPC from where the player stood at the attack tick or the tick before (they may step away). */
+		int closest(int tick, ObservedActorState fallback, NpcState npc)
+		{
+			int best = distance(fallback, npc.getWorldX(), npc.getWorldY(), size(npc));
+			for (int t : new int[]{tick, tick - 1})
+			{
+				WorldSnapshot frame = frames.get(t);
+				if (frame != null && located(frame) && frame.getPlayer().getPlane() == npc.getPlane())
+				{
+					best = Math.min(best, distance(frame.getPlayer(), npc.getWorldX(), npc.getWorldY(), size(npc)));
+				}
+			}
+			return best;
 		}
 
 		String sceneKey(int tick)

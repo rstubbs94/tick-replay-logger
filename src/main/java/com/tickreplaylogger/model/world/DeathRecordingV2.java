@@ -101,7 +101,7 @@ public class DeathRecordingV2
 	}
 
 	@Data
-	@Builder
+	@Builder(toBuilder = true)
 	public static class Events
 	{
 		private final List<DamageRecord> damageEvents;
@@ -123,7 +123,7 @@ public class DeathRecordingV2
 		}
 
 		@Data
-		@Builder
+		@Builder(toBuilder = true)
 		public static class PlayerActionRecord
 		{
 			private final int tick;

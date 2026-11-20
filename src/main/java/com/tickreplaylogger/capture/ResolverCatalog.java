@@ -31,6 +31,8 @@ final class ResolverCatalog
 	private final Map<Integer, String> surfaces = new HashMap<>();
 	private final Map<Integer, String> contactNpcs = new HashMap<>();
 	private final Map<Integer, String> selfDamageItems = new HashMap<>();
+	/** Projectiles the cache names as prayer-disabling attacks. */
+	private final Set<Integer> prayerDisablers = new HashSet<>();
 
 	ResolverCatalog(String id, JsonObject json)
 	{
@@ -52,6 +54,10 @@ final class ResolverCatalog
 		names(json.getAsJsonObject("hazardGraphics"), hazardGraphics);
 		names(json.getAsJsonObject("surfaces"), surfaces);
 		names(json.getAsJsonObject("contactNpcs"), contactNpcs);
+		if (json.has("prayerDisablers"))
+		{
+			json.getAsJsonArray("prayerDisablers").forEach(e -> prayerDisablers.add(e.getAsInt()));
+		}
 		json.getAsJsonObject("selfDamageItems").entrySet()
 			.forEach(e -> selfDamageItems.put(Integer.parseInt(e.getKey()), e.getValue().getAsJsonArray().get(0).getAsString()));
 	}

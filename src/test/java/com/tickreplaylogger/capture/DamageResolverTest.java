@@ -12,8 +12,8 @@ public class DamageResolverTest
 	private static final String CATALOG = "{\"version\":1,\"hitsplats\":{\"status\":{\"5\":\"Venom\",\"65\":\"Poison\"},"
 		+ "\"nonHp\":[6,60]},\"npcs\":{\"2042\":[41,3,0,[5069]],\"2045\":[15,3,0,[]],\"9035\":[10,5,1,[]],"
 		+ "\"7000\":[20,4,0,[100]],\"9041\":[5,4,0,[8425]]},\"venomous\":[2042],\"attackAnims\":[100,5069,8339],\"projectileStyles\":{\"1046\":\"magic\"},"
-		+ "\"hazardGraphics\":{},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{},"
-		+ "\"selfDamageItems\":{\"7510\":[\"Dwarven rock cake\",[\"Eat\"]]}}";
+		+ "\"hazardGraphics\":{},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{\"9039\":\"Corrupted tornado\"},"
+		+ "\"selfDamageItems\":{\"7510\":[\"Dwarven rock cake\",[\"Eat\"]]},\"prayerDisablers\":[1714]}";
 	private static final int TICK = 50, CYCLE = 5000;
 
 	private final DamageResolver resolver = new DamageResolver(
@@ -206,6 +206,41 @@ public class DamageResolverTest
 		assertEquals("Goblin warlord", resolve().get(1L).getAttackerName());
 	}
 
+	/** A tornado on the player's tile last tick hits now, though the player has since run two tiles. */
+	@Test
+	public void contactUsesWhereThePlayerStoodInThatFrame()
+	{
+		WorldSnapshot before = WorldSnapshot.builder().tick(TICK - 1).gameCycle(CYCLE - 30).sceneKey("scene")
+			.player(PlayerState.builder().worldX(3200).worldY(3198).plane(0).worldPositionKnown(true).build())
+			.npcs(List.of(NpcState.builder().actorRef("npc:5").npcId(9039).name("null").worldX(3200).worldY(3198).plane(0)
+				.size(1).worldViewId(0).build()))
+			.build();
+		hit(1, 22, 16);
+		DamageRecord result = resolver.resolve(recording(before)).get(1L);
+		assertEquals("Corrupted tornado", result.getAttackerName());
+	}
+
+	/** Prayers switched off on the tick a prayer-attack projectile landed are explained by it. */
+	@Test
+	public void prayerSwitchedOffByAPrayerAttackNamesTheAttacker()
+	{
+		projectiles.add(ProjectileState.builder().observationId(3L).projectileId(1714).targetRef("player")
+			.sourceRef("npc:2").sourceName("Corrupted Hunllef").sourceNpcId(9035).endCycle(CYCLE - 5).observedTick(TICK)
+			.build());
+		WorldSnapshot before = WorldSnapshot.builder().tick(TICK - 1).gameCycle(CYCLE - 30).sceneKey("scene").build();
+		DeathRecordingV2 recording = recording(before);
+		List<DeathRecordingV2.Events.PlayerActionRecord> actions = List.of(DeathRecordingV2.Events.PlayerActionRecord
+			.builder().tick(TICK).type("PRAYER_DEACTIVATED").target("Piety")
+			.detail("Piety (deactivated; cause not established)").build());
+		recording = recording.toBuilder().events(recording.getEvents().toBuilder().playerActions(actions)
+			.effectEvents(List.of(EffectEvent.builder().type("prayer_state_change").startTick(TICK).build())).build())
+			.build();
+		DeathRecordingV2 explained = resolver.explainPrayerLoss(recording);
+		assertEquals("Piety (disabled by Corrupted Hunllef's prayer attack)",
+			explained.getEvents().getPlayerActions().get(0).getDetail());
+		assertEquals("Corrupted Hunllef", explained.getEvents().getEffectEvents().get(0).getSourceName());
+	}
+
 	@Test
 	public void aMessageAloneIsNeverNamedAsTheSource()
 	{
@@ -249,11 +284,18 @@ public class DamageResolverTest
 
 	private Map<Long, DamageRecord> resolve()
 	{
-		WorldSnapshot frame = WorldSnapshot.builder().tick(TICK).sceneKey("scene")
+		return resolver.resolve(recording());
+	}
+
+	/** The current frame at TICK (player at 3200,3200), after any earlier frames given. */
+	private DeathRecordingV2 recording(WorldSnapshot... earlier)
+	{
+		List<WorldSnapshot> frames = new ArrayList<>(List.of(earlier));
+		frames.add(WorldSnapshot.builder().tick(TICK).gameCycle(CYCLE).sceneKey("scene")
 			.player(PlayerState.builder().worldX(3200).worldY(3200).plane(0).worldPositionKnown(true).build())
-			.npcs(npcs).projectiles(projectiles).hazards(hazards).build();
-		return resolver.resolve(DeathRecordingV2.builder().ticks(List.of(frame)).events(DeathRecordingV2.Events.builder()
-			.damageEvents(hits).observations(observations).build()).build());
+			.npcs(npcs).projectiles(projectiles).hazards(hazards).build());
+		return DeathRecordingV2.builder().ticks(frames).events(DeathRecordingV2.Events.builder().damageEvents(hits)
+			.observations(observations).build()).build();
 	}
 
 	private void hit(long sequence, int amount, int type)

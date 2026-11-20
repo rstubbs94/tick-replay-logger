@@ -31,7 +31,7 @@ import lombok.*;
  * {@link DamageRecord}. A graphic sighting does not establish an applied effect.
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 public class EffectEvent
 {
 	// freeze_bind|teleblock|stun|knockback|prayer_disable|prayer_pierce|disarm|stat_drain|

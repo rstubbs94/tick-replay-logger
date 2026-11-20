@@ -289,12 +289,19 @@ final class DamageResolver
 		Integer cycle = hit.getObservedCycle();
 		for (ProjectileState p : w.projectiles)
 		{
-			if (cycle != null && !"player".equals(p.getTargetRef()) && lands(p, cycle) && p.getEndWorldX() != null
-				&& distance(player, p.getEndWorldX(), p.getEndWorldY(), 1) <= 1
-				&& catalog.canDeal(w.sourceNpcId(p), hit.getAmount()))
+			if (cycle == null || "player".equals(p.getTargetRef()) || !lands(p, cycle) || p.getEndWorldX() == null
+				|| !catalog.canDeal(w.sourceNpcId(p), hit.getAmount()))
 			{
-				out.add(new Candidate(p.getSourceName() == null ? "Area attack" : p.getSourceName() + " (area attack)",
-					p.getSourceRef(), w.sourceNpcId(p), false, "TILE_PROJECTILE:" + p.getProjectileId())
+				continue;
+			}
+			// Landing exactly where the player stood (this tick or the one before) is certain; next to them, possible.
+			int d = w.closestTo(hit.getImpactTick(), player, p.getEndWorldX(), p.getEndWorldY());
+			String graphic = catalog.getHazardGraphics().get(p.getProjectileId());
+			if (d <= 1)
+			{
+				out.add(new Candidate(graphic != null ? graphic.replaceAll("(?i)\\s+travel$", "")
+					: p.getSourceName() == null ? "Area attack" : p.getSourceName() + " (area attack)", p.getSourceRef(),
+					w.sourceNpcId(p), d == 0, "TILE_PROJECTILE:" + p.getProjectileId())
 					.at(p.getSourceSceneKey(), p.getSourceWorldViewId(), p.getSourcePlane()));
 			}
 		}
@@ -684,13 +691,24 @@ final class DamageResolver
 		/** Distance to the NPC from where the player stood at the attack tick or the tick before (they may step away). */
 		int closest(int tick, ObservedActorState fallback, NpcState npc)
 		{
-			int best = distance(fallback, npc.getWorldX(), npc.getWorldY(), size(npc));
+			return closest(tick, fallback, npc.getWorldX(), npc.getWorldY(), size(npc), npc.getPlane());
+		}
+
+		/** Distance to a landing tile from where the player stood this tick or the tick before. */
+		int closestTo(int tick, ObservedActorState fallback, int x, int y)
+		{
+			return closest(tick, fallback, x, y, 1, fallback.getPlane());
+		}
+
+		private int closest(int tick, ObservedActorState fallback, int x, int y, int size, int plane)
+		{
+			int best = distance(fallback, x, y, size);
 			for (int t : new int[]{tick, tick - 1})
 			{
 				WorldSnapshot frame = frames.get(t);
-				if (frame != null && located(frame) && frame.getPlayer().getPlane() == npc.getPlane())
+				if (frame != null && located(frame) && frame.getPlayer().getPlane() == plane)
 				{
-					best = Math.min(best, distance(frame.getPlayer(), npc.getWorldX(), npc.getWorldY(), size(npc)));
+					best = Math.min(best, distance(frame.getPlayer(), x, y, size));
 				}
 			}
 			return best;

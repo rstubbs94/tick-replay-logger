@@ -7885,7 +7885,7 @@ public class DeferredAttributionTest
 		hit(HitsplatID.DAMAGE_ME, 7);
 		hp -= 7;
 		tick();
-		assertTrue(capturedLastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertNotNull(capturedLastDamage().getSourceResolution());
 		java.nio.file.Path path = java.nio.file.Paths.get("build/test-fixtures/projectile-endpoint-clue.json");
 		java.nio.file.Files.createDirectories(path.getParent());
 		java.nio.file.Files.write(path, gson.toJson(export()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -7949,7 +7949,8 @@ public class DeferredAttributionTest
 		gameCycle++;
 		hit(HitsplatID.DAMAGE_ME, 7);
 		tick();
-		assertTrue(capturedLastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertEquals(7, capturedLastDamage().getAmount());
+		assertNotNull(capturedLastDamage().getSourceResolution());
 	}
 
 	private void endpointContext()

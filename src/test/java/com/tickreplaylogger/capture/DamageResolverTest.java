@@ -12,7 +12,7 @@ public class DamageResolverTest
 	private static final String CATALOG = "{\"version\":1,\"hitsplats\":{\"status\":{\"5\":\"Venom\",\"65\":\"Poison\"},"
 		+ "\"nonHp\":[6,60]},\"npcs\":{\"2042\":[41,3,0,[5069]],\"2045\":[15,3,0,[]],\"9035\":[10,5,1,[]],"
 		+ "\"7000\":[20,4,0,[100]],\"9041\":[5,4,0,[8425]]},\"venomous\":[2042],\"attackAnims\":[100,5069,8339],\"projectileStyles\":{\"1046\":\"magic\"},"
-		+ "\"hazardGraphics\":{},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{\"9039\":\"Corrupted tornado\"},"
+		+ "\"hazardGraphics\":{\"1483\":\"Vorkath acid travel\"},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{\"9039\":\"Corrupted tornado\"},"
 		+ "\"selfDamageItems\":{\"7510\":[\"Dwarven rock cake\",[\"Eat\"]]},\"prayerDisablers\":[1714]}";
 	private static final int TICK = 50, CYCLE = 5000;
 
@@ -239,6 +239,21 @@ public class DamageResolverTest
 		assertEquals("Piety (disabled by Corrupted Hunllef's prayer attack)",
 			explained.getEvents().getPlayerActions().get(0).getDetail());
 		assertEquals("Corrupted Hunllef", explained.getEvents().getEffectEvents().get(0).getSourceName());
+	}
+
+	/** Vorkath's acid lands on the tile the player stood on last tick; they have since stepped off it. */
+	@Test
+	public void projectileLandingWhereThePlayerStoodIsCertain()
+	{
+		projectiles.add(ProjectileState.builder().observationId(4L).projectileId(1483).targetRef(null).sourceRef("npc:6")
+			.sourceName("Vorkath").sourceNpcId(8061).endCycle(CYCLE + 1).endWorldX(3199).endWorldY(3200)
+			.observedTick(TICK).build());
+		WorldSnapshot before = WorldSnapshot.builder().tick(TICK - 1).gameCycle(CYCLE - 30).sceneKey("scene")
+			.player(PlayerState.builder().worldX(3199).worldY(3200).plane(0).worldPositionKnown(true).build()).build();
+		hit(1, 5, 16);
+		DamageRecord result = resolver.resolve(recording(before)).get(1L);
+		assertEquals("Vorkath acid", result.getAttackerName());
+		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
 	}
 
 	@Test

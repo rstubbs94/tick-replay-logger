@@ -19,7 +19,7 @@ import lombok.*;
 final class DamageResolver
 {
 	static final String METHOD = "RESOLVER_V2";
-	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10, LAUNCH_CYCLES = 60;
+	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10, LAUNCH_CYCLES = 60, VENOM = 1_000_000;
 
 	private final ResolverCatalog catalog;
 
@@ -82,7 +82,8 @@ final class DamageResolver
 		}
 		DamageResolver resolver = new DamageResolver(catalog);
 		DeathRecordingV2 explained = resolver.explainPrayerLoss(recording);
-		return RecordingProjection.apply(explained, resolver.resolve(explained), catalog.getId());
+		Map<Long, DamageRecord> resolved = resolver.resolve(explained);
+		return RecordingProjection.apply(resolver.nameStatusOnsets(explained), resolved, catalog.getId());
 	}
 
 	/** Each hit on the player, with its source resolution and display fields, keyed by observation sequence. */
@@ -90,16 +91,89 @@ final class DamageResolver
 	{
 		Window window = new Window(recording);
 		Map<DamageRecord, Assignment> assigned = assignProjectiles(window);
-		Map<Long, DamageRecord> out = new LinkedHashMap<>();
+		Map<DamageRecord, List<Candidate>> found = new LinkedHashMap<>();
 		for (DamageRecord hit : window.hits)
 		{
+			found.put(hit, resolve(window, hit, assigned.getOrDefault(hit, new Assignment(Collections.emptyList(), true))));
+		}
+		Map<Long, DamageRecord> out = new LinkedHashMap<>();
+		found.forEach((hit, candidates) ->
+		{
+			String status = catalog.getStatuses().get(hit.getHitsplatType());
+			Integer onset = status == null ? null : statusOnset(window, hit.getImpactTick(), "Venom".equals(status));
+			String from = onset == null ? null : applicator(found, onset);
+			if (from != null)
+			{
+				applied.put(onset, from);
+				candidates = List.of(new Candidate(status + " from " + from, null, null, true, "STATUS_APPLIED:" + onset));
+			}
 			if (hit.getObservationSequence() != null)
 			{
-				out.put(hit.getObservationSequence(), describe(hit, resolve(window, hit,
-					assigned.getOrDefault(hit, new Assignment(Collections.emptyList(), true)))));
+				out.put(hit.getObservationSequence(), describe(hit, candidates));
+			}
+		});
+		return out;
+	}
+
+	/** Poison or venom start ticks resolved in this recording, with what hit the player then. */
+	private final Map<Integer, String> applied = new HashMap<>();
+
+	/**
+	 * The tick this poison or venom began: the player's poison counter turned positive (venom from 1,000,000)
+	 * with nothing in between clearing it. Null when it began before the recording or is not recorded.
+	 */
+	private static Integer statusOnset(Window w, int tick, boolean venom)
+	{
+		for (int t = tick; w.frames.containsKey(t - 1); t--)
+		{
+			Boolean now = poisoned(w.frames.get(t), venom), before = poisoned(w.frames.get(t - 1), venom);
+			if (Boolean.FALSE.equals(now))
+			{
+				return null;
+			}
+			if (Boolean.TRUE.equals(now) && Boolean.FALSE.equals(before))
+			{
+				return t;
 			}
 		}
-		return out;
+		return null;
+	}
+
+	private static Boolean poisoned(WorldSnapshot frame, boolean venom)
+	{
+		PlayerState p = frame.getPlayer();
+		return p == null || !Boolean.TRUE.equals(p.getPoisonValueKnown()) ? null
+			: venom ? p.getPoisonValue() >= VENOM : p.getPoisonValue() > 0;
+	}
+
+	/** Whatever hit the player on the tick the status began (or the tick before); several are all named. */
+	private static String applicator(Map<DamageRecord, List<Candidate>> found, int onset)
+	{
+		Set<String> names = new LinkedHashSet<>();
+		found.forEach((hit, candidates) ->
+		{
+			if (hit.getImpactTick() >= onset - 1 && hit.getImpactTick() <= onset)
+			{
+				candidates.stream().filter(c -> !c.evidence.startsWith("STATUS")).forEach(c -> names.add(c.name));
+			}
+		});
+		return names.isEmpty() ? null : String.join(" or ", names);
+	}
+
+	/** The "Poisoned"/"Venomed" effect at a resolved start tick names what applied it. */
+	DeathRecordingV2 nameStatusOnsets(DeathRecordingV2 recording)
+	{
+		if (applied.isEmpty() || recording.getEvents().getEffectEvents() == null)
+		{
+			return recording;
+		}
+		List<EffectEvent> effects = recording.getEvents().getEffectEvents().stream().map(e -> e == null
+			|| !"dot".equals(e.getType()) || !applied.containsKey(e.getStartTick()) ? e
+				: e.toBuilder().sourceName(applied.get(e.getStartTick()))
+					.journalNote(e.getJournalNote() == null ? null : e.getJournalNote() + " by " + applied.get(e.getStartTick()))
+					.build())
+			.collect(Collectors.toList());
+		return recording.toBuilder().events(recording.getEvents().toBuilder().effectEvents(effects).build()).build();
 	}
 
 	/** Fills the journal and display fields from the resolution; the recorded facts stay unchanged. */

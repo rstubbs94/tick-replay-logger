@@ -298,6 +298,31 @@ public class DamageResolverTest
 		assertTrue(explained.getEvents().getEffectEvents().isEmpty());
 	}
 
+	/** Poisoned by a melee hit (counter turns on that tick); a later poison splat names the attacker. */
+	@Test
+	public void poisonDamageNamesWhatHitThePlayerWhenThePoisonBegan()
+	{
+		attacker(7000, 100, TICK - 5);
+		hits.add(DamageRecord.builder().direction("RECEIVED").defenderRef("player").impactTick(TICK - 5)
+			.observedCycle(CYCLE - 150).observationSequence(1L).amount(0).hitsplatType(12).damageType("unknown").build());
+		hit(2, 4, 65);
+		List<WorldSnapshot> frames = new ArrayList<>();
+		for (int t = TICK - 6; t < TICK; t++)
+		{
+			frames.add(WorldSnapshot.builder().tick(t).gameCycle(CYCLE - 30 * (TICK - t)).sceneKey("scene")
+				.player(PlayerState.builder().worldX(3200).worldY(3200).plane(0).worldPositionKnown(true)
+					.poisonValueKnown(true).poisonValue(t >= TICK - 5 ? 20 : 0).build())
+				.npcs(npcs).build());
+		}
+		DeathRecordingV2 recording = recording(frames.toArray(new WorldSnapshot[0]));
+		List<WorldSnapshot> all = new ArrayList<>(recording.getTicks());
+		all.set(all.size() - 1, all.get(all.size() - 1).toBuilder().player(PlayerState.builder().worldX(3200)
+			.worldY(3200).plane(0).worldPositionKnown(true).poisonValueKnown(true).poisonValue(19).build()).build());
+		DamageRecord poison = resolver.resolve(recording.toBuilder().ticks(all).build()).get(2L);
+		assertEquals("Poison from Goblin warlord", poison.getAttackerName());
+		assertEquals("poison", poison.getDamageType());
+	}
+
 	@Test
 	public void aMessageAloneIsNeverNamedAsTheSource()
 	{

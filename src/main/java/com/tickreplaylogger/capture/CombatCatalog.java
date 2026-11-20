@@ -31,14 +31,12 @@ import java.nio.charset.*;
 import java.util.*;
 import lombok.*;
 import lombok.extern.slf4j.*;
-import static com.tickreplaylogger.capture.ResolverEvidence.array;
 
 /** Bundled factual identity and state references; never treats prose as an event. */
 @Slf4j
 public final class CombatCatalog
 {
 	private JsonObject root = new JsonObject();
-	private volatile ObservedInventorySourceHints inventorySourceHintIndex;
 
 	/** Shared factual lookup view; optional legacy indexes remain lazy during migration. */
 	static CombatCatalog referenceView(JsonObject references)
@@ -66,6 +64,11 @@ public final class CombatCatalog
 	private JsonObject section(String key)
 	{
 		return object(root.get(key));
+	}
+
+	private static JsonArray array(JsonElement value)
+	{
+		return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray();
 	}
 
 	private static JsonObject object(JsonElement value)
@@ -204,24 +207,6 @@ public final class CombatCatalog
 	public JsonObject contextBindings()
 	{
 		return section("contextBindings");
-	}
-
-	public ObservedInventorySourceHints inventorySourceHints()
-	{
-		ObservedInventorySourceHints index = inventorySourceHintIndex;
-		if (index == null)
-		{
-			synchronized (this)
-			{
-				index = inventorySourceHintIndex;
-				if (index == null)
-				{
-					inventorySourceHintIndex = index = new ObservedInventorySourceHints(
-						section("inventorySourceCapture"));
-				}
-			}
-		}
-		return index;
 	}
 
 	private JsonObject localStatusRule(String key)

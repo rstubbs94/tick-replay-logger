@@ -337,7 +337,7 @@ public final class ObservedProjectileEndpointResolver
 					.candidate(candidate).mechanism("PROJECTILE_ENDPOINT_COOCCURRENCE").damageComponent(rule.key)
 					.causalAssociationOnly(true).build(), "NPC_PROJECTILE_ENDPOINT", sourceId, true));
 				unknown = true;
-				if (out.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (out.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					return new ObservedMechanismResolver.Result(out, true);
 			}
 		}

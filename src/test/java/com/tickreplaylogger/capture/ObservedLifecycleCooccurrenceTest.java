@@ -259,7 +259,7 @@ public class ObservedLifecycleCooccurrenceTest
 		for (int i = 0; i < 4097; i++) events.add(lifecycle("ACTOR_DEATH", 5, 101, 100 + i, source()));
 		ObservedMechanismResolver.Result result = resolve(namespace(rule("ACTOR_DEATH")), hit(), events);
 		assertTrue(result.isUnidentifiedPossible());
-		assertTrue(result.getContributions().size() <= SourceEvidenceResolver.MAX_HYPOTHESES);
+		assertTrue(result.getContributions().size() <= LegacyConstraintOracle.MAX_HYPOTHESES);
 	}
 
 	@Test

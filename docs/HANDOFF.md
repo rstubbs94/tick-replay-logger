@@ -1,5 +1,32 @@
 # Development handoff
 
+## Generic resolver branch - 20 November 2026
+
+Branch `rebuild/generic-resolver-20261120` replaces the damage resolver and keeps
+capture, storage, export and UI unchanged. Plan, spikes and evidence are in
+`C:\Dev	ick-replay-testebuild-plan-20261120` (`PLAN-v3.md`, `SPIKE-RESULTS.md`).
+
+- Removed: `ResolverV1`, `OriginalSourceProof`, `RawEvidenceWindow`,
+  `SourceEvidenceResolver`, `ResolverV1Recording`, `SourceAnnotations`,
+  `ResolverEvidence`, `ResolutionCandidate`, `ResolutionResult`,
+  `ObservedInventorySourceHints`, `SelfDamageInputs`, `SourceAssociationNpcIndex`,
+  and the capture code that only fed them.
+- Added: `capture/DamageResolver` (generic evidence ladder: status hitsplats,
+  projectiles matched jointly per cycle with max-hit limits, surfaces and timed
+  attacks, nearby attacks, the player's own actions, game messages) and
+  `capture/ResolverCatalog` with `resolver-catalog.json` (0.22 MB, generated from
+  the research data). Max-hit exclusion is off for scaled content.
+- Output keeps the `SourceResolution` version 1 contract (`method: RESOLVER_V2`).
+- Production size: **165,990 tokens** (local counter). Full suite: 1,022 tests,
+  0 failures. Thin-JAR restricted-API scan: 0 findings.
+- On the 7 local recordings: 95 identified / 37 alternatives / 0 unknown received
+  damage hits, against 15 / 41 / 21 from the previous resolver.
+- Not yet done: in-game testing of the new build, official formatter pass,
+  slimming the remaining capture-time classification (phase B), website change
+  to display the plugin's resolution instead of re-resolving.
+
+The section below describes the previous branch state.
+
 ## Current state - 20 November 2026
 
 The continuous-capture refactor works locally and has passed the checks below.

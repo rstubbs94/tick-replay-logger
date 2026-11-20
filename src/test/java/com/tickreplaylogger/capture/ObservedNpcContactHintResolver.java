@@ -304,7 +304,7 @@ public final class ObservedNpcContactHintResolver
 					.damageComponent(rule.key).causalAssociationOnly(true).build(),
 				"NPC_BODY", body.id, true));
 			unknown = true;
-			if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				return new ObservedMechanismResolver.Result(output, true);
 		}
 		return new ObservedMechanismResolver.Result(Collections.unmodifiableList(output), unknown);

@@ -392,22 +392,6 @@ public class LegacyWorldSnapshotRecorder
 	}
 
 	/**
-	 * Assemble the export for a death: window events to the buffered tick range, keep only the
-	 * scenes still referenced, and build the idâ†’name maps from the buffer. Does not clear state.
-	 */
-	public DeathRecordingV2 buildExport(DeathRecordingV2.Meta meta, DeathRecordingV2.Summary summary)
-	{
-		return buildExport(meta, summary, Integer.MIN_VALUE, Integer.MAX_VALUE);
-	}
-
-	/** Export the selected journal window, excluding later ticks even if the live buffer advances. */
-	public DeathRecordingV2 buildExport(DeathRecordingV2.Meta meta, DeathRecordingV2.Summary summary, int fromTick,
-		int throughTick)
-	{
-		return completeExport(freezeExport(meta, summary, fromTick, throughTick));
-	}
-
-	/**
 	 * Select a stable window of finished capture DTOs under the recorder lock. Finished DTOs and
 	 * their captured values are never modified by later ticks; only the rolling collections change.
 	 * Compaction and JSON serialization must happen after this method releases the lock.
@@ -461,14 +445,6 @@ public class LegacyWorldSnapshotRecorder
 									&& meta.getCaptureSettings().isOtherPlayers() ? Boolean.FALSE : null)
 						.build())
 			.build();
-	}
-
-	/** Complete a detached window on a worker, without blocking capture or reading client APIs. */
-	public DeathRecordingV2 completeExport(DeathRecordingV2 frozen)
-	{
-		DeathRecordingV2 resolved = ResolverV1Recording.resolve(frozen, gson);
-		return NpcStateEncoding.compact(resolved.toBuilder().idToName(buildIdToName(resolved.getTicks()))
-			.ticks(WorldStateExport.compact(resolved.getTicks())).build(), gson);
 	}
 
 	private List<DamageRecord> windowDamage(int min, int max)

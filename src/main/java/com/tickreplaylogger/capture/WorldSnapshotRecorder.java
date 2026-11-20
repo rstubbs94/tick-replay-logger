@@ -414,7 +414,7 @@ public class WorldSnapshotRecorder extends TickRecorder
 		}
 		try
 		{
-			DeathRecordingV2 resolved = ResolverV1Recording.resolve(frozen, gson);
+			DeathRecordingV2 resolved = DamageResolver.resolveRecording(frozen, gson);
 			if (resolved.getMeta() != null && resolved.getMeta().getDeathTick() != null)
 			{
 				resolved = RecordingEncounterLabels.prepare(resolved, DamageMap.load(gson));

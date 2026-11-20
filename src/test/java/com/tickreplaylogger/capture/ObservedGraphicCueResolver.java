@@ -277,7 +277,7 @@ public final class ObservedGraphicCueResolver
 					.candidate(candidate).mechanism("ENVIRONMENT_AREA_IMPACT").damageComponent(rule.key)
 					.causalAssociationOnly(true).build(), "GRAPHIC", cue.id, true));
 				unknown = true; // A cue never closes the list of possible causes.
-				if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					return new ObservedMechanismResolver.Result(Collections.unmodifiableList(output), true);
 			}
 		}

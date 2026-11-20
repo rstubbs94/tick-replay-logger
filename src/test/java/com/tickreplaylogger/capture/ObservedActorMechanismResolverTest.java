@@ -299,7 +299,7 @@ public class ObservedActorMechanismResolverTest
 		for (int i = 0; i < 4097; i++) events.add(event("ANIMATION_CHANGED", metadata()));
 		ObservedMechanismResolver.Result result = resolve(declaration("ANIMATION_CHANGED", "AREA_IMPACT", "CHEBYSHEV_RADIUS"), hit(),
 			events, Collections.singletonList(frame(3)), Collections.emptyList());
-		assertTrue(result.isUnidentifiedPossible()); assertTrue(result.getContributions().size() <= SourceEvidenceResolver.MAX_HYPOTHESES);
+		assertTrue(result.isUnidentifiedPossible()); assertTrue(result.getContributions().size() <= LegacyConstraintOracle.MAX_HYPOTHESES);
 	}
 
 	private static Map<String, Object> row(Object... fields)

@@ -25,7 +25,6 @@
 package com.tickreplaylogger;
 
 import com.google.gson.Gson;
-import com.tickreplaylogger.capture.ResolverV1Recording;
 import com.tickreplaylogger.model.world.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -66,81 +65,6 @@ public class ProjectileCorrelationWindowTest
 	{
 		NPC actor = actor(new WorldPoint(1000, 1000, 1), null);
 		assertNull(closest(Collections.singletonList(actor), new WorldPoint(1002, 1000, 1), null));
-	}
-
-	@Test
-	public void actualCyclesRetainTheOwnerDespiteADifferentRoundedArrivalTick()
-	{
-		DamageRecord hit = projected(4750, 4773, 102, "original-scene", 0);
-		assertTrue(hit.getSourceResolution().getCandidates().stream()
-			.anyMatch(source -> "Observed projectile owner".equals(source.getName())));
-		assertEquals(43, hit.getAmount());
-		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
-	}
-
-	@Test
-	public void damageDuringObservedFlightDoesNotRequireVisualArrival()
-	{
-		// The old producer's arrival-only filter lost this legitimate observation.
-		DamageRecord hit = projected(4700, 4773, 100, "original-scene", 0);
-		assertTrue(hit.getSourceResolution().getCandidates().stream()
-			.anyMatch(source -> "Observed projectile owner".equals(source.getName())));
-		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
-	}
-
-	@Test
-	public void missingImpactClockPreservesTheCallbackWithoutClaimingAnArrival()
-	{
-		DamageRecord hit = projected(null, 4773, 101, "original-scene", 0);
-		assertEquals(43, hit.getAmount());
-		assertNull(hit.getObservedCycle());
-		assertNotNull(hit.getSourceResolution());
-		assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
-		assertNotEquals("CONFIRMED", hit.getAttribution());
-	}
-
-	@Test
-	public void foreignSceneAndPlaneCannotBecomeAQualifiedLocalHpCause()
-	{
-		for (DamageRecord hit : Arrays.asList(projected(4750, 4773, 102, "different-scene", 0),
-			projected(4750, 4773, 102, "original-scene", 1)))
-		{
-			assertEquals(43, hit.getAmount());
-			assertTrue(hit.getSourceResolution().isUnidentifiedPossible());
-			assertNotEquals("CONFIRMED", hit.getAttribution());
-			for (SourceResolution.Candidate candidate : hit.getSourceResolution().getCandidates())
-				assertFalse(candidate.getEvidence().stream()
-					.anyMatch(evidence -> evidence.startsWith("SOURCE_BOUND:") || evidence.startsWith("QUALIFIED_MAXIMUM:")));
-		}
-	}
-
-	private static DamageRecord projected(Integer hitCycle, int endCycle, int estimatedArrival, String scene, int plane)
-	{
-		ProjectileSourceHistory.SourceObservation source = ProjectileSourceHistory.SourceObservation.builder()
-			.actorKind("NPC").sourceRef("npc:original:g1").sourceNpcId(990001).sourceActorKnown(true)
-			.sourceName("Observed projectile owner").sourceObservedName("Observed projectile owner").sourceNameKnown(true)
-			.sourceEvidence("ACTOR").sourceWorldViewId(0).sourcePlane(0).sourceSceneKey("original-scene")
-			.observedTick(99).observedCycle(4690).build();
-		ProjectileState projectile = ProjectileState.builder().observationId(5L).projectileId(990002).spawnTick(99)
-			.observedTick(99).observedCycle(4690).endCycle(endCycle).estimatedImpactTick(estimatedArrival)
-			.sourceActorKnown(true).sourceRef(source.getSourceRef()).sourceNpcId(source.getSourceNpcId())
-			.sourceWorldViewId(0).sourcePlane(0).sourceSceneKey("original-scene").worldViewId(0).plane(0)
-			.targetRef("player").targetsPlayer(true).targetWorldViewId(0).targetPlane(0)
-			.sourceHistory(ProjectileSourceHistory.builder().version(1).firstObservedSource(source).build()).build();
-		ObservedEvent launch = ObservedEvent.builder().tick(99).gameCycle(4690).sequence(10).type("PROJECTILE_FIRST_SEEN")
-			.sceneKey("original-scene").data(Collections.singletonMap("projectile", projectile)).build();
-		Map<String, Object> facts = new LinkedHashMap<>();
-		facts.put("amount", 43); facts.put("hitsplatType", 16);
-		ObservedEvent impact = ObservedEvent.builder().tick(100).gameCycle(hitCycle).sequence(20).type("HITSPLAT")
-			.actorRef("player").sceneKey(scene).data(facts).build();
-		DamageRecord hit = DamageRecord.builder().direction("RECEIVED").defenderRef("player").amount(43)
-			.hitsplatType(16).hitsplatTypeKnown(true).impactTick(100).observedCycle(hitCycle).observationSequence(20L)
-			.impactSceneKey(scene).impactWorldViewId(0).impactPlane(plane).attackerName("Unknown").attribution("UNKNOWN").build();
-		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(Collections.emptyList(),
-			Collections.emptyList(), Arrays.asList(launch, impact), Collections.singletonList(hit), Collections.emptyList(),
-			99, 100, 20, 1);
-		return ResolverV1Recording.resolve(com.tickreplaylogger.capture.ResolverTestCatalog.recording(window), new Gson())
-			.getEvents().getDamageEvents().get(0);
 	}
 
 	private static NPC actor(WorldPoint point, WorldArea area)

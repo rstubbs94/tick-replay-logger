@@ -16,9 +16,8 @@ public final class RuntimeCatalog
 
 	private RuntimeCatalog(JsonObject document)
 	{
-		this.document = document != null && Integer.valueOf(1).equals(ResolverV1.integer(document.get("schemaVersion")))
-			&& "retrospective_combat_mechanics".equals(ResolverV1.text(document, "purpose")) ? document
-				: new JsonObject();
+		this.document = document != null && "1".equals(text(document, "schemaVersion"))
+			&& "retrospective_combat_mechanics".equals(text(document, "purpose")) ? document : new JsonObject();
 	}
 
 	public static RuntimeCatalog load(Gson gson)
@@ -55,6 +54,12 @@ public final class RuntimeCatalog
 
 	public String id()
 	{
-		return ResolverV1.text(document, "catalogId");
+		return text(document, "catalogId");
+	}
+
+	private static String text(JsonObject object, String key)
+	{
+		JsonElement value = object.get(key);
+		return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
 	}
 }

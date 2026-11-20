@@ -251,7 +251,7 @@ public final class ObservedActorActivityResolver
 				.build();
 			distinct.put(identity, candidate);
 			sourceSamples.put(candidate.getKey(), source);
-			if (distinct.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (distinct.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			{
 				incomplete = true;
 				break;

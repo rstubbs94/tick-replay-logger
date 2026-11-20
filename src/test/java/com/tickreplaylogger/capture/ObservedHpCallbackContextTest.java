@@ -133,42 +133,4 @@ public class ObservedHpCallbackContextTest
 		assertFalse(LegacyObservedHpCallbackContext.normal(index.forHit(hit()), Collections.singletonList("UNOBSERVED_FACT"), Collections.singletonList("BETA")));
 	}
 
-	@Test public void captureReadsOnlyTheTwoScalarFactsAndKeepsFailureIndependent()
-	{
-		List<String> reads = new ArrayList<>(); Client client = scalarClient(false, false, reads);
-		Map<String, Object> facts = ObservedInventorySourceHints.captureNumericContext(client, 5, 100);
-		assertEquals(0, facts.get("leagueType")); assertEquals(Collections.emptyList(), facts.get("worldTypes"));
-		assertEquals(Arrays.asList("worldTypes", "LEAGUE_TYPE"), reads);
-		reads.clear(); Client failed = scalarClient(true, false, reads);
-		facts = ObservedInventorySourceHints.captureNumericContext(failed, 5, 100);
-		assertNull(facts.get("worldTypes")); assertEquals(0, facts.get("leagueType"));
-		assertEquals(Arrays.asList("worldTypes", "LEAGUE_TYPE"), reads);
-		assertFalse(LegacyObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
-		reads.clear(); Client missingLeague = scalarClient(false, true, reads);
-		facts = ObservedInventorySourceHints.captureNumericContext(missingLeague, 5, 100);
-		assertEquals(Collections.emptyList(), facts.get("worldTypes")); assertNull(facts.get("leagueType"));
-		assertEquals(Arrays.asList("worldTypes", "LEAGUE_TYPE"), reads);
-		assertFalse(LegacyObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
-	}
-
-	private static Client scalarClient(boolean missingWorldTypes, boolean missingLeague, List<String> reads)
-	{
-		return (Client) Proxy.newProxyInstance(Client.class.getClassLoader(), new Class<?>[] { Client.class }, (proxy, method, arguments) ->
-		{
-			if ("getWorldType".equals(method.getName()))
-			{
-				reads.add("worldTypes");
-				if (missingWorldTypes) throw new IllegalStateException("unavailable");
-				return EnumSet.noneOf(WorldType.class);
-			}
-			if ("getVarbitValue".equals(method.getName()) && arguments != null && arguments.length == 1
-				&& Integer.valueOf(VarbitID.LEAGUE_TYPE).equals(arguments[0]))
-			{
-				reads.add("LEAGUE_TYPE");
-				if (missingLeague) throw new IllegalStateException("unavailable");
-				return 0;
-			}
-			throw new AssertionError("Unexpected client read: " + method.getName());
-		});
-	}
 }

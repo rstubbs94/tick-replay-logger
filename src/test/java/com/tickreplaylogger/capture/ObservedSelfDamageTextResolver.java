@@ -216,7 +216,7 @@ public final class ObservedSelfDamageTextResolver
 					"Exact public system response and HP callback; item possession, accepted action, ordering and cause are not established"))
 				.build());
 			incomplete = true;
-			if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				break;
 		}
 		return new ObservedActorActivityResolver.Result(output, incomplete);

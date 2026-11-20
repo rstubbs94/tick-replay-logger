@@ -17,6 +17,15 @@
 - [x] Independently review capture lifetimes, atomic selection and published compatibility.
 - [x] Keep README and release wording focused on damage matching, export detail, telemetry and UI.
 
+## Generic resolver (branch rebuild/generic-resolver-20261120)
+
+- [x] Replace the resolver path with the generic data-driven resolver; keep capture, export and UI.
+- [x] Full suite green, thin-JAR API scan clean, production under 200,000 tokens (165,990).
+- [ ] Owner tests the new build in game (test client in `C:\Dev	ick-replay-test\generic-resolver-test`).
+- [ ] Run the official formatter on the new files.
+- [ ] Phase B: remove remaining capture-time classification and the unused resolver section of `runtime-mechanics.json`.
+- [ ] Website: show the plugin's resolution instead of re-resolving on import.
+
 ## Before resubmission
 
 - [ ] Reduce readable production source below the maintainer's 200,000-token limit, with headroom.

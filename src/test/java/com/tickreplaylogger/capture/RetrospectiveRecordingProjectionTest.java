@@ -9,21 +9,6 @@ import static org.junit.Assert.*;
 
 public class RetrospectiveRecordingProjectionTest
 {
-	@Test
-	public void unavailableResolverStillBuildsReplayRowsFromOriginalHits()
-	{
-		DamageRecord original = hit(1, 5, 7, null).toBuilder().attackerName("Unknown").attribution("UNKNOWN").build();
-		com.tickreplaylogger.model.TickData state = com.tickreplaylogger.model.TickData.builder().tickNumber(5).build();
-		DeathRecordingV2 raw = DeathRecordingV2.builder().journalTicks(Collections.singletonList(state))
-			.events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(original)).build()).build();
-		DeathRecordingV2 completed = new ResolverV1Recording(
-			ResolverTestCatalog.engine(new com.google.gson.JsonObject()), new com.google.gson.Gson(), raw).enrich(raw);
-		assertEquals(1, completed.getJournalTicks().get(0).getDamageEvents().size());
-		assertEquals(7, completed.getJournalTicks().get(0).getDamageEvents().get(0).getAmount());
-		assertEquals("Unknown", completed.getJournalTicks().get(0).getDamageEvents().get(0).getSource());
-		assertTrue(state.getDamageEvents().isEmpty());
-		assertNull(original.getSourceResolution());
-	}
 
 	private DamageRecord hit(long seq, int tick, int amount, String ref)
 	{

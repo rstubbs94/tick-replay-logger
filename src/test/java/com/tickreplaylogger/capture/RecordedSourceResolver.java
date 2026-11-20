@@ -167,7 +167,7 @@ public final class RecordedSourceResolver
 		if (retained != null)
 			for (Map<String, Object> raw : retained)
 			{
-				if (hypotheses.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (hypotheses.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				{
 					unidentified = true;
 					break;
@@ -350,7 +350,7 @@ public final class RecordedSourceResolver
 		unidentified |= self.isIncomplete();
 		for (Candidate candidate : self.getCandidates())
 		{
-			if (hypotheses.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (hypotheses.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			{
 				unidentified = true;
 				break;
@@ -361,7 +361,7 @@ public final class RecordedSourceResolver
 		ObservedMechanismResolver.Result bodyContacts = npcContactHints.resolve(hit);
 		for (ObservedMechanismResolver.Contribution contribution : bodyContacts.getContributions())
 		{
-			if (hypotheses.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (hypotheses.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			{
 				unidentified = true;
 				break;
@@ -372,7 +372,7 @@ public final class RecordedSourceResolver
 		ObservedMechanismResolver.Result endpoints = projectileEndpoints.resolve(hit);
 		for (ObservedMechanismResolver.Contribution contribution : endpoints.getContributions())
 		{
-			if (hypotheses.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (hypotheses.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			{
 				unidentified = true;
 				break;
@@ -384,7 +384,7 @@ public final class RecordedSourceResolver
 		for (Candidate candidate : activity.getCandidates())
 		{
 			unidentified = true; // Unclassified activity never closes the possible-source list.
-			if (hypotheses.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (hypotheses.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				break;
 			hypotheses
 				.add(activityHypothesis(candidate, activity.getSourceSamples().get(candidate.getKey()), hit, impact));

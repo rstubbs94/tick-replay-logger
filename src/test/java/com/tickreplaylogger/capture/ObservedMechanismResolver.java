@@ -86,7 +86,7 @@ public final class ObservedMechanismResolver
 		if (hit.getObservedHazardContacts() != null)
 			for (Map<String, Object> contact : hit.getObservedHazardContacts())
 			{
-				if (count++ >= MAX_OBSERVATIONS || output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (count++ >= MAX_OBSERVATIONS || output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					return new Result(output, true);
 				Primitive primitive = callback(contact);
 				if (primitive != null)
@@ -95,7 +95,7 @@ public final class ObservedMechanismResolver
 		if (impact.getHazards() != null)
 			for (HazardState hazard : impact.getHazards())
 			{
-				if (count++ >= MAX_OBSERVATIONS || output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (count++ >= MAX_OBSERVATIONS || output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					return new Result(output, true);
 				Primitive primitive = snapshot(hazard, impact, scene);
 				if (primitive != null)
@@ -265,7 +265,7 @@ public final class ObservedMechanismResolver
 						if (eligible && (!onset || newObservedContact))
 						{
 							addHistorical(output, rule, source, frame, hit);
-							if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+							if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 								return true;
 						}
 						else if (eligible && onset && (!previousComplete || !prior.contains(identity)))
@@ -453,7 +453,7 @@ public final class ObservedMechanismResolver
 			output.add(new Contribution(LegacyConstraintOracle.Hypothesis.builder().candidate(candidate)
 				.mechanism(rule.getDelivery()).causalAssociationOnly(true).build(), source.kind, source.id,
 				definitionBound));
-			if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				return true;
 		}
 		return unknown;

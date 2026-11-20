@@ -111,7 +111,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	private final IdentityHashMap<Projectile, ProjectileState> projectileCallbackStates = new IdentityHashMap<>();
 	private final IdentityHashMap<Projectile, Map<String, Object>> projectileLaunchObservations = new IdentityHashMap<>();
 	private final ProjectileSourceTracker projectileSourceTracker = new ProjectileSourceTracker();
-	private SourceAssociationNpcIndex sourceAssociationNpcs = new SourceAssociationNpcIndex(null);
 	private final Map<Long, RetainedProjectile> retainedProjectiles = new LinkedHashMap<>();
 	private List<ProjectileState> settledProjectileSamples;
 	private long nextProjectileId;
@@ -433,7 +432,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	// Track pending self-damage from potions (divine, overload, etc.)
 	// This prevents double-counting when the hitsplat fires on the next tick
 	private String pendingSelfDamageSource;
-	private final SelfDamageInputs selfDamageInputs = new SelfDamageInputs();
 	private Scene selfDamageScopeScene;
 	private WorldView selfDamageScopeView;
 	private boolean selfDamageScopeKnown;
@@ -467,7 +465,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		recordingStorage = new RecordingStorage(config.maxDeathsToStore(), gson, getPluginDirectory());
 		captureService = new WorldCaptureService(surfaceObservationIds);
 		damageMap = DamageMap.load(gson);
-		sourceAssociationNpcs = SourceAssociationNpcIndex.load(gson);
 		captureService.setDamageMap(damageMap);
 		worldRecorder = new WorldSnapshotRecorder(config.ticksToRecord(), gson);
 		if (replacingCapture && clientThread != null)
@@ -816,7 +813,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		manuallyDeactivatedPrayers.clear();
 		lastSpecialAttackPercent = -1;
 		pendingSelfDamageSource = null;
-		selfDamageInputs.clear();
 		selfDamageScopeKnown = false;
 		projectilesThisTick.clear();
 		currentSceneKey = null;
@@ -1126,25 +1122,8 @@ public class TickReplayLoggerPlugin extends Plugin
 				callbackIssues.add("impactPrayer." + issue.getKey() + ": " + issue.getValue());
 			}
 		}
-		Map<String, Object> inventorySourceObservation = context.ready && localPlayer != null && actor == localPlayer
-			&& config.trackDamageReceived() && config.captureWorldSnapshots() && damageMap != null
-			&& damageMap.catalog().inventorySourceHints().accepts(hitsplatType, damage)
-				? damageMap.catalog().inventorySourceHints().capture(client, eventTick(), context.cycle)
-				: null;
-		// Static mode qualification belongs to this actual HP callback, not the settled tick.
-		// Reuse the inventory capture's identical two scalar reads when it already needed them.
-		Object numericContext = null;
-		if (context.ready && localPlayer != null && actor == localPlayer && config.trackDamageReceived()
-			&& ("HP".equals(surface) || "BLOCK".equals(surface)))
-		{
-			numericContext = inventorySourceObservation != null
-				&& inventorySourceObservation.get("numericContext") instanceof Map
-					? inventorySourceObservation.get("numericContext")
-					: ObservedInventorySourceHints.captureNumericContext(client, eventTick(), context.cycle);
-		}
 		long sequence = observe("HITSPLAT", actor, null,
-			data("actorState", actorState, "inventorySourceObservation", inventorySourceObservation, "numericContext",
-				numericContext, "localPrayerState", callbackPrayer == null ? null : callbackPrayer.toState(),
+			data("actorState", actorState, "localPrayerState", callbackPrayer == null ? null : callbackPrayer.toState(),
 				"receiverKind", actor instanceof NPC ? "NPC" : actor instanceof Player ? "PLAYER" : "ACTOR",
 				"resourceSurface", surface == null ? "UNCLASSIFIED" : surface, "possibleOutcomeSurfaces",
 				possibleSurfaces, "attributionCaptureStatus",
@@ -1967,21 +1946,6 @@ public class TickReplayLoggerPlugin extends Plugin
 			}
 			int size = definition.getSize(), targetX = nativeBaseX() + pl.getSceneX(),
 				targetY = nativeBaseY() + pl.getSceneY();
-			// Presence is a recorded source alternative, not contact, activation or an observed attack.
-			if (witnesses != null && !gameTickInProgress && sourceAssociationNpcs.contains(definition.getId())
-				&& contactView != null && nativeScene() != null)
-			{
-				Map<String, Object> witness = data("kind", "NPC_EMITTER", "npcId", definition.getId(), "baseNpcId",
-					npc.getId(), "actorRef", actorRef(npc), "observedName", npc.getName(), "combatLevel",
-					npc.getCombatLevel(), "worldX", position.getX(), "worldY", position.getY(), "plane",
-					position.getPlane(), "observedSize", size, "worldViewId", contactView.getId(), "sceneKey",
-					currentSceneKey, "scopeEvidence", "NPC_WORLD_VIEW_READ", "observedCycle", client.getGameCycle(),
-					"observationStage", "HITSPLAT_CALLBACK", "sourceEligibility", "DECLARED_SOURCE_ASSOCIATION");
-				if (!witnesses.contains(witness))
-				{
-					witnesses.add(witness);
-				}
-			}
 			boolean coherentFootprint = false;
 			if (size == 1)
 			{
@@ -2622,11 +2586,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		try
 		{
 			ensureSelfDamageScope();
-			if (itemId != null)
-			{
-				selfDamageInputs.observe(damageMap == null ? null : damageMap.catalog(), itemId, option, eventTick(),
-					sequence);
-			}
 		}
 		catch (RuntimeException unavailable)
 		{
@@ -2846,14 +2805,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 
 			// Special attack energy is stored as 0-1000 (divide by 10 for percentage)
-			if (previousSpecPercent >= 0 && currentSpecPercent < previousSpecPercent)
-			{
-				ensureSelfDamageScope();
-				ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
-				Item weapon = equipment == null ? null : equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
-				selfDamageInputs.observeResourceDecrease(damageMap == null ? null : damageMap.catalog(),
-					weapon == null ? -1 : weapon.getId(), eventTick(), sequence);
-			}
 			if (previousSpecPercent >= 0 && currentSpecPercent < previousSpecPercent && config.trackSpecialAttacks())
 			{
 				// Special attack was used
@@ -3345,7 +3296,6 @@ public class TickReplayLoggerPlugin extends Plugin
 			|| selfDamageScopeView != currentView || selfDamageScopeBaseX != baseX || selfDamageScopeBaseY != baseY
 			|| selfDamageScopePlane != plane)
 		{
-			selfDamageInputs.clear();
 			pendingSelfDamageSource = null;
 			selfDamageScopeEpoch = causalSceneEpoch;
 			selfDamageScopeScene = currentScene;
@@ -3411,9 +3361,6 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		List<Map<String, Object>> witnesses = new ArrayList<>(hit.sourceWitnesses);
-		Object inventory = hit.original.getData().get("inventorySourceObservation");
-		@SuppressWarnings("unchecked")
-		Map<String, Object> inventoryObservation = inventory instanceof Map ? (Map<String, Object>) inventory : null;
 		Object actor = hit.original.getData().get("actorState");
 		Object graphics = actor instanceof Map ? ((Map<?, ?>) actor).get("graphicsState") : null;
 		DamageEvent.DamageType type = DamageEvent.DamageType
@@ -3432,7 +3379,6 @@ public class TickReplayLoggerPlugin extends Plugin
 			try
 			{
 				ensureSelfDamageScope();
-				witnesses.addAll(selfDamageInputs.candidates(currentGameTick));
 				Map<String, Object> consumption = selfConsumptionObservation();
 				if (consumption != null)
 				{
@@ -3459,11 +3405,6 @@ public class TickReplayLoggerPlugin extends Plugin
 				witness.put("observedCycle", projectile.latestObservation.getObservedCycle());
 				witnesses.add(Collections.unmodifiableMap(witness));
 			}
-		}
-		if (damageMap != null && inventoryObservation != null)
-		{
-			witnesses.addAll(
-				damageMap.catalog().inventorySourceHints().witnesses(inventoryObservation, hit.original.getSequence()));
 		}
 		WorldPoint position = hit.position;
 		DamageRecord record = DamageRecord.builder().direction(hit.hpOutcomeKnown ? "RECEIVED" : "RESOURCE_IMPACT")

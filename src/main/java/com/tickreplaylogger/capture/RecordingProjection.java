@@ -100,7 +100,7 @@ final class RecordingProjection
 		}
 		int tick = recording.getMeta().getDeathTick();
 		List<DamageRecord> alternatives = new ArrayList<>();
-		List<SourceResolution.Candidate> possible = new ArrayList<>(), excluded = new ArrayList<>();
+		List<SourceResolution> resolutions = new ArrayList<>();
 		Set<String> sources = new LinkedHashSet<>();
 		boolean unlinked = false;
 		if (hits != null)
@@ -113,7 +113,10 @@ final class RecordingProjection
 					continue;
 				}
 				alternatives.add(hit);
-				append(hit.getSourceResolution(), possible, excluded);
+				if (hit.getSourceResolution() != null)
+				{
+					resolutions.add(hit.getSourceResolution());
+				}
 				if (hit.getAttackerRef() != null && !hit.getAttackerRef().trim().isEmpty())
 				{
 					sources.add("actor:" + hit.getAttackerRef());
@@ -145,8 +148,7 @@ final class RecordingProjection
 			.fatalHitBasis(unresolved || fatal == null ? basis
 				: alternatives.size() > 1 ? "LAST_POSITIVE_RECEIVED_CALLBACK_IN_DEATH_TICK"
 					: "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK")
-			.sourceResolution(SourceEvidenceResolver.project(possible, excluded, true, catalogId,
-				"RECORDED_RESOLVER_V1_FATAL_ALTERNATIVES"))
+			.sourceResolution(DamageResolver.merge(resolutions, catalogId))
 			.reactable(fatal == null || alternatives.size() > 1 ? null
 				: "IMPACT".equals(fatal.getDetermination()) ? Boolean.TRUE
 					: "LAUNCH".equals(fatal.getDetermination()) ? Boolean.FALSE : null)
@@ -232,22 +234,6 @@ final class RecordingProjection
 		}
 		DamageRecord result = applyAnnotations(original, projected);
 		return result.equals(original) ? original : result;
-	}
-
-	private static void append(SourceResolution resolution, List<SourceResolution.Candidate> possible,
-		List<SourceResolution.Candidate> excluded)
-	{
-		if (resolution != null)
-		{
-			if (resolution.getCandidates() != null)
-			{
-				possible.addAll(resolution.getCandidates());
-			}
-			if (resolution.getExcludedCandidates() != null)
-			{
-				excluded.addAll(resolution.getExcludedCandidates());
-			}
-		}
 	}
 
 	/** Applies only derived display fields; the original callback and impact samples stay on the record. */

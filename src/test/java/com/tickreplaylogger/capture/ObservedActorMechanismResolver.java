@@ -265,17 +265,17 @@ public final class ObservedActorMechanismResolver
 		ObservedMechanismResolver.Result lifecycle = lifecycle(hit);
 		output.addAll(lifecycle.getContributions());
 		unknown |= lifecycle.isUnidentifiedPossible();
-		if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+		if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			return new ObservedMechanismResolver.Result(Collections.unmodifiableList(output), true);
 		ObservedMechanismResolver.Result retained = lifecycle(hit, true);
 		for (ObservedMechanismResolver.Contribution contribution : retained.getContributions())
 		{
 			output.add(contribution);
-			if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				return new ObservedMechanismResolver.Result(Collections.unmodifiableList(output), true);
 		}
 		unknown |= retained.isUnidentifiedPossible();
-		if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+		if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 			return new ObservedMechanismResolver.Result(Collections.unmodifiableList(output), true);
 		int work = 0;
 		for (Cue cue : cues)
@@ -349,7 +349,7 @@ public final class ObservedActorMechanismResolver
 					.candidate(candidate).mechanism(rule.getDelivery()).damageComponent(rule.getComponent())
 					.causalAssociationOnly(true).build();
 				output.add(new ObservedMechanismResolver.Contribution(hypothesis, "NPC", cue.id, definition));
-				if (output.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (output.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					return new ObservedMechanismResolver.Result(output, true);
 			}
 		}
@@ -501,10 +501,10 @@ public final class ObservedActorMechanismResolver
 				Integer earlierMaximum = maxima.get(key), maximum = rule.getPerHitMaximum();
 				maxima.put(key, previous == null ? maximum
 					: earlierMaximum == null || maximum == null ? null : Math.max(earlierMaximum, maximum));
-				if (grouped.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+				if (grouped.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 					break;
 			}
-			if (grouped.size() >= SourceEvidenceResolver.MAX_HYPOTHESES)
+			if (grouped.size() >= LegacyConstraintOracle.MAX_HYPOTHESES)
 				break;
 		}
 		for (Map.Entry<String, SourceResolution.Candidate> entry : grouped.entrySet())

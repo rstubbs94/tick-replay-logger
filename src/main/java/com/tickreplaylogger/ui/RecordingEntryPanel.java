@@ -133,7 +133,7 @@ public class RecordingEntryPanel extends JPanel
 		titleRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		titleRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.preparedTitle(recording, damageMap);
+		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.title(recording);
 		boolean encounterTitle = !java.util.Objects.equals(displayName, recording.getKillerName());
 		JLabel titleLabel = new JLabel("#" + recordingNumber + ": " + DisplayFormat.humanize(displayName));
 		if (encounterTitle)

@@ -24,7 +24,6 @@
  */
 package com.tickreplaylogger.capture;
 
-import static net.runelite.client.util.Text.removeTags;
 import com.google.gson.*;
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.DeathRecordingV2;
@@ -34,10 +33,8 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPOutputStream;
 import com.google.gson.stream.*;
-import lombok.extern.slf4j.Slf4j;
 
-/** Completes the viewer payload from the original saved journal without rewriting old captures. */
-@Slf4j
+/** Serializes completed captures once; historical payloads are opaque best-effort input. */
 public final class RecordingExport
 {
 	private RecordingExport()
@@ -47,29 +44,43 @@ public final class RecordingExport
 	private static final int COMPRESS_AT_BYTES = 1024 * 1024;
 	private static final int MAX_EXPANDED_BYTES = 64 * 1024 * 1024;
 
-	/** Lossless clipboard transport; {@link #forViewer} remains ordinary JSON. */
 	public static String forClipboard(TickRecording recording, Gson gson)
 	{
-		String rich = recording.getRichExportJson();
-		if (rich != null && rich.length() >= COMPRESS_AT_BYTES / 3 && latestPayload(rich))
+		if (recording.getPreparedExport() != null)
 		{
-			try
-			{
-				Completion completed = prepare(recording, gson);
-				String encoded = compress(out -> writeCompleted(recording, gson, completed, out), gson, rich.length());
-				if (encoded != null)
-				{
-					return encoded;
-				}
-			}
-			catch (IOException | RuntimeException invalid)
-			{
-				/* Preserve the ordinary export fallback below. */ }
+			String encoded = compress(out -> gson.toJson(recording.getPreparedExport(), out), gson, COMPRESS_AT_BYTES);
+			return encoded == null ? forViewer(recording, gson) : encoded;
 		}
 		return clipboardTransport(forViewer(recording, gson), gson);
 	}
 
-	static String clipboardTransport(String plain, Gson gson)
+	public static String forViewer(TickRecording recording, Gson gson)
+	{
+		if (recording.getPreparedExport() != null)
+		{
+			return gson.toJson(recording.getPreparedExport());
+		}
+		String historical = recording.getRichExportJson();
+		if (historical == null || historical.isEmpty())
+		{
+			return gson.toJson(recording);
+		}
+		try (JsonReader reader = new JsonReader(new StringReader(historical)))
+		{
+			if (reader.peek() != JsonToken.BEGIN_OBJECT)
+			{
+				return gson.toJson(recording);
+			}
+			reader.skipValue();
+			return reader.peek() == JsonToken.END_DOCUMENT ? historical : gson.toJson(recording);
+		}
+		catch (IOException | RuntimeException invalid)
+		{
+			return gson.toJson(recording);
+		}
+	}
+
+	public static String clipboardTransport(String plain, Gson gson)
 	{
 		if (plain.length() < COMPRESS_AT_BYTES / 3 || !latestPayload(plain))
 		{
@@ -172,379 +183,4 @@ public final class RecordingExport
 		}
 	}
 
-	public static String forViewer(TickRecording recording, Gson gson)
-	{
-		String rich = recording.getRichExportJson();
-		if (rich == null || rich.isEmpty())
-		{
-			return gson.toJson(recording);
-		}
-		try
-		{
-			if (!latestPayload(rich))
-			{
-				try (JsonReader reader = new JsonReader(new StringReader(rich)))
-				{
-					if (reader.peek() != JsonToken.BEGIN_OBJECT)
-					{
-						throw new IOException("Invalid recording object");
-					}
-					reader.skipValue();
-					if (reader.peek() != JsonToken.END_DOCUMENT)
-					{
-						throw new IOException("Trailing export data");
-					}
-				}
-				return rich;
-			}
-			Completion completed = prepare(recording, gson);
-			StringWriter out = new StringWriter(rich.length());
-			writeCompleted(recording, gson, completed, out);
-			return out.toString();
-		}
-		catch (IOException | RuntimeException invalid)
-		{
-			log.warn("Cannot complete rich export; returning the original journal", invalid);
-			return gson.toJson(recording);
-		}
-	}
-
-	private static final class Completion
-	{
-		JsonArray damage = new JsonArray(), actions = new JsonArray();
-		JsonObject summary = new JsonObject();
-		JsonElement journal;
-		JsonObject enrichment;
-		boolean recovered = true, observations;
-	}
-
-	private static Completion prepare(TickRecording recording, Gson gson) throws IOException
-	{
-		Completion completed = new Completion();
-		try (JsonReader reader = new JsonReader(new StringReader(recording.getRichExportJson())))
-		{
-			reader.beginObject();
-			while (reader.hasNext())
-			{
-				switch (reader.nextName())
-				{
-				case "journalTicks":
-					completed.recovered = false;
-					reader.skipValue();
-					break;
-				case "summary":
-					completed.summary = gson.fromJson(reader, JsonObject.class);
-					if (completed.summary == null)
-					{
-						throw new IOException("Null summary");
-					}
-					break;
-				case "events":
-					reader.beginObject();
-					while (reader.hasNext())
-					{
-						switch (reader.nextName())
-						{
-						case "damageEvents":
-							completed.damage = gson.fromJson(reader, JsonArray.class);
-							if (completed.damage == null)
-							{
-								completed.damage = new JsonArray();
-							}
-							break;
-						case "playerActions":
-							completed.actions = gson.fromJson(reader, JsonArray.class);
-							if (completed.actions == null)
-							{
-								completed.actions = new JsonArray();
-							}
-							break;
-						case "observations":
-							completed.observations = true;
-							reader.skipValue();
-							break;
-						default:
-							reader.skipValue();
-						}
-					}
-					reader.endObject();
-					break;
-				default:
-					reader.skipValue();
-				}
-			}
-			reader.endObject();
-			if (reader.peek() != JsonToken.END_DOCUMENT)
-			{
-				throw new IOException("Trailing export data");
-			}
-		}
-		JsonArray damage = completed.damage, actions = completed.actions;
-		Map<String, Integer> knownActions = new HashMap<>(), knownHits = new HashMap<>();
-		for (JsonElement value : actions)
-		{
-			count(knownActions, actionKey(value.getAsJsonObject()));
-		}
-		for (JsonElement value : damage)
-		{
-			JsonObject hit = value.getAsJsonObject();
-			if ("DEALT".equals(text(hit, "direction")))
-			{
-				count(knownHits, hitKey(hit));
-			}
-		}
-		Map<String, Integer> seenActions = new HashMap<>(), seenHits = new HashMap<>();
-		int totalDealt = 0;
-		for (TickData tick : recording.getTicks())
-		{
-			for (PlayerAction action : tick.getPlayerActions())
-			{
-				JsonObject row = new JsonObject();
-				row.addProperty("tick", tick.getTickNumber());
-				row.addProperty("type", action.getType().name());
-				row.addProperty("detail", action.getDescription());
-				if (action.getTarget() != null)
-				{
-					row.addProperty("target", action.getTarget());
-				}
-				if (action.getItemName() != null)
-				{
-					row.addProperty("itemName", action.getItemName());
-				}
-				row.addProperty("observationKind", "LEGACY_JOURNAL");
-				String key = actionKey(row);
-				if (count(seenActions, key) > knownActions.getOrDefault(key, 0))
-				{
-					actions.add(row);
-				}
-			}
-			for (DamageEvent hit : tick.getDamageEvents())
-			{
-				if (hit.getDirection() != DamageEvent.DamageDirection.DEALT)
-				{
-					continue;
-				}
-				totalDealt += hit.getAmount();
-				JsonObject row = new JsonObject();
-				row.addProperty("direction", "DEALT");
-				row.addProperty("ownership", "LOCAL_PLAYER");
-				row.addProperty("impactTick", tick.getTickNumber());
-				row.addProperty("launchTick", tick.getTickNumber());
-				row.addProperty("launchTickEstimated", true);
-				row.addProperty("launchStateEvidence", "UNAVAILABLE");
-				row.addProperty("attackerRef", "player");
-				row.addProperty("defenderName", hit.getSource());
-				row.addProperty("amount", hit.getAmount());
-				row.addProperty("damageType",
-					hit.getDamageType() == null ? "unknown" : hit.getDamageType().name().toLowerCase(Locale.ROOT));
-				row.addProperty("damageTypeEvidence", "LEGACY_JOURNAL");
-				row.addProperty("attribution", "UNKNOWN");
-				row.addProperty("attributionEvidence", "LEGACY_JOURNAL");
-				row.addProperty("determination", "UNKNOWN");
-				String key = hitKey(row);
-				if (count(seenHits, key) > knownHits.getOrDefault(key, 0))
-				{
-					damage.add(row);
-				}
-			}
-		}
-		completed.journal = gson.toJsonTree(recording.getTicks());
-		completed.summary.addProperty("totalDamageDealtInBuffer", totalDealt);
-		if (completed.recovered)
-		{
-			completed.enrichment = new JsonObject();
-			completed.enrichment.addProperty("sourceSchemaVersion", DeathRecordingV2.LATEST_SCHEMA_VERSION);
-			completed.enrichment.addProperty("journalRecovered", true);
-			completed.enrichment.addProperty("historicalObservationsUnavailable", !completed.observations);
-		}
-		return completed;
-	}
-
-	private static void writeCompleted(TickRecording recording, Gson gson, Completion completed, Writer output)
-		throws IOException
-	{
-		try (JsonReader reader = new JsonReader(new StringReader(recording.getRichExportJson())))
-		{
-			JsonWriter writer = gson.newJsonWriter(output);
-			writer.setHtmlSafe(gson.htmlSafe());
-			writer.setSerializeNulls(true);
-			boolean events = false, journal = false, summary = false, enrichment = false;
-			reader.beginObject();
-			writer.beginObject();
-			while (reader.hasNext())
-			{
-				String name = reader.nextName();
-				writer.name(name);
-				switch (name)
-				{
-				case "events":
-					events = true;
-					writeEvents(reader, writer, gson, completed);
-					break;
-				case "journalTicks":
-					journal = true;
-					reader.skipValue();
-					writeValue(writer, gson, completed.journal);
-					break;
-				case "summary":
-					summary = true;
-					reader.skipValue();
-					writeValue(writer, gson, completed.summary);
-					break;
-				case "exportEnrichment":
-					enrichment = true;
-					if (completed.recovered)
-					{
-						reader.skipValue();
-						writeValue(writer, gson, completed.enrichment);
-					}
-					else
-					{
-						copy(reader, writer);
-					}
-					break;
-				default:
-					copy(reader, writer);
-				}
-			}
-			reader.endObject();
-			if (!events)
-			{
-				writer.name("events").beginObject();
-				writer.name("damageEvents");
-				writeValue(writer, gson, completed.damage);
-				writer.name("playerActions");
-				writeValue(writer, gson, completed.actions);
-				writer.endObject();
-			}
-			if (!journal)
-			{
-				writer.name("journalTicks");
-				writeValue(writer, gson, completed.journal);
-			}
-			if (!summary)
-			{
-				writer.name("summary");
-				writeValue(writer, gson, completed.summary);
-			}
-			if (completed.recovered && !enrichment)
-			{
-				writer.name("exportEnrichment");
-				writeValue(writer, gson, completed.enrichment);
-			}
-			writer.endObject();
-			writer.flush();
-		}
-	}
-
-	private static void writeEvents(JsonReader reader, JsonWriter writer, Gson gson, Completion completed)
-		throws IOException
-	{
-		boolean damage = false, actions = false;
-		reader.beginObject();
-		writer.beginObject();
-		while (reader.hasNext())
-		{
-			String name = reader.nextName();
-			writer.name(name);
-			if (name.equals("damageEvents"))
-			{
-				damage = true;
-				reader.skipValue();
-				writeValue(writer, gson, completed.damage);
-			}
-			else if (name.equals("playerActions"))
-			{
-				actions = true;
-				reader.skipValue();
-				writeValue(writer, gson, completed.actions);
-			}
-			else
-			{
-				copy(reader, writer);
-			}
-		}
-		reader.endObject();
-		if (!damage)
-		{
-			writer.name("damageEvents");
-			writeValue(writer, gson, completed.damage);
-		}
-		if (!actions)
-		{
-			writer.name("playerActions");
-			writeValue(writer, gson, completed.actions);
-		}
-		writer.endObject();
-	}
-
-	private static void writeValue(JsonWriter writer, Gson gson, JsonElement value) throws IOException
-	{
-		gson.getAdapter(JsonElement.class).write(writer, value);
-	}
-
-	/** Standard Gson token forwarding keeps number lexemes, nulls and unknown channels. */
-	private static void copy(JsonReader reader, JsonWriter writer) throws IOException
-	{
-		switch (reader.peek())
-		{
-		case BEGIN_OBJECT:
-			reader.beginObject();
-			writer.beginObject();
-			while (reader.hasNext())
-			{
-				writer.name(reader.nextName());
-				copy(reader, writer);
-			}
-			reader.endObject();
-			writer.endObject();
-			break;
-		case BEGIN_ARRAY:
-			reader.beginArray();
-			writer.beginArray();
-			while (reader.hasNext())
-			{
-				copy(reader, writer);
-			}
-			reader.endArray();
-			writer.endArray();
-			break;
-		case STRING:
-			writer.value(reader.nextString());
-			break;
-		case NUMBER:
-			writer.jsonValue(reader.nextString());
-			break;
-		case BOOLEAN:
-			writer.value(reader.nextBoolean());
-			break;
-		case NULL:
-			reader.nextNull();
-			writer.nullValue();
-			break;
-		default:
-			throw new IOException("Invalid export token");
-		}
-	}
-
-	private static String text(JsonObject row, String key)
-	{
-		return !row.has(key) || row.get(key).isJsonNull() ? "" : row.get(key).getAsString();
-	}
-
-	private static String actionKey(JsonObject row)
-	{
-		return text(row, "tick") + "\t" + text(row, "type") + "\t" + text(row, "detail");
-	}
-
-	private static String hitKey(JsonObject row)
-	{
-		return text(row, "impactTick") + "\t" + text(row, "amount") + "\t"
-			+ removeTags(text(row, "defenderName")).trim();
-	}
-
-	private static int count(Map<String, Integer> counts, String key)
-	{
-		return counts.merge(key, 1, Integer::sum);
-	}
 }

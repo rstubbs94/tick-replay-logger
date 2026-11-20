@@ -1,10 +1,9 @@
 # Standard-build and single-resolver consolidation plan
 
-Status: correctness checks pass on `refactor/direct-observation-resolver-20261119`;
-the review-size gate remains open. The formatted production code is 222,270
-tokens against the 200,000 limit. The full regression run passes 1,189 tests,
-and the standard-build/API checks pass after removing a test-only constructor.
-The public candidate is unchanged until all review gates pass.
+Status, 20 November: the continuous-capture refactor passes 1,197 checks and
+the standard build/API checks. Production source measures 215,446 tokens;
+the strict below-200,000 review gate remains open. The public candidate is
+unchanged. See HANDOFF.md for the current checkpoint and validation scope.
 
 ## Objective and release gates
 
@@ -45,23 +44,25 @@ It must not contain separate handlers for individual bosses or NPC IDs.
 
 ```mermaid
 flowchart LR
-    A[Recorded RuneLite observations] --> B[Shared evidence adapter]
+    A[Bounded original observations] --> L[Raw Live View]
+    A --> W[Atomically frozen death or manual capture]
+    W --> B[Shared evidence adapter]
     R[Runtime reference manifest] --> B
     B --> C[One generic resolver]
     D[Versioned runtime rules catalog] --> C
     C --> E[Post-event source annotations]
-    A --> F[Preserved raw facts]
-    F --> G[Live View and local replay]
+    W --> F[Preserved raw facts]
+    F --> G[Saved replay]
     E --> G
     F --> H[Death and snapshot exports]
     E --> H
 ```
 
-One window index reads the original observations, one evaluator matches the
-rules, and one projection supplies the results. Live View, death completion,
-snapshots and exports use this path. Different windows may require recomputation; this
-does not justify separate matching implementations. Identical observations,
-window boundaries and data versions must produce equivalent results.
+Live View renders original observations without attribution. Death and manual
+capture freeze one window, then a background worker indexes it, runs the one
+evaluator and prepares saved replay/export. The journal is a generated view;
+it is not a second recording store. Identical observations, window boundaries
+and data versions must produce equivalent results.
 
 Raw facts remain usable independently of attribution. Missing rules preserve
 observed API source evidence and the existing alternatives/Unknown behaviour.

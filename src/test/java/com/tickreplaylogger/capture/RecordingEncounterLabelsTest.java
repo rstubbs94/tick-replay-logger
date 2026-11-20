@@ -25,22 +25,14 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.TickData;
-import com.tickreplaylogger.model.TickRecording;
-import com.tickreplaylogger.model.world.NpcState;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.model.world.*;
 import com.tickreplaylogger.ui.RecordingEntryPanel;
 import com.tickreplaylogger.ui.playback.PlaybackPanel;
-import java.awt.Component;
-import java.awt.Container;
-import java.util.Collections;
-import javax.swing.JLabel;
-import javax.swing.SwingUtilities;
-import org.junit.Test;
-import org.junit.BeforeClass;
-import org.junit.AfterClass;
+import java.awt.*;
+import java.util.*;
+import javax.swing.*;
+import org.junit.*;
 import static org.junit.Assert.*;
 
 public class RecordingEncounterLabelsTest
@@ -52,222 +44,121 @@ public class RecordingEncounterLabelsTest
 
 	private NpcState boss(int id, String name, int level, int size)
 	{
-		return NpcState.builder().npcId(id).name(name).combatLevel(level).size(size).normalWorldContextObserved(true)
-			.build();
+		return NpcState.builder().npcId(id).name(name).combatLevel(level).size(size).normalWorldContextObserved(true).build();
+	}
+
+	private DeathRecordingV2 raw(NpcState... npcs)
+	{
+		DamageRecord fatal = DamageRecord.builder().amount(43).impactTick(100).attackerName("Unknown").attribution("UNKNOWN").build();
+		return DeathRecordingV2.builder().schemaVersion(DeathRecordingV2.LATEST_SCHEMA_VERSION).meta(DeathRecordingV2.Meta.builder().referenceCatalogId(MAP.catalog().id()).deathTick(100).build())
+			.summary(DeathRecordingV2.Summary.builder().killerName("Unknown").killerConfidence("UNKNOWN")
+				.killerBasis("SELECTED_RECORD_SOURCE_ONLY").fatalHit(fatal).fatalHitCandidates(Collections.singletonList(fatal))
+				.fatalHitBasis("UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK").build())
+			.ticks(Collections.singletonList(WorldSnapshot.builder().tick(100).npcs(Arrays.asList(npcs)).build()))
+			.journalTicks(Collections.singletonList(TickData.builder().tickNumber(100).currentHp(0).maxHp(99)
+				.damageEvents(Collections.singletonList(DamageEvent.received(43, DamageEvent.DamageType.UNKNOWN, "Unknown", "UNKNOWN", "UNKNOWN"))).build())).build();
 	}
 
 	private TickRecording recording(NpcState... npcs)
 	{
-		JsonObject root = new JsonObject();
-		root.addProperty("schemaVersion", "1.3");
-		JsonObject meta = new JsonObject();
-		meta.addProperty("referenceCatalogId", MAP.catalog().id());
-		meta.addProperty("deathTick", 100);
-		root.add("meta", meta);
-		JsonObject summary = new JsonObject();
-		summary.addProperty("killerName", "Unknown");
-		summary.addProperty("killerConfidence", "UNKNOWN");
-		summary.addProperty("fatalHitBasis", "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK");
-		JsonObject fatal = new JsonObject();
-		fatal.addProperty("amount", 43);
-		fatal.addProperty("impactTick", 100);
-		fatal.addProperty("attackerName", "Unknown");
-		fatal.addProperty("attribution", "UNKNOWN");
-		fatal.addProperty("attributionEvidence", "HISTORY_WITHOUT_CURRENT_HIT_EVIDENCE");
-		summary.add("fatalHit", fatal);
-		root.add("summary", summary);
-		JsonObject frame = new JsonObject();
-		frame.addProperty("tick", 100);
-		frame.add("npcs", GSON.toJsonTree(npcs));
-		JsonArray ticks = new JsonArray();
-		ticks.add(frame);
-		root.add("ticks", ticks);
-		TickData journal = TickData.builder().tickNumber(100).currentHp(0).maxHp(99).damageEvents(Collections
-			.singletonList(DamageEvent.received(43, DamageEvent.DamageType.UNKNOWN, "Unknown", "UNKNOWN", "UNKNOWN")))
-			.build();
-		return TickRecording.builder().killerName("Unknown").killerConfidence("UNKNOWN")
-			.killerBasis("SELECTED_RECORD_SOURCE_ONLY").fatalHitBasis("UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK")
-			.ticks(Collections.singletonList(journal)).finalHp(0).location("Recorded encounter")
-			.richExportJson(GSON.toJson(root)).build();
+		return TickRecording.fromPrepared(RecordingEncounterLabels.prepare(raw(npcs), MAP), 1, "Recorded encounter", true);
 	}
 
-	@Test
-	public void recordedBossContextDoesNotRewriteAnUnknownFatalSource()
+	@Test public void recordedBossContextDoesNotRewriteAnUnknownFatalSource()
 	{
-		TickRecording r = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		String before = GSON.toJson(r);
-		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(r, MAP, GSON));
-		assertEquals("Unknown", r.getKillerName());
-		assertEquals("UNKNOWN", r.getKillerConfidence());
-		assertEquals("SELECTED_RECORD_SOURCE_ONLY", r.getKillerBasis());
-		assertEquals(before, GSON.toJson(r));
+		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
+		String before = GSON.toJson(recording);
+		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(recording));
+		assertEquals("Unknown", recording.getKillerName());
+		assertEquals("UNKNOWN", recording.getKillerConfidence());
+		assertEquals("SELECTED_RECORD_SOURCE_ONLY", recording.getKillerBasis());
+		assertEquals("Unknown", recording.getPreparedExport().getSummary().getFatalHit().getAttackerName());
+		assertEquals(before, GSON.toJson(recording));
 	}
 
-	@Test
-	public void multipleBossesMissingOrContradictoryIdentityCannotSupplyAnEncounterTitle()
+	@Test public void multipleMissingOrContradictoryIdentitiesCannotSupplyAnEncounterTitle()
 	{
-		assertEquals("Unknown", RecordingEncounterLabels
-			.title(recording(boss(9036, "Corrupted Hunllef", 894, 5), boss(2042, "Zulrah", 725, 5)), MAP, GSON));
-		assertEquals("Unknown",
-			RecordingEncounterLabels.title(recording(boss(9036, "Different observed NPC", 894, 5)), MAP, GSON));
-		NpcState unavailable = NpcState.builder().npcId(9036).name("Corrupted Hunllef").combatLevel(894).size(5)
-			.build();
-		assertEquals("Unknown", RecordingEncounterLabels.title(recording(unavailable), MAP, GSON));
-		TickRecording missing = recording();
-		missing.setRichExportJson("{");
-		assertEquals("Unknown", RecordingEncounterLabels.title(missing, MAP, GSON));
+		assertEquals("Unknown", RecordingEncounterLabels.title(recording(boss(9036, "Corrupted Hunllef", 894, 5), boss(2042, "Zulrah", 725, 5))));
+		assertEquals("Unknown", RecordingEncounterLabels.title(recording(boss(9036, "Different observed NPC", 894, 5))));
+		assertEquals("Unknown", RecordingEncounterLabels.title(recording(NpcState.builder().npcId(9036).name("Corrupted Hunllef").combatLevel(894).size(5).build())));
+		TickRecording missing = TickRecording.builder().killerName("Unknown").richExportJson("{").build();
+		assertEquals("Unknown", RecordingEncounterLabels.title(missing));
 	}
 
-	@Test
-	public void explicitRenameAndLiveSnapshotsKeepTheirOriginalTitles()
+	@Test public void explicitRenameAndLiveSnapshotsKeepTheirOriginalTitles()
 	{
-		TickRecording r = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		r.setKillerName("My attempt");
-		assertEquals("My attempt", RecordingEncounterLabels.title(r, MAP, GSON));
-		r.setKillerName("Unknown");
-		r.setCustomLabel(true);
-		assertEquals("Unknown", RecordingEncounterLabels.title(r, MAP, GSON));
-		TickRecording live = TickRecording.builder().killerName("Unknown").location("Live Snapshot").finalHp(0)
-			.richExportJson(r.getRichExportJson()).build();
-		assertEquals("Unknown", RecordingEncounterLabels.title(live, MAP, GSON));
+		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
+		recording.setKillerName("My attempt");
+		assertEquals("My attempt", RecordingEncounterLabels.title(recording));
+		recording.setKillerName("Unknown"); recording.setCustomLabel(true);
+		assertEquals("Unknown", RecordingEncounterLabels.title(recording));
+		TickRecording live = recording.toBuilder().customLabel(false).location("Live Snapshot").build();
+		assertEquals("Unknown", RecordingEncounterLabels.title(live));
 	}
 
-	@Test
-	public void observedDeathMarkerDoesNotRequireAnAvailableOrZeroFinalHp()
+	@Test public void preparationRequiresActualDeathAndReviewedReferenceButNotAFinalHpRead()
 	{
-		TickRecording original = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		TickRecording lateHp = TickRecording.builder().killerName("Unknown").finalHp(25).finalHpKnown(false)
-			.location("Recorded encounter").richExportJson(original.getRichExportJson()).build();
-		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(lateHp, MAP, GSON));
-		JsonObject withoutDeath = GSON.fromJson(lateHp.getRichExportJson(), JsonObject.class);
-		withoutDeath.getAsJsonObject("meta").remove("deathTick");
-		lateHp.setRichExportJson(GSON.toJson(withoutDeath));
-		assertEquals("Unknown", RecordingEncounterLabels.title(lateHp, MAP, GSON));
-	}
-
-	@Test
-	public void currentSharedRowsAndAdditionalViewsUseTheSameGuardedContext()
-	{
-		TickRecording r = recording();
-		JsonObject root = GSON.fromJson(r.getRichExportJson(), JsonObject.class);
-		JsonObject frame = root.getAsJsonArray("ticks").get(0).getAsJsonObject();
-		frame.remove("npcs");
-		JsonObject nativeFrame = new JsonObject();
-		JsonArray refs = new JsonArray();
-		refs.add(0);
-		nativeFrame.add("npcStateRefs", refs);
-		JsonArray views = new JsonArray();
-		views.add(nativeFrame);
-		frame.add("additionalViews", views);
-		JsonObject table = new JsonObject();
-		table.addProperty("format", "shared-blocks-v1");
-		table.addProperty("blockWidth", 8);
-		table.add("fields", GSON.toJsonTree(new String[]
-		{ "npcId", "name", "combatLevel", "size", "normalWorldContextObserved" }));
-		table.add("values", GSON.toJsonTree(new Object[]
-		{ 9036, "Corrupted Hunllef", 894, 5, true }));
-		table.add("blocks", GSON.toJsonTree(new int[][]
+		NpcState boss = boss(9036, "Corrupted Hunllef", 894, 5);
+		TickRecording late = recording(boss).toBuilder().finalHp(25).finalHpKnown(false).build();
+		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(late));
+		DeathRecordingV2 raw = raw(boss);
+		DeathRecordingV2 unspecified = raw.toBuilder().schemaVersion(null).build();
+		assertSame(unspecified, RecordingEncounterLabels.prepare(unspecified, MAP));
+		for (DeathRecordingV2.Meta meta : Arrays.asList(raw.getMeta().toBuilder().deathTick(null).build(), raw.getMeta().toBuilder().referenceCatalogId("unmatched").build()))
 		{
-			{ 0, 1, 2, 3, 4 } }));
-		table.add("rows", GSON.toJsonTree(new int[][]
-		{
-			{ 0 } }));
-		root.add("npcStateTable", table);
-		r.setRichExportJson(GSON.toJson(root));
-		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(r, MAP, GSON));
-		refs.set(0, new com.google.gson.JsonPrimitive(9));
-		r.setRichExportJson(GSON.toJson(root));
-		assertEquals("Unknown", RecordingEncounterLabels.title(r, MAP, GSON));
-		root.getAsJsonObject("meta").addProperty("referenceCatalogId", "unmatched");
-		r.setRichExportJson(GSON.toJson(root));
-		assertEquals("Unknown", RecordingEncounterLabels.title(r, MAP, GSON));
+			DeathRecordingV2 unqualified = raw.toBuilder().meta(meta).build();
+			assertSame(unqualified, RecordingEncounterLabels.prepare(unqualified, MAP));
+			assertEquals("Unknown", RecordingEncounterLabels.title(TickRecording.fromPrepared(unqualified, 1, "Recorded encounter", true)));
+		}
 	}
 
-	@Test
-	public void entryAndPlaybackShowEncounterSeparatelyFromUnknownFatalSource() throws Exception
+	@Test public void additionalViewsArePreparedBeforeWireEncodingWithoutMutatingRawFrames()
 	{
-		TickRecording r = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		String before = GSON.toJson(r);
-		RecordingEncounterLabels.prepareTitle(r, MAP, GSON);
+		DeathRecordingV2 raw = raw().toBuilder().ticks(Collections.singletonList(WorldSnapshot.builder().tick(100)
+			.additionalViews(Collections.singletonList(WorldSnapshot.builder().npcs(Collections.singletonList(boss(9036, "Corrupted Hunllef", 894, 5))).build())).build())).build();
+		String before = GSON.toJson(raw);
+		DeathRecordingV2 prepared = RecordingEncounterLabels.prepare(raw, MAP);
+		assertEquals("Corrupted Hunllef", prepared.getSummary().getBossName());
+		assertEquals(before, GSON.toJson(raw));
+		DeathRecordingV2 wire = prepared.toBuilder().ticks(Collections.emptyList()).npcStateTable(NpcStateTable.builder().format("shared-blocks-v1").build()).build();
+		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(TickRecording.fromPrepared(wire, 1, "Recorded encounter", true)));
+	}
+
+	@Test public void entryAndPlaybackShowEncounterSeparatelyFromUnknownFatalSource() throws Exception
+	{
+		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
+		String before = GSON.toJson(recording);
 		SwingUtilities.invokeAndWait(() ->
 		{
-			RecordingEntryPanel entry = new RecordingEntryPanel(r, 1, null, null, null, null, null, MAP, GSON);
+			RecordingEntryPanel entry = new RecordingEntryPanel(recording, 1, null, null, null, null, null, MAP, GSON);
 			assertTrue(hasLabel(entry, "#1: Corrupted Hunllef"));
 			assertTrue(hasLabel(entry, "Fatal source: Unknown"));
-			PlaybackPanel playback = new PlaybackPanel(() ->
-			{
-			}, null, MAP, GSON);
-			playback.loadRecording(r);
+			PlaybackPanel playback = new PlaybackPanel(() -> {}, null, MAP, GSON);
+			playback.loadRecording(recording);
 			assertTrue(hasLabel(playback, "Corrupted Hunllef"));
 			assertTrue(hasLabel(playback, "Fatal: 43 from Unknown"));
 		});
-		assertEquals(before, GSON.toJson(r));
-	}
-
-	@Test
-	public void preparedTitlesSurviveWrapperCopiesWithoutChangingExportOrEquality()
-	{
-		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		TickRecording unprepared = recording.toBuilder().build();
-		String before = GSON.toJson(recording);
-		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.prepareTitle(recording, MAP, GSON));
-		TickRecording copied = recording.toBuilder().build();
-		assertSame(recording.preparedEncounterTitle(), copied.preparedEncounterTitle());
-		assertFalse(RecordingEncounterLabels.needsPreparation(copied, MAP));
-		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.preparedTitle(copied, MAP));
-		assertEquals(unprepared, recording);
 		assertEquals(before, GSON.toJson(recording));
-		assertEquals(before, GSON.toJson(copied));
 	}
 
-	@Test
-	public void payloadReplacementAndExplicitRenameInvalidatePreparedTitles()
+	@Test public void payloadReplacementAndWrapperCopiesNeedNoTitleCache()
 	{
 		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		RecordingEncounterLabels.prepareTitle(recording, MAP, GSON);
-		recording.setRichExportJson(recording(boss(2042, "Zulrah", 725, 5)).getRichExportJson());
-		assertEquals("Unknown", RecordingEncounterLabels.preparedTitle(recording, MAP));
-		assertTrue(RecordingEncounterLabels.needsPreparation(recording, MAP));
-		assertEquals("Zulrah", RecordingEncounterLabels.prepareTitle(recording, MAP, GSON));
-		recording.setKillerName("My renamed attempt");
+		assertEquals("Corrupted Hunllef", RecordingEncounterLabels.title(recording.toBuilder().build()));
+		recording.setPreparedExport(recording(boss(2042, "Zulrah", 725, 5)).getPreparedExport());
+		assertEquals("Zulrah", RecordingEncounterLabels.title(recording));
 		recording.setCustomLabel(true);
-		assertEquals("My renamed attempt", RecordingEncounterLabels.preparedTitle(recording, MAP));
-		assertFalse(RecordingEncounterLabels.needsPreparation(recording, MAP));
-		recording.setKillerName("Unknown");
-		assertEquals("Unknown", RecordingEncounterLabels.prepareTitle(recording, MAP, GSON));
+		assertEquals("Unknown", RecordingEncounterLabels.title(recording));
 		recording.setCustomLabel(false);
-		assertEquals("Zulrah", RecordingEncounterLabels.prepareTitle(recording, MAP, GSON));
-		assertEquals("Unknown", RecordingEncounterLabels.preparedTitle(recording, null));
-	}
-
-	@Test
-	public void directUiConstructionNeverPreparesAnUncachedRichPayload() throws Exception
-	{
-		TickRecording recording = recording(boss(9036, "Corrupted Hunllef", 894, 5));
-		String before = GSON.toJson(recording);
-		SwingUtilities.invokeAndWait(() ->
-		{
-			assertEquals("Unknown", RecordingEncounterLabels.title(recording, MAP, GSON));
-			RecordingEntryPanel entry = new RecordingEntryPanel(recording, 1, null, null, null, null, null, MAP, GSON);
-			assertTrue(hasLabel(entry, "#1: Unknown"));
-			PlaybackPanel playback = new PlaybackPanel(() ->
-			{
-			}, null, MAP, GSON);
-			playback.loadRecording(recording);
-			assertTrue(hasLabel(playback, "Unknown"));
-			assertNull(recording.preparedEncounterTitle());
-		});
-		assertEquals(before, GSON.toJson(recording));
+		assertEquals("Zulrah", RecordingEncounterLabels.title(recording));
 	}
 
 	private boolean hasLabel(Container parent, String text)
 	{
-		for (Component component : parent.getComponents())
+		for (Component child : parent.getComponents())
 		{
-			if (component instanceof JLabel && text.equals(((JLabel) component).getText()))
-				return true;
-			if (component instanceof Container && hasLabel((Container) component, text))
-				return true;
+			if (child instanceof JLabel && text.equals(((JLabel) child).getText())) return true;
+			if (child instanceof Container && hasLabel((Container) child, text)) return true;
 		}
 		return false;
 	}

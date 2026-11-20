@@ -14,7 +14,14 @@ public final class ResolverTestCatalog
     private ResolverTestCatalog() {}
     public static ResolverV1 engine(JsonObject document)
     {
-        return new ResolverV1(document,JSON,null,null);
+        return new ResolverV1(document,JSON,null);
+    }
+    public static com.tickreplaylogger.model.world.DeathRecordingV2 recording(ResolverV1Recording.EvidenceWindow window)
+    {
+        return com.tickreplaylogger.model.world.DeathRecordingV2.builder().ticks(window.getTicks()).scenes(window.getScenes())
+            .events(com.tickreplaylogger.model.world.DeathRecordingV2.Events.builder().damageEvents(window.getHits())
+                .observations(window.getObservations()).captureGaps(window.getCaptureGaps())
+                .observationLinks(window.getObservationLinks()).build()).build();
     }
     public static JsonObject lower(JsonObject document)
     {

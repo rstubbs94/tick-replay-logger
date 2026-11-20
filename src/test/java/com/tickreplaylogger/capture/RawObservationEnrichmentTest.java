@@ -22,81 +22,105 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.Gson;
-import com.tickreplaylogger.model.world.ObservedEvent;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+/** Resource wire aliases are constructed on a frozen view, never by editing the captured callback. */
 public class RawObservationEnrichmentTest
 {
-	private static ObservedEvent event(int tick, long sequence)
-	{
-		return ObservedEvent.builder().tick(tick).sequence(sequence).gameCycle(tick * 30).type("HITSPLAT")
-			.actorRef("player").actorName("Recorded recipient").relatedActorRef("original-related").sceneKey("scene")
-			.data(Collections.singletonMap("amount", 3)).build();
-	}
+    private static ObservedEvent event(int tick, long sequence)
+    {
+        Map<String, Object> data = new LinkedHashMap<>(); data.put("amount", 3); data.put("hitsplatType", 16);
+        return ObservedEvent.builder().tick(tick).sequence(sequence).gameCycle(tick * 30).type("HITSPLAT")
+            .actorRef("player").actorName("Recorded recipient").relatedActorRef("original-related").sceneKey("scene")
+            .data(Collections.unmodifiableMap(data)).build();
+    }
 
-	@Test
-	public void currentTailReplacementLeavesHistoryAndOriginalCallbackIdentityUntouched()
-	{
-		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
-		ObservedEvent historical = event(1, 1), current = event(2, 2);
-		recorder.addObservation(historical); recorder.addObservation(current);
-		Map<String, Object> derived = new HashMap<>(); derived.put("resourceOutcomeStatus", "UNRESOLVED"); derived.put("amount", 999);
-		recorder.enrichHitsplatObservations(2, Collections.singletonMap(2L, derived));
-		List<ObservedEvent> events = recorder.observationsForSourceResolution();
-		assertEquals(2, events.size()); assertSame(historical, events.get(0)); assertNotSame(current, events.get(1));
-		ObservedEvent enriched = events.get(1);
-		assertEquals(current.getSequence(), enriched.getSequence()); assertEquals(current.getTick(), enriched.getTick());
-		assertEquals(current.getGameCycle(), enriched.getGameCycle()); assertEquals(current.getActorRef(), enriched.getActorRef());
-		assertEquals(current.getActorName(), enriched.getActorName()); assertEquals(current.getRelatedActorRef(), enriched.getRelatedActorRef());
-		assertEquals(current.getSceneKey(), enriched.getSceneKey()); assertEquals(3, enriched.getData().get("amount"));
-		assertEquals("COMPLETE_TICK_TAIL", enriched.getData().get("sourceEnrichmentCoverage"));
-		assertFalse(current.getData().containsKey("resourceOutcomeStatus"));
-		try { enriched.getData().put("amount", 99); fail("Enriched metadata must be immutable"); }
-		catch (UnsupportedOperationException expected) { }
-	}
+    private static DamageRecord context(int tick, long sequence)
+    {
+        return DamageRecord.builder().impactTick(tick).observedCycle(tick * 30).observationSequence(sequence)
+            .amount(3).hitsplatType(16).hitsplatTypeKnown(true).direction("RESOURCE_IMPACT").defenderRef("player")
+            .attributionCandidates(Collections.singletonList(Collections.singletonMap("projectileObservationId", 99L)))
+            .observedHazardContacts(Collections.singletonList(Collections.singletonMap("graphicObservationId", 7L))).build();
+    }
 
-	@Test
-	public void unorderedInputUsesCompleteBoundedFallbackAndPreservesOriginalSequenceOrder()
-	{
-		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
-		for (ObservedEvent event : Arrays.asList(event(2, 1), event(1, 2), event(2, 3))) recorder.addObservation(event);
-		Map<Long, Map<String, Object>> derived = new HashMap<>();
-		derived.put(1L, Collections.singletonMap("resourceOutcomeStatus", "UNRESOLVED"));
-		derived.put(3L, Collections.singletonMap("resourceOutcomeStatus", "UNRESOLVED"));
-		recorder.enrichHitsplatObservations(2, derived);
-		List<ObservedEvent> events = recorder.observationsForSourceResolution();
-		assertEquals(3, events.size());
-		assertEquals(1L, events.get(0).getSequence()); assertEquals(2L, events.get(1).getSequence()); assertEquals(3L, events.get(2).getSequence());
-		assertEquals("COMPLETE_BUFFER_SCAN", events.get(0).getData().get("sourceEnrichmentCoverage"));
-		assertFalse(events.get(1).getData().containsKey("resourceOutcomeStatus"));
-		assertEquals("COMPLETE_BUFFER_SCAN", events.get(2).getData().get("sourceEnrichmentCoverage"));
-	}
+    @SuppressWarnings("unchecked")
+    private static void assertOriginalFacts(DamageRecord original, ObservedEvent wire)
+    {
+        Gson gson = new Gson();
+        assertEquals(Collections.singletonList(Collections.singletonMap("projectileObservationId", 99L)), original.getAttributionCandidates());
+        assertEquals(Collections.singletonList(Collections.singletonMap("graphicObservationId", 7L)), original.getObservedHazardContacts());
+        Object originalFacts = gson.toJsonTree(original);
+        Map<String, Object> data = wire.getData();
+        DamageRecord nested = (DamageRecord) data.get("attributionContext");
+        DamageRecord reconstructed = nested.toBuilder()
+            .attributionCandidates((List<Map<String, Object>>) data.get("attributionCandidates"))
+            .observedHazardContacts((List<Map<String, Object>>) data.get("observedHazardContacts")).build();
+        assertEquals(originalFacts, gson.toJsonTree(reconstructed));
+        assertNull(nested.getAttributionCandidates());
+        assertNull(nested.getObservedHazardContacts());
+        assertEquals(originalFacts, gson.toJsonTree(original));
+    }
 
-	@Test
-	public void optionalEnrichmentFailureCannotRemovePreviouslyCapturedCallbacks()
-	{
-		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
-		for (ObservedEvent event : Arrays.asList(event(1, 1), event(2, 2), event(2, 3))) recorder.addObservation(event);
-		Map<Long, Map<String, Object>> derived = new HashMap<Long, Map<String, Object>>()
-		{
-			@Override public Map<String, Object> get(Object key)
-			{
-				if (Long.valueOf(2).equals(key)) throw new IllegalStateException("injected optional enrichment failure");
-				return Collections.singletonMap("resourceOutcomeStatus", "UNRESOLVED");
-			}
-			@Override public boolean isEmpty() { return false; }
-		};
-		try { recorder.enrichHitsplatObservations(2, derived); fail("Injected failure must be visible"); }
-		catch (IllegalStateException expected) { }
-		List<ObservedEvent> events = recorder.observationsForSourceResolution();
-		assertEquals(3, events.size());
-		assertEquals(1L, events.get(0).getSequence()); assertEquals(2L, events.get(1).getSequence()); assertEquals(3L, events.get(2).getSequence());
-		assertTrue(events.stream().allMatch(event -> Integer.valueOf(3).equals(event.getData().get("amount"))));
-	}
+    @Test
+    public void frozenContextLeavesHistoricalCallbacksAndOriginalReceiptUntouched()
+    {
+        InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
+        ObservedEvent historical = event(1, 1), current = event(2, 2);
+        recorder.addObservation(historical); recorder.addObservation(current);
+        DamageRecord context = context(2, 2); recorder.addDamage(context);
+        List<ObservedEvent> events = recorder.observationsForSourceResolution();
+        assertEquals(2, events.size()); assertSame(historical, events.get(0)); assertNotSame(current, events.get(1));
+        ObservedEvent frozen = events.get(1);
+        assertEquals(current.getSequence(), frozen.getSequence()); assertEquals(current.getTick(), frozen.getTick());
+        assertEquals(current.getGameCycle(), frozen.getGameCycle()); assertEquals(current.getActorRef(), frozen.getActorRef());
+        assertEquals(current.getActorName(), frozen.getActorName()); assertEquals(current.getRelatedActorRef(), frozen.getRelatedActorRef());
+        assertEquals(current.getSceneKey(), frozen.getSceneKey()); assertEquals(3, frozen.getData().get("amount"));
+        assertEquals("UNRESOLVED", frozen.getData().get("resourceOutcomeStatus"));
+        assertOriginalFacts(context, frozen);
+        assertFalse(current.getData().containsKey("resourceOutcomeStatus"));
+        assertFalse(current.getData().containsKey("attributionContext"));
+        assertOriginalFacts(context, recorder.observationsForSourceResolution().get(1));
+        try { frozen.getData().put("amount", 99); fail("Frozen wire metadata must be immutable"); }
+        catch (UnsupportedOperationException expected) { }
+        assertTrue(recorder.freezeExport(null, null, 1, 2).getEvents().getDamageEvents().isEmpty());
+    }
+
+    @Test
+    public void unorderedTicksKeepOriginalCaptureOrderAndExactContextIds()
+    {
+        InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
+        for (ObservedEvent event : Arrays.asList(event(2, 1), event(1, 2), event(2, 3))) recorder.addObservation(event);
+        recorder.addDamage(context(2, 1)); recorder.addDamage(context(2, 3));
+        List<ObservedEvent> events = recorder.observationsForSourceResolution();
+        assertEquals(3, events.size());
+        assertEquals(1L, events.get(0).getSequence()); assertEquals(2L, events.get(1).getSequence()); assertEquals(3L, events.get(2).getSequence());
+        assertEquals("UNRESOLVED", events.get(0).getData().get("resourceOutcomeStatus"));
+        assertFalse(events.get(1).getData().containsKey("attributionContext"));
+        assertEquals("UNRESOLVED", events.get(2).getData().get("resourceOutcomeStatus"));
+        assertEquals(Long.valueOf(1), ((DamageRecord) events.get(0).getData().get("attributionContext")).getObservationSequence());
+        assertEquals(Long.valueOf(3), ((DamageRecord) events.get(2).getData().get("attributionContext")).getObservationSequence());
+    }
+
+    @Test
+    public void failedDuplicateContextCannotRemoveOrRewriteAnOriginalCallback()
+    {
+        InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
+        for (ObservedEvent event : Arrays.asList(event(1, 1), event(2, 2), event(2, 3))) recorder.addObservation(event);
+        DamageRecord original = context(2, 2);
+        try { recorder.addDamage(original.toBuilder().amount(999).build()); fail("Context cannot rewrite the observed amount"); }
+        catch (IllegalArgumentException expected) { }
+        recorder.addDamage(original);
+        try { recorder.addDamage(original.toBuilder().amount(999).build()); fail("An ID cannot be replaced"); }
+        catch (IllegalArgumentException expected) { }
+        List<ObservedEvent> events = recorder.observationsForSourceResolution();
+        assertEquals(3, events.size());
+        assertEquals(1L, events.get(0).getSequence()); assertEquals(2L, events.get(1).getSequence()); assertEquals(3L, events.get(2).getSequence());
+        assertTrue(events.stream().allMatch(event -> Integer.valueOf(3).equals(event.getData().get("amount"))));
+        assertOriginalFacts(original, events.get(1));
+        assertFalse(events.get(0).getData().containsKey("attributionContext"));
+        assertFalse(events.get(2).getData().containsKey("attributionContext"));
+    }
 }

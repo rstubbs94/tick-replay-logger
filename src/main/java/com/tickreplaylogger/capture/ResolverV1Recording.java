@@ -85,14 +85,6 @@ public final class ResolverV1Recording
 			return Collections.unmodifiableList(result);
 		}
 
-		private DeathRecordingV2 recording()
-		{
-			return DeathRecordingV2
-				.builder().ticks(ticks).scenes(scenes).events(DeathRecordingV2.Events.builder().damageEvents(hits)
-					.observations(observations).captureGaps(captureGaps).observationLinks(observationLinks).build())
-				.build();
-		}
-
 		private static EvidenceWindow from(DeathRecordingV2 recording)
 		{
 			DeathRecordingV2.Events events = recording.getEvents();
@@ -105,64 +97,18 @@ public final class ResolverV1Recording
 	}
 
 	private final ResolverV1 engine;
-	private final EvidenceWindow window;
 	private final RawEvidenceWindow evidence;
 	private final Map<DamageRecord, DamageRecord> resolved = new IdentityHashMap<>();
 	private boolean evaluated;
 
-	public ResolverV1Recording(EvidenceWindow window, Gson gson)
-	{
-		this(ResolverV1.load(gson), gson, window);
-	}
-
-	public ResolverV1Recording(EvidenceWindow window, Gson gson, DamageMap ignored)
-	{
-		this(window, gson);
-	}
-
 	public ResolverV1Recording(ResolverV1 engine, Gson gson, DeathRecordingV2 recording)
 	{
-		this(engine, gson, EvidenceWindow.from(expanded(recording, gson)));
-	}
-
-	private ResolverV1Recording(ResolverV1 engine, Gson gson, EvidenceWindow window)
-	{
+		if (recording.getNpcStateTable() != null)
+		{
+			throw new IllegalArgumentException("Attribution requires the original uncompressed capture");
+		}
 		this.engine = engine;
-		this.window = window;
-		evidence = new RawEvidenceWindow(window, gson);
-	}
-
-	public String getRulesId()
-	{
-		return engine.id();
-	}
-
-	public DamageRecord resolveHit(DamageRecord hit)
-	{
-		if (hit == null || !window.contains(hit) || !local(hit) || !engine.isAvailable())
-		{
-			return hit;
-		}
-		evaluate();
-		DamageRecord found = resolved.get(hit);
-		if (found != null)
-		{
-			return found;
-		}
-		// Caller contexts may be detached copies. Match all original callback/witness facts, never derived annotations.
-		for (Map.Entry<DamageRecord, DamageRecord> entry : resolved.entrySet())
-		{
-			DamageRecord original = entry.getKey();
-			if (original.sameNativeCallback(hit)
-				&& Objects.equals(original.getAttributionCandidates(), hit.getAttributionCandidates())
-				&& Objects.equals(original.getObservedHazardContacts(), hit.getObservedHazardContacts())
-				&& Objects.equals(original.getCaptureIssues(), hit.getCaptureIssues()))
-			{
-				return entry.getValue();
-			}
-		}
-		ResolverEvidence.Hit original = evidence.hit(hit);
-		return SourceEvidenceResolver.project(original, engine.evaluate(original), engine.id());
+		evidence = new RawEvidenceWindow(EvidenceWindow.from(recording), gson);
 	}
 
 	private static boolean local(DamageRecord hit)
@@ -196,11 +142,10 @@ public final class ResolverV1Recording
 
 	public DeathRecordingV2 enrich(DeathRecordingV2 recording)
 	{
-		if (!engine.isAvailable())
+		if (engine.isAvailable())
 		{
-			return recording;
+			evaluate();
 		}
-		evaluate();
 		Map<Long, DamageRecord> bySequence = new LinkedHashMap<>();
 		Set<Long> duplicates = new HashSet<>();
 		for (DamageRecord hit : resolved.values())
@@ -225,49 +170,4 @@ public final class ResolverV1Recording
 			: new ResolverV1Recording(ResolverV1.load(gson), gson, recording).enrich(recording);
 	}
 
-	private static DeathRecordingV2 expanded(DeathRecordingV2 recording, Gson gson)
-	{
-		if (recording.getNpcStateTable() == null)
-		{
-			return recording;
-		}
-		NpcStateEncoding.Reader reader = new NpcStateEncoding.Reader(recording.getNpcStateTable(), gson);
-		return recording.toBuilder().ticks(expanded(recording.getTicks(), reader)).npcStateTable(null).build();
-	}
-
-	private static List<WorldSnapshot> expanded(List<WorldSnapshot> frames, NpcStateEncoding.Reader reader)
-	{
-		if (frames == null)
-		{
-			return null;
-		}
-		List<WorldSnapshot> result = new ArrayList<>();
-		for (WorldSnapshot frame : frames)
-		{
-			result.add(frame == null ? null
-				: frame.toBuilder().npcs(reader.read(frame)).npcStateRefs(null)
-					.additionalViews(expanded(frame.getAdditionalViews(), reader)).build());
-		}
-		return result;
-	}
-
-	public static DamageEvent projectJournalDamage(DamageEvent event, DamageRecord record)
-	{
-		return RecordingProjection.projectJournalDamage(event, record);
-	}
-
-	public static String projectResourceNote(String original, DamageRecord record)
-	{
-		return RecordingProjection.projectResourceNote(original, record);
-	}
-
-	public static TickData projectJournalTick(TickData tick, Map<Long, DamageRecord> records)
-	{
-		return RecordingProjection.projectJournalTick(tick, records);
-	}
-
-	public static List<TickData> projectJournalTicks(List<TickData> ticks, DeathRecordingV2 recording)
-	{
-		return RecordingProjection.projectJournalTicks(ticks, recording);
-	}
 }

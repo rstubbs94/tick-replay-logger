@@ -24,235 +24,72 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
 import com.tickreplaylogger.model.TickRecording;
 import com.tickreplaylogger.model.world.*;
-import java.io.StringReader;
 import java.util.*;
-import java.util.List;
 
-/** Recorded encounter context for titles. This never changes the fatal source or saved data. */
+/** Encounter context is prepared once from raw capture, independently of a fatal-source verdict. */
 public final class RecordingEncounterLabels
 {
 	private RecordingEncounterLabels()
 	{
 	}
 
-	/** UI callers never parse rich data; background callers prepare and reuse the same cache. */
-	public static String title(TickRecording recording, DamageMap map, Gson gson)
+	public static DeathRecordingV2 prepare(DeathRecordingV2 recording, DamageMap map)
 	{
-		return javax.swing.SwingUtilities.isEventDispatchThread() ? preparedTitle(recording, map)
-			: prepareTitle(recording, map, gson);
+		if (recording.getMeta() == null || recording.getMeta().getDeathTick() == null
+			|| !DeathRecordingV2.LATEST_SCHEMA_VERSION.equals(recording.getSchemaVersion()) || map == null
+			|| map.catalog() == null || !map.catalog().id().equals(recording.getMeta().getReferenceCatalogId()))
+		{
+			return recording;
+		}
+		Set<String> names = new LinkedHashSet<>();
+		append(recording.getTicks(), map, names);
+		return recording.toBuilder().summary(
+			(recording.getSummary() == null ? DeathRecordingV2.Summary.builder() : recording.getSummary().toBuilder())
+				.bossName(names.size() == 1 ? names.iterator().next() : null).build())
+			.build();
 	}
 
-	private static boolean encounterTitleNeeded(TickRecording recording)
+	private static void append(List<WorldSnapshot> frames, DamageMap map, Set<String> names)
 	{
-		String original = recording.getKillerName();
-		return original != null && !Boolean.TRUE.equals(recording.getCustomLabel())
-			&& (original.equals("Unknown") || original.startsWith("Unknown ("))
-			&& !"Live Snapshot".equals(recording.getLocation()) && recording.getRichExportJson() != null;
-	}
-
-	private static String catalogId(DamageMap map)
-	{
-		return map == null || map.catalog() == null ? null : map.catalog().id();
-	}
-
-	public static boolean needsPreparation(TickRecording recording, DamageMap map)
-	{
-		if (!encounterTitleNeeded(recording))
+		if (frames == null)
 		{
-			return false;
+			return;
 		}
-		String scope = catalogId(map);
-		TickRecording.PreparedEncounterTitle cached = recording.preparedEncounterTitle();
-		return scope != null && (cached == null || !cached.matches(recording, scope));
-	}
-
-	/** Cheap lookup even for an unprepared direct panel caller. */
-	public static String preparedTitle(TickRecording recording, DamageMap map)
-	{
-		TickRecording.PreparedEncounterTitle cached = recording.preparedEncounterTitle();
-		return encounterTitleNeeded(recording) && cached != null && cached.matches(recording, catalogId(map))
-			? cached.title()
-			: recording.getKillerName();
-	}
-
-	public static String prepareTitle(TickRecording recording, DamageMap map, Gson gson)
-	{
-		if (gson == null || !needsPreparation(recording, map))
+		for (WorldSnapshot frame : frames)
 		{
-			return preparedTitle(recording, map);
-		}
-		if (javax.swing.SwingUtilities.isEventDispatchThread())
-		{
-			throw new IllegalStateException("Encounter title preparation must run off the EDT");
-		}
-		TickRecording frozen = recording.toBuilder().build();
-		String scope = catalogId(map);
-		String encounter = observedEncounter(frozen, map, gson);
-		TickRecording.PreparedEncounterTitle cached = new TickRecording.PreparedEncounterTitle(
-			frozen.getRichExportJson(), frozen.getKillerName(), frozen.getCustomLabel(), scope,
-			encounter == null ? frozen.getKillerName() : encounter);
-		if (cached.matches(recording, catalogId(map)))
-		{
-			recording.rememberEncounterTitle(cached);
-		}
-		return preparedTitle(recording, map);
-	}
-
-	public static String observedEncounter(TickRecording recording, DamageMap map, Gson gson)
-	{
-		if (javax.swing.SwingUtilities.isEventDispatchThread())
-		{
-			throw new IllegalStateException("Rich encounter observations must be read off the EDT");
-		}
-		if (recording == null || gson == null || map == null || map.catalog() == null
-			|| recording.getRichExportJson() == null)
-		{
-			return null;
-		}
-		List<WorldSnapshot> frames = new ArrayList<>();
-		NpcStateTable table = null;
-		String version = null, catalogId = null;
-		boolean deathObserved = false;
-		// Skip geometry and event payloads rather than rehydrating a full rich recording per title.
-		try (JsonReader reader = new JsonReader(new StringReader(recording.getRichExportJson())))
-		{
-			reader.beginObject();
-			while (reader.hasNext())
+			if (frame == null)
 			{
-				switch (reader.nextName())
-				{
-				case "schemaVersion":
-					version = reader.nextString();
-					break;
-				case "meta":
-					JsonObject meta = gson.fromJson(reader, JsonObject.class);
-					catalogId = meta != null && meta.has("referenceCatalogId")
-						? meta.get("referenceCatalogId").getAsString()
-						: null;
-					deathObserved = meta != null && meta.has("deathTick") && meta.get("deathTick").isJsonPrimitive()
-						&& meta.get("deathTick").getAsJsonPrimitive().isNumber()
-						&& meta.get("deathTick").getAsString().matches("[0-9]+");
-					break;
-				case "npcStateTable":
-					table = gson.fromJson(reader, NpcStateTable.class);
-					break;
-				case "ticks":
-					readFrames(reader, gson, frames, 0);
-					break;
-				default:
-					reader.skipValue();
-				}
+				continue;
 			}
-			reader.endObject();
-			if (reader.peek() != JsonToken.END_DOCUMENT || !deathObserved || !"1.3".equals(version)
-				|| !map.catalog().id().equals(catalogId))
+			if (frame.getNpcs() != null)
 			{
-				return null;
-			}
-			NpcStateEncoding.Reader rows = table == null ? null : new NpcStateEncoding.Reader(table, gson);
-			Set<String> bosses = new LinkedHashSet<>();
-			for (WorldSnapshot frame : frames)
-			{
-				List<NpcState> npcs = frame.getNpcs();
-				if (npcs == null && frame.getNpcStateRefs() != null)
-				{
-					if (rows == null)
-					{
-						return null;
-					}
-					npcs = rows.read(frame);
-				}
-				if (npcs == null)
-				{
-					continue;
-				}
-				for (NpcState npc : npcs)
+				for (NpcState npc : frame.getNpcs())
 				{
 					String name = map.catalog().observedBossName(npc);
 					if (name != null)
 					{
-						bosses.add(name);
-					}
-					if (bosses.size() > 1)
-					{
-						return null;
+						names.add(name);
 					}
 				}
 			}
-			return bosses.size() == 1 ? bosses.iterator().next() : null;
-		}
-		catch (Exception unavailable)
-		{
-			return null;
+			append(frame.getAdditionalViews(), map, names);
 		}
 	}
 
-	private static void readFrames(JsonReader reader, Gson gson, List<WorldSnapshot> frames, int depth)
-		throws java.io.IOException
+	public static String title(TickRecording recording)
 	{
-		if (depth > 8)
+		String original = recording.getKillerName();
+		DeathRecordingV2 completed = recording.getPreparedExport();
+		if (original == null || Boolean.TRUE.equals(recording.getCustomLabel())
+			|| !(original.equals("Unknown") || original.startsWith("Unknown ("))
+			|| "Live Snapshot".equals(recording.getLocation()) || completed == null || completed.getMeta() == null
+			|| completed.getMeta().getDeathTick() == null || completed.getSummary() == null
+			|| completed.getSummary().getBossName() == null)
 		{
-			throw new IllegalArgumentException("Nested native frames");
+			return original;
 		}
-		if (reader.peek() == JsonToken.NULL)
-		{
-			reader.nextNull();
-			return;
-		}
-		reader.beginArray();
-		while (reader.hasNext())
-		{
-			List<NpcState> npcs = null;
-			List<Integer> refs = null;
-			reader.beginObject();
-			while (reader.hasNext())
-			{
-				switch (reader.nextName())
-				{
-				case "npcs":
-					if (reader.peek() == JsonToken.NULL)
-					{
-						reader.nextNull();
-						break;
-					}
-					npcs = new ArrayList<>();
-					reader.beginArray();
-					while (reader.hasNext())
-					{
-						npcs.add(gson.fromJson(reader, NpcState.class));
-					}
-					reader.endArray();
-					break;
-				case "npcStateRefs":
-					if (reader.peek() == JsonToken.NULL)
-					{
-						reader.nextNull();
-						break;
-					}
-					refs = new ArrayList<>();
-					reader.beginArray();
-					while (reader.hasNext())
-					{
-						refs.add(gson.fromJson(reader, Integer.class));
-					}
-					reader.endArray();
-					break;
-				case "additionalViews":
-					readFrames(reader, gson, frames, depth + 1);
-					break;
-				default:
-					reader.skipValue();
-				}
-			}
-			reader.endObject();
-			frames.add(WorldSnapshot.builder().npcs(npcs).npcStateRefs(refs).build());
-		}
-		reader.endArray();
+		return completed.getSummary().getBossName();
 	}
 }

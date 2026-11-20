@@ -16,7 +16,11 @@ public class InspectableWorldSnapshotRecorder extends WorldSnapshotRecorder
 
     private ResolverV1Recording.EvidenceWindow evidence()
     {
-        return freezeSourceEvidence(Integer.MAX_VALUE, Long.MAX_VALUE, 0, Collections.emptyList());
+        DeathRecordingV2 frozen = freezeExport(null, null, Integer.MIN_VALUE, Integer.MAX_VALUE - 1);
+        DeathRecordingV2.Events events = frozen.getEvents();
+        return new ResolverV1Recording.EvidenceWindow(frozen.getTicks(), frozen.getScenes(), events.getObservations(),
+            events.getDamageEvents(), events.getCaptureGaps(), events.getObservationLinks(), Integer.MIN_VALUE,
+            Integer.MAX_VALUE, Long.MAX_VALUE, 0);
     }
 
     public synchronized WorldSnapshot snapshotAtTick(int tick)

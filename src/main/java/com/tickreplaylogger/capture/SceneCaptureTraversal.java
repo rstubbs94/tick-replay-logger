@@ -28,7 +28,7 @@ import java.util.*;
 import java.util.List;
 import net.runelite.api.*;
 
-/** One current native-view census shared by discovery and capture; never reused across ticks. */
+/** Native scene membership, seeded once and refreshed only for lifecycle-event tiles. */
 final class SceneCaptureTraversal
 {
 	static final class ObjectRow
@@ -58,11 +58,21 @@ final class SceneCaptureTraversal
 	final Client client;
 	final WorldView view;
 	final Tile[][][] arrays;
+	final Scene scene;
+	final List<TileSlot> slots;
 	final List<Tile> tiles;
+	private final IdentityHashMap<Tile, Integer> tileIndices = new IdentityHashMap<>();
 	final int bridgeFailures;
 	final Map<Integer, Integer> arrayTileCounts;
 	final String arrayIssue;
 	private Map<Integer, List<ObjectRow>> objects;
+	private Map<Integer, List<ItemRow>> itemsByPlane = new HashMap<>();
+	private final IdentityHashMap<Tile, Tile> bridges;
+	private final IdentityHashMap<Tile, List<ObjectRow>> tileObjects = new IdentityHashMap<>();
+	private final IdentityHashMap<Tile, Map<String, String>> objectIssues = new IdentityHashMap<>();
+	private final IdentityHashMap<Tile, List<TileItem>> tileItems = new IdentityHashMap<>();
+	private final Set<Tile> itemIssues = Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Set<Tile> dirty = Collections.newSetFromMap(new IdentityHashMap<>());
 	private int objectFailures;
 	private Map<Integer, List<Tile>> byPlane;
 	private int[] tilePlanes;
@@ -71,24 +81,33 @@ final class SceneCaptureTraversal
 	private final Map<Integer, Set<String>> planeReasons = new HashMap<>();
 	private final List<String> planeIssues = new ArrayList<>();
 
-	private SceneCaptureTraversal(Client client, WorldView view, Tile[][][] arrays, List<Tile> tiles, int failures,
-		Map<Integer, Integer> counts, String arrayIssue)
+	private SceneCaptureTraversal(Client client, WorldView view, Scene scene, Tile[][][] arrays, List<TileSlot> slots,
+		List<Tile> tiles, int failures, Map<Integer, Integer> counts, String arrayIssue,
+		IdentityHashMap<Tile, Tile> bridges)
 	{
 		this.client = client;
 		this.view = view;
 		this.arrays = arrays;
+		this.scene = scene;
+		this.slots = slots;
 		this.tiles = tiles;
+		for (int index = 0; index < tiles.size(); index++)
+		{
+			tileIndices.put(tiles.get(index), index);
+		}
 		this.bridgeFailures = failures;
 		this.arrayTileCounts = counts;
 		this.arrayIssue = arrayIssue;
+		this.bridges = bridges;
 	}
 
 	static SceneCaptureTraversal capture(Client client, WorldView view)
 	{
 		Tile[][][] arrays;
+		Scene scene;
 		try
 		{
-			Scene scene = view == null ? client.getScene() : view.getScene();
+			scene = view == null ? client.getScene() : view.getScene();
 			arrays = scene == null ? null : scene.getTiles();
 		}
 		catch (RuntimeException unavailable)
@@ -102,6 +121,7 @@ final class SceneCaptureTraversal
 		Set<Tile> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 		java.util.Deque<Tile> pending = new ArrayDeque<>();
 		Map<Integer, Integer> counts = new LinkedHashMap<>();
+		List<TileSlot> slots = new ArrayList<>();
 		for (int plane = 0; plane < arrays.length; plane++)
 		{
 			Tile[][] level = arrays[plane];
@@ -110,15 +130,18 @@ final class SceneCaptureTraversal
 				continue;
 			}
 			int count = 0;
-			for (Tile[] column : level)
+			for (int x = 0; x < level.length; x++)
 			{
+				Tile[] column = level[x];
 				if (column != null)
 				{
-					for (Tile tile : column)
+					for (int y = 0; y < column.length; y++)
 					{
+						Tile tile = column[y];
 						if (tile != null)
 						{
 							count++;
+							slots.add(new TileSlot(tile, plane, x, y));
 							if (seen.add(tile))
 							{
 								pending.add(tile);
@@ -130,6 +153,7 @@ final class SceneCaptureTraversal
 			counts.put(plane, count);
 		}
 		List<Tile> tiles = new ArrayList<>(seen.size());
+		IdentityHashMap<Tile, Tile> bridges = new IdentityHashMap<>();
 		int failures = 0;
 		while (!pending.isEmpty())
 		{
@@ -138,6 +162,7 @@ final class SceneCaptureTraversal
 			try
 			{
 				Tile bridge = tile.getBridge();
+				bridges.put(tile, bridge);
 				if (bridge != null && seen.add(bridge))
 				{
 					pending.addLast(bridge);
@@ -148,14 +173,14 @@ final class SceneCaptureTraversal
 				failures++;
 			}
 		}
-		return new SceneCaptureTraversal(client, view, arrays, Collections.unmodifiableList(tiles), failures,
-			Collections.unmodifiableMap(counts), null);
+		return new SceneCaptureTraversal(client, view, scene, arrays, Collections.unmodifiableList(slots),
+			Collections.unmodifiableList(tiles), failures, Collections.unmodifiableMap(counts), null, bridges);
 	}
 
 	private static SceneCaptureTraversal unavailable(Client client, WorldView view, String reason)
 	{
-		return new SceneCaptureTraversal(client, view, null, Collections.emptyList(), 1, Collections.emptyMap(),
-			reason);
+		return new SceneCaptureTraversal(client, view, null, null, Collections.emptyList(), Collections.emptyList(), 1,
+			Collections.emptyMap(), reason, new IdentityHashMap<>());
 	}
 
 	boolean matches(Client client, WorldView view)
@@ -168,13 +193,85 @@ final class SceneCaptureTraversal
 		return arrays != null && plane >= 0 && plane < arrays.length && arrays[plane] != null;
 	}
 
+	static final class TileSlot
+	{
+		final Tile tile;
+		final int plane, x, y;
+
+		TileSlot(Tile tile, int plane, int x, int y)
+		{
+			this.tile = tile;
+			this.plane = plane;
+			this.x = x;
+			this.y = y;
+		}
+	}
+
+	static final class ItemRow
+	{
+		final Tile tile;
+		final TileItem item;
+
+		ItemRow(Tile tile, TileItem item)
+		{
+			this.tile = tile;
+			this.item = item;
+		}
+	}
+
+	boolean current(Client client, WorldView view)
+	{
+		try
+		{
+			Scene current = view == null ? client.getScene() : view.getScene();
+			return arrays != null && bridgeFailures == 0 && tileFailures == bridgeFailures && this.scene == current
+				&& current != null && current.getTiles() == arrays;
+		}
+		catch (RuntimeException unavailable)
+		{
+			return false;
+		}
+	}
+
+	boolean changed(Tile tile)
+	{
+		if (!tileIndices.containsKey(tile))
+		{
+			return false;
+		}
+		dirty.add(tile);
+		return true;
+	}
+
+	private void refresh()
+	{
+		if (dirty.isEmpty())
+		{
+			return;
+		}
+		for (Tile tile : dirty)
+		{
+			tileObjects.remove(tile);
+			objectIssues.remove(tile);
+			tileItems.remove(tile);
+			itemIssues.remove(tile);
+		}
+		dirty.clear();
+		objects = null;
+		itemsByPlane.clear();
+	}
+
 	List<ObjectRow> objects(int plane)
 	{
+		refresh();
 		if (objects == null)
 		{
 			objects = new HashMap<>();
 			objectFailures = bridgeFailures;
 			indexTilePlanes();
+			planeEvidence.clear();
+			planeReasons.clear();
+			planeIssues.clear();
 			Set<TileObject> seen = Collections.newSetFromMap(new IdentityHashMap<>());
 			for (int index = 0; index < tiles.size(); index++)
 			{
@@ -183,55 +280,167 @@ final class SceneCaptureTraversal
 				{
 					recordPlane(tilePlanes[index], "TILE_REPORTED_PLANE");
 				}
-				try
+				for (ObjectRow row : objectRows(tile))
 				{
-					add(seen, "groundObject", tile.getGroundObject());
-				}
-				catch (RuntimeException unavailable)
-				{
-					objectFailure("ground object");
-				}
-				try
-				{
-					add(seen, "wallObject", tile.getWallObject());
-				}
-				catch (RuntimeException unavailable)
-				{
-					objectFailure("wall object");
-				}
-				try
-				{
-					add(seen, "decorativeObject", tile.getDecorativeObject());
-				}
-				catch (RuntimeException unavailable)
-				{
-					objectFailure("decoration");
-				}
-				try
-				{
-					GameObject[] games = tile.getGameObjects();
-					if (games != null)
+					try
 					{
-						for (GameObject game : games)
-						{
-							try
-							{
-								add(seen, "gameObject", game);
-							}
-							catch (RuntimeException unavailable)
-							{
-								objectFailure("game object");
-							}
-						}
+						add(seen, row.kind, row.object);
+					}
+					catch (RuntimeException unavailable)
+					{
+						objectFailure("game object");
 					}
 				}
-				catch (RuntimeException unavailable)
+				Map<String, String> issues = objectIssues.get(tile);
+				if (issues != null)
 				{
-					objectFailure("game object");
+					for (String kind : issues.keySet())
+					{
+						objectFailure(kind);
+					}
 				}
 			}
 		}
 		return objects.getOrDefault(plane, Collections.emptyList());
+	}
+
+	List<ObjectRow> objectRows(Tile tile)
+	{
+		refresh();
+		List<ObjectRow> rows = tileObjects.get(tile);
+		if (rows != null)
+		{
+			return rows;
+		}
+		rows = new ArrayList<>();
+		readObject(tile, rows, "groundObject", "ground object", tile::getGroundObject);
+		readObject(tile, rows, "wallObject", "wall object", tile::getWallObject);
+		readObject(tile, rows, "decorativeObject", "decoration", tile::getDecorativeObject);
+		try
+		{
+			GameObject[] games = tile.getGameObjects();
+			if (games != null)
+			{
+				for (GameObject game : games)
+				{
+					if (game != null)
+					{
+						rows.add(new ObjectRow("gameObject", game));
+					}
+				}
+			}
+		}
+		catch (RuntimeException unavailable)
+		{
+			objectIssues.computeIfAbsent(tile, key -> new LinkedHashMap<>()).put("game object",
+				unavailable.getClass().getSimpleName());
+		}
+		tileObjects.put(tile, rows);
+		return rows;
+	}
+
+	private void readObject(Tile tile, List<ObjectRow> rows, String kind, String issue,
+		java.util.function.Supplier<TileObject> read)
+	{
+		try
+		{
+			TileObject object = read.get();
+			if (object != null)
+			{
+				rows.add(new ObjectRow(kind, object));
+			}
+		}
+		catch (RuntimeException unavailable)
+		{
+			objectIssues.computeIfAbsent(tile, key -> new LinkedHashMap<>()).put(issue,
+				unavailable.getClass().getSimpleName());
+		}
+	}
+
+	List<ItemRow> items(int plane)
+	{
+		refresh();
+		List<ItemRow> rows = itemsByPlane.get(plane);
+		if (rows != null)
+		{
+			return rows;
+		}
+		rows = new ArrayList<>();
+		for (Tile tile : tiles(plane))
+		{
+			List<TileItem> items = tileItems.get(tile);
+			if (items == null)
+			{
+				items = new ArrayList<>();
+				try
+				{
+					List<TileItem> current = tile.getGroundItems();
+					if (current != null)
+					{
+						items.addAll(current);
+					}
+					else if (tile.getItemLayer() != null)
+					{
+						itemIssues.add(tile);
+					}
+				}
+				catch (RuntimeException unavailable)
+				{
+					itemIssues.add(tile);
+				}
+				tileItems.put(tile, items);
+			}
+			for (TileItem item : items)
+			{
+				if (item != null)
+				{
+					rows.add(new ItemRow(tile, item));
+				}
+			}
+		}
+		itemsByPlane.put(plane, rows);
+		return rows;
+	}
+
+	Tile bridge(Tile tile)
+	{
+		return bridges.get(tile);
+	}
+
+	int reportedPlane(Tile tile)
+	{
+		indexTilePlanes();
+		Integer index = tileIndices.get(tile);
+		return index == null ? Integer.MIN_VALUE : tilePlanes[index];
+	}
+
+	Map<String, String> objectErrors(Tile tile)
+	{
+		return objectIssues.getOrDefault(tile, Collections.emptyMap());
+	}
+
+	int itemFailures(int plane)
+	{
+		int failures = 0;
+		for (Tile tile : tiles(plane))
+		{
+			if (itemIssues.contains(tile))
+			{
+				failures++;
+			}
+		}
+		return failures;
+	}
+
+	void retryFailures()
+	{
+		if (objectFailures > bridgeFailures)
+		{
+			objects = null;
+		}
+		dirty.addAll(objectIssues.keySet());
+		dirty.addAll(itemIssues);
+		refresh();
 	}
 
 	private void objectFailure(String kind)

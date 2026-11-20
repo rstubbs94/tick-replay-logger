@@ -70,7 +70,7 @@ public class RichNpcEncodingTest
 		assertNotNull("Use the actual shared encoding path", export.getNpcStateTable());
 		assertTrue(export.getNpcStateTable().getValues().stream().anyMatch(value -> value.isJsonPrimitive()
 			&& value.getAsJsonPrimitive().isString() && value.getAsString().startsWith("injected:")));
-		NpcStateEncoding.Reader reader = new NpcStateEncoding.Reader(export.getNpcStateTable(), injected);
+		NpcStateDecoder reader = new NpcStateDecoder(export.getNpcStateTable(), injected);
 		for (int index = 0; index < original.size(); index++)
 			assertEquals(gson.toJsonTree(original.get(index).getNpcs()),
 				gson.toJsonTree(reader.read(export.getTicks().get(index))));

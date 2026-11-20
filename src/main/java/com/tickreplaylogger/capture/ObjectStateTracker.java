@@ -144,7 +144,8 @@ public final class ObjectStateTracker
 		{
 			info.put("currentMetadataFailures", currentMetadataFailures);
 		}
-		info.put("reconciledEverySnapshot", true);
+		info.put("reconciledEverySnapshot", false);
+		info.put("membershipEvidence", "SCENE_SEED_AND_LIFECYCLE_EVENTS");
 		info.put("membershipStatus", !membershipAvailable ? "UNAVAILABLE"
 			: membershipComplete ? "COMPLETE_EXPOSED_SCENE_SCAN" : "PARTIAL_EXPOSED_SCENE_SCAN");
 		info.put("complete", membershipComplete && currentFailures == 0 && currentDropped == 0);

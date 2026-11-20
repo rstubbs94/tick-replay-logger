@@ -35,6 +35,7 @@ import com.tickreplaylogger.util.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.inject.Inject;
 import lombok.RequiredArgsConstructor;
@@ -96,7 +97,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	@Inject
 	private ClientThread clientThread;
 
-	private TickRecorder tickRecorder;
 	private RecordingStorage recordingStorage;
 	private TickReplayLoggerPanel panel;
 	private NavigationButton navButton;
@@ -104,10 +104,8 @@ public class TickReplayLoggerPlugin extends Plugin
 	// --- Rich death-reconstruction capture (WorldSnapshot buffer feeding the versioned export) ---
 	private WorldCaptureService captureService;
 	private final ObjectHazards.ObservationIdentities surfaceObservationIds = new ObjectHazards.ObservationIdentities();
-	private WorldSnapshotRecorder worldRecorder;
+	private volatile WorldSnapshotRecorder worldRecorder;
 	private DamageMap damageMap;
-	private SourceResolutionWorker sourceWorker;
-	private long sourceEvidenceRevision;
 	// Attributed NPC id/spotanim bookkeeping for labelling + effect dedupe.
 	private final Set<Integer> activeEffectSpotanims = new HashSet<>();
 	private Integer lastEffectGraphicSampleTick;
@@ -148,7 +146,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	private int currentGameTick = 0;
 
 	private final List<PendingHit> pendingHits = new ArrayList<>();
-	private final Map<Long, DamageRecord> resourceImpactContexts = new LinkedHashMap<>();
 	private static final int MAX_RESOURCE_IMPACTS_PER_TICK = 256;
 	private int resourceImpactQueueCount;
 	/** Scoped to one callback lookup or deferred batch, restored even if an optional read fails. */
@@ -230,50 +227,44 @@ public class TickReplayLoggerPlugin extends Plugin
 	private volatile String capturedRsn;
 	private volatile int capturedWorld;
 
-	/** Immutable impact observation; attacker evidence is resolved after packet processing. */
+	/** Original callback receipt plus the independently sampled contact/native context awaiting finalization. */
 	private static class PendingHit
 	{
-		final int amount;
-		final int hitsplatType;
-		final DamageEvent.DamageType damageType;
-		final List<String> prayers;
+		final ObservedEvent original;
+		final CallbackContext context;
 		final WorldPoint position;
-		final List<Map<String, Object>> hazardWitnesses;
-		final long epoch;
-		final Integer observedCycle;
-		final long sequence;
-		final PrayerObservation prayerObservation;
-		final ActorGraphicsState graphicsObservation;
 		final NativeHitScope nativeScope;
-		String impactSceneKey;
-		final List<String> captureIssues = new ArrayList<>();
+		final PrayerObservation prayerObservation;
+		final List<Map<String, Object>> hazardWitnesses = new ArrayList<>();
+		final List<Map<String, Object>> sourceWitnesses = new ArrayList<>();
+		final List<String> captureIssues;
+		String impactSceneKey, defenderName;
 		String defenderIdentityEvidence = "CALLBACK_LOCAL_REFERENCE_MATCH";
 		boolean hpOutcomeKnown = true;
-		Map<String, Object> inventorySourceObservation;
-		String defenderName;
-		final List<Map<String, Object>> sourceWitnesses = new ArrayList<>();
 
-		PendingHit(int amount, int hitsplatType, DamageEvent.DamageType damageType, List<String> prayers,
-			WorldPoint position, NativeHitScope nativeScope, Integer observedCycle, long sequence,
-			PrayerObservation prayerObservation, List<Map<String, Object>> hazardWitnesses, long epoch,
-			ActorGraphicsState graphicsObservation)
+		PendingHit(ObservedEvent original, CallbackContext context, WorldPoint position, NativeHitScope nativeScope,
+			PrayerObservation prayerObservation, List<Map<String, Object>> contacts)
 		{
-			this.amount = amount;
-			this.hitsplatType = hitsplatType;
-			this.damageType = damageType;
-			this.prayers = new ArrayList<>(prayers);
+			this.original = Objects.requireNonNull(original);
+			this.context = context;
 			this.position = position;
 			this.nativeScope = nativeScope;
-			this.hazardWitnesses = new ArrayList<>();
-			for (Map<String, Object> witness : hazardWitnesses)
-			{
-				this.hazardWitnesses.add(new LinkedHashMap<>(witness));
-			}
-			this.epoch = epoch;
-			this.observedCycle = observedCycle;
-			this.sequence = sequence;
 			this.prayerObservation = prayerObservation;
-			this.graphicsObservation = graphicsObservation;
+			captureIssues = context.issues;
+			for (Map<String, Object> witness : contacts)
+			{
+				hazardWitnesses.add(new LinkedHashMap<>(witness));
+			}
+		}
+
+		int amount()
+		{
+			return ((Number) original.getData().get("amount")).intValue();
+		}
+
+		int type()
+		{
+			return ((Number) original.getData().get("hitsplatType")).intValue();
 		}
 	}
 
@@ -347,15 +338,11 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
+	@RequiredArgsConstructor
 	private static class UnassignedHit
 	{
-		Actor actor;
-		int amount, type;
-		String surface;
-		Integer hp;
-		long sequence;
-		CallbackContext context;
-		ActorGraphicsState graphicsObservation;
+		final Actor actor;
+		final PendingHit hit;
 	}
 
 	private static class UnassignedDeath
@@ -480,11 +467,9 @@ public class TickReplayLoggerPlugin extends Plugin
 		boolean replacingCapture = worldRecorder != null;
 		// Freeze this process's provenance before a later development rebuild replaces resources.
 		CaptureBuild.sourceTreeHash();
-		tickRecorder = new TickRecorder(config.ticksToRecord());
 		recordingStorage = new RecordingStorage(config.maxDeathsToStore(), gson, getPluginDirectory());
 		captureService = new WorldCaptureService(surfaceObservationIds);
 		damageMap = DamageMap.load(gson);
-		sourceWorker = new SourceResolutionWorker(executorService, task -> clientThread.invokeLater(task), gson);
 		sourceAssociationNpcs = SourceAssociationNpcIndex.load(gson);
 		captureService.setDamageMap(damageMap);
 		worldRecorder = new WorldSnapshotRecorder(config.ticksToRecord(), gson);
@@ -496,7 +481,6 @@ public class TickReplayLoggerPlugin extends Plugin
 				if (worldRecorder == startingRecorder)
 				{
 					resetTransientTracking();
-					tickRecorder.clear();
 					startingRecorder.clear();
 				}
 			});
@@ -504,8 +488,8 @@ public class TickReplayLoggerPlugin extends Plugin
 
 		// Create panel
 		panel = new TickReplayLoggerPanel(recordingStorage, spriteManager, gson, config, damageMap);
-		panel.setTickRecorder(tickRecorder);
-		panel.setLiveSnapshotPreparer(this::prepareLiveExport);
+		panel.setTickRecorder(worldRecorder);
+		panel.setLiveCaptureRequester(this::requestLiveCapture);
 		panel.setLiveViewEnabled(config.enableLiveView());
 		TickReplayLoggerPanel startingPanel = panel;
 		recordingStorage.ready().whenComplete((ignored, error) -> startingPanel.storageCompleted(error));
@@ -544,17 +528,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 
 		WorldSnapshotRecorder closingRecorder = worldRecorder;
-		TickRecorder closingJournal = tickRecorder;
 		WorldCaptureService closingCapture = captureService;
 		Runnable releaseCapture = () ->
 		{
 			if (closingRecorder != null)
 			{
 				closingRecorder.clear();
-			}
-			if (closingJournal != null)
-			{
-				closingJournal.clear();
 			}
 			if (closingCapture != null)
 			{
@@ -717,14 +696,10 @@ public class TickReplayLoggerPlugin extends Plugin
 		case LOGIN_SCREEN:
 			// Logged out â€” clear everything and treat the next login as fresh
 			loginPending = true;
-			if (tickRecorder != null)
-			{
-				tickRecorder.clear();
-				log.debug("Player logged out - tick recorder cleared");
-			}
 			if (worldRecorder != null)
 			{
 				worldRecorder.clear();
+				log.debug("Player logged out - tick recorder cleared");
 			}
 			resetTransientTracking();
 			break;
@@ -734,14 +709,10 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				// Fresh login: restart the tick counter and buffer for a new session
 				loginPending = false;
-				if (tickRecorder != null)
-				{
-					tickRecorder.resetTickCounter();
-					log.debug("Player logged in - tick recorder reset");
-				}
 				if (worldRecorder != null)
 				{
-					worldRecorder.clear();
+					worldRecorder.resetTickCounter();
+					log.debug("Player logged in - tick recorder reset");
 				}
 				resetTransientTracking();
 			}
@@ -814,11 +785,6 @@ public class TickReplayLoggerPlugin extends Plugin
 	 */
 	private void resetTransientTracking()
 	{
-		if (sourceWorker != null)
-		{
-			sourceWorker.reset();
-		}
-		sourceEvidenceRevision++;
 		captureSessionObserved = false;
 		unassignedHits.clear();
 		unassignedDeaths.clear();
@@ -840,7 +806,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		pendingProjectiles.clear();
 		processedProjectiles.clear();
 		pendingHits.clear();
-		resourceImpactContexts.clear();
 		resourceImpactQueueCount = 0;
 		pendingDeath = null;
 		currentGameTick = 0;
@@ -904,10 +869,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		if (event.getKey().equals("ticksToRecord"))
 		{
 			int newCapacity = config.ticksToRecord();
-			if (tickRecorder != null)
-			{
-				tickRecorder.resize(newCapacity);
-			}
 			if (worldRecorder != null)
 			{
 				worldRecorder.resize(newCapacity);
@@ -1004,32 +965,31 @@ public class TickReplayLoggerPlugin extends Plugin
 	/** Match only the actor object actually read at this same delivered boundary. Never bridge identity across ticks. */
 	private void settleUnassignedIntake(Player local)
 	{
-		for (UnassignedHit hit : unassignedHits)
+		for (UnassignedHit unassigned : unassignedHits)
 		{
-			if (local == null || hit.actor != local)
+			PendingHit hit = unassigned.hit;
+			if (local == null || unassigned.actor != local)
 			{
-				tickRecorder.markStateUnavailable("callbackIdentity");
+				worldRecorder.markStateUnavailable("callbackIdentity");
 				continue;
 			}
 			CallbackContext c = hit.context;
+			int amount = hit.amount(), type = hit.type();
+			String surface = (String) hit.original.getData().get("resourceSurface");
+			long sequence = hit.original.getSequence();
 			c.issues.add("defenderIdentity: SETTLED_LOCAL_REFERENCE_MATCH");
-			recordRecipientLink("HITSPLAT", hit.sequence);
-			noteUnresolvedImpact(hit.amount, hit.type, hit.surface, hit.hp, hit.sequence, c.cycle, c.issues);
-			if (config.trackDamageReceived()
-				&& ("HP".equals(hit.surface) || "BLOCK".equals(hit.surface) && hit.amount == 0 || damageMap == null
-					|| damageMap.catalog().possibleOutcomeSurfaces(hit.type).contains("HP")))
+			recordRecipientLink("HITSPLAT", sequence);
+			noteUnresolvedImpact(amount, type, surface, integerField(hit.original.getData(), "localHpAtCallback"),
+				sequence, c.cycle, c.issues);
+			if (config.trackDamageReceived() && ("HP".equals(surface) || "BLOCK".equals(surface) && amount == 0
+				|| damageMap == null || damageMap.catalog().possibleOutcomeSurfaces(type).contains("HP")))
 			{
-				PendingHit pending = new PendingHit(hit.amount, hit.type,
-					DamageEvent.DamageType
-						.fromReference(damageMap == null ? null : damageMap.catalog().hitsplatDamageType(hit.type)),
-					Collections.emptyList(), null, null, c.cycle, hit.sequence, PrayerObservation.unavailable(),
-					Collections.emptyList(), c.epoch, hit.graphicsObservation);
-				pending.captureIssues.addAll(c.issues);
-				pending.hpOutcomeKnown = "HP".equals(hit.surface) || "BLOCK".equals(hit.surface) && hit.amount == 0;
+				PendingHit pending = hit;
+				pending.hpOutcomeKnown = "HP".equals(surface) || "BLOCK".equals(surface) && amount == 0;
 				pending.defenderIdentityEvidence = "SETTLED_LOCAL_REFERENCE_MATCH";
 				if (!pending.hpOutcomeKnown && resourceImpactQueueCount++ >= MAX_RESOURCE_IMPACTS_PER_TICK)
 				{
-					tickRecorder
+					worldRecorder
 						.addCaptureIssue("resourceImpacts: attribution queue limit; original callback retained");
 					continue;
 				}
@@ -1050,7 +1010,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			}
 			else
 			{
-				tickRecorder.markStateUnavailable("callbackIdentity");
+				worldRecorder.markStateUnavailable("callbackIdentity");
 			}
 		}
 		unassignedHits.clear();
@@ -1068,224 +1028,44 @@ public class TickReplayLoggerPlugin extends Plugin
 				.actorRef("player").resolvedTick(currentGameTick).evidence("SETTLED_LOCAL_REFERENCE_MATCH").build());
 	}
 
-	private static boolean distinctFatalSources(List<DamageRecord> candidates)
-	{
-		if (candidates.size() < 2)
-		{
-			return false;
-		}
-		Set<String> sources = new LinkedHashSet<>();
-		for (DamageRecord hit : candidates)
-		{
-			if (hit.getAttackerRef() != null && !hit.getAttackerRef().trim().isEmpty())
-			{
-				sources.add("actor:" + hit.getAttackerRef());
-			}
-			else if ("STATUS_HITSPLAT".equals(hit.getAttributionEvidence()))
-			{
-				sources.add("status:" + hit.getDamageType() + ":" + hit.getAttackerName());
-			}
-			else
-			{
-				return true;
-			} // Equal display names do not identify a shared actor or causal hit.
-		}
-		return sources.size() > 1;
-	}
-
+	/** Freeze the observed death window once; attribution and wire projection run only on the storage worker. */
 	private void recordDeath(PendingDeath deathContext)
 	{
-		log.debug("PLAYER DIED! Recording settled death trace...");
-
-		// Get the tick history
-		List<TickData> tickHistory = tickRecorder.getTickHistory();
-
-		if (tickHistory.isEmpty())
+		WorldSnapshotRecorder recorder = worldRecorder;
+		List<TickData> history = recorder.getTickHistory();
+		if (history.isEmpty())
 		{
 			log.warn("No tick data recorded before death");
 			return;
 		}
-
-		// Use the final observed positive HP hit, preserving its source uncertainty. A recent
-		// engager cannot replace a missing or ambiguous fatal observation.
-		String killer = "Unknown";
-		DamageEvent fatalJournalHit = null;
-		List<DamageEvent> journalCandidates = new ArrayList<>();
-		for (int i = 0; i < tickHistory.size(); i++)
-		{
-			if (tickHistory.get(i).getTickNumber() != currentGameTick)
-			{
-				continue;
-			}
-			List<DamageEvent> evs = tickHistory.get(i).getDamageEvents();
-			if (evs == null)
-			{
-				continue;
-			}
-			for (int j = 0; j < evs.size(); j++)
-			{
-				DamageEvent de = evs.get(j);
-				if (de.getDirection() == DamageEvent.DamageDirection.RECEIVED && de.getAmount() > 0)
-				{
-					fatalJournalHit = de;
-					journalCandidates.add(de);
-					killer = de.getSource() != null ? de.getSource() : "Unknown";
-				}
-			}
-		}
-		List<Map<String, Object>> unresolved = unresolvedImpactTick == currentGameTick
-			? new ArrayList<>(unresolvedImpactObservations)
-			: new ArrayList<>();
-		int unresolvedCount = unresolvedImpactTick == currentGameTick ? unresolvedImpactCount : 0;
-		String fatalBasis = unresolvedCount > 0 ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
-			: journalCandidates.isEmpty() ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
-				: journalCandidates.size() > 1 ? "LAST_POSITIVE_RECEIVED_JOURNAL_RECORD_IN_DEATH_TICK"
-					: "UNIQUE_POSITIVE_RECEIVED_JOURNAL_RECORD_IN_DEATH_TICK";
-		boolean mixedJournal = journalCandidates.size() > 1 && !journalCandidates.stream()
-			.allMatch(hit -> (hit.getDamageType() == DamageEvent.DamageType.POISON
-				|| hit.getDamageType() == DamageEvent.DamageType.VENOM)
-				&& hit.getDamageType() == journalCandidates.get(0).getDamageType()
-				&& Objects.equals(hit.getSource(), journalCandidates.get(0).getSource()));
-		String killerBasis = unresolvedCount > 0 ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
-			: mixedJournal ? "MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS"
-				: journalCandidates.isEmpty() ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
-					: "SELECTED_RECORD_SOURCE_ONLY";
-		String killerConfidence = fatalJournalHit == null || fatalJournalHit.getConfidence() == null ? "UNKNOWN"
-			: fatalJournalHit.getConfidence();
-		if (unresolvedCount > 0 || mixedJournal)
-		{
-			killer = "Unknown";
-			killerConfidence = "UNKNOWN";
-		}
-		// Without a fatal observed HP hit, attacker history does not identify a killer.
-
-		// Try to get location
 		WorldPoint location = deathContext.position;
-		String locationStr = location != null ? "(" + location.getX() + ", " + location.getY() + ")" : "Unknown";
-
-		// Calculate total damage received
-		int totalDamage = TickRecording.calculateTotalDamage(tickHistory);
-
-		// Build the rich versioned export (the full Phase-2 payload â€” scenes, per-tick snapshots, events,
-		// summary) from the WorldSnapshot buffer FIRST, so it can be stored on the death record and the
-		// single "Copy" action emits the complete data.
-		DeathRecordingV2 frozenExport = null;
-		WorldSnapshotRecorder exportingRecorder = worldRecorder;
-		if (worldRecorder != null)
-		{
-			try
-			{
-				DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis())
-					.rsn(deathContext.name).accountType(null).world(deathContext.world)
-					.worldKnown(deathContext.worldKnown)
-					.captureIssues(deathContext.issues.isEmpty() ? null : new ArrayList<>(deathContext.issues))
-					.deathTick(currentGameTick).bufferTicks(RecordingLimits.ticks(config.ticksToRecord()))
-					.captureRadius(0).captureSettings(captureSettings()).build();
-				// Callback order selects a record for inspection, not a proven lethal server roll.
-				DamageRecord fatal = worldRecorder.lastDamagingHit();
-				List<DamageRecord> fatalCandidates = worldRecorder.positiveReceivedAtTick(currentGameTick);
-				boolean missingFatal = fatal == null || fatal.getImpactTick() != currentGameTick;
-				if (missingFatal)
-				{
-					fatal = null;
-					killer = "Unknown (no HP impact linked to death tick)";
-				}
-				boolean unresolvedFatal = unresolvedCount > 0
-					|| worldRecorder.hasUnresolvedPlayerImpact(currentGameTick, fatal);
-				if (unresolvedFatal)
-				{
-					fatal = null;
-					killer = "Unknown (HP/resource impact unresolved)";
-				}
-				String killerName = killer;
-				killerConfidence = "UNKNOWN";
-				if (fatal != null && fatal.getAttackerName() != null)
-				{
-					killerName = fatal.getAttackerName();
-					killerConfidence = fatal.getAttribution();
-				}
-				boolean mixedFatal = distinctFatalSources(fatalCandidates);
-				if (mixedFatal && !unresolvedFatal && !missingFatal)
-				{
-					killerName = "Unknown";
-					killerConfidence = "UNKNOWN";
-				}
-				killerBasis = unresolvedFatal ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
-					: missingFatal ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
-						: mixedFatal ? "MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS" : "SELECTED_RECORD_SOURCE_ONLY";
-				DeathRecordingV2.Summary summary = DeathRecordingV2.Summary.builder().killerName(killerName)
-					.killerConfidence(killerConfidence).killerBasis(killerBasis)
-					.unresolvedImpactObservations(unresolved).unresolvedImpactObservationCount(unresolvedCount)
-					.fatalHit(fatal).sourceResolution(fatal == null ? null : fatal.getSourceResolution())
-					.fatalHitCandidates(fatalCandidates)
-					.fatalHitBasis(unresolvedFatal ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
-						: missingFatal ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
-							: fatalCandidates.size() > 1 ? "LAST_POSITIVE_RECEIVED_CALLBACK_IN_DEATH_TICK"
-								: "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK")
-					// IMPACT = reactable mid-flight; LAUNCH = not; UNKNOWN/none = leave null.
-					.reactable(fatal == null || fatalCandidates.size() > 1 ? null
-						: "IMPACT".equals(fatal.getDetermination()) ? Boolean.TRUE
-							: "LAUNCH".equals(fatal.getDetermination()) ? Boolean.FALSE : null)
-					.activity(null).bossName(null).totalDamageTakenInBuffer(totalDamage)
-					.ticksCaptured(worldRecorder.size()).otherPlayersPresent(false).build();
-				killer = killerName;
-				fatalBasis = summary.getFatalHitBasis();
-				frozenExport = worldRecorder
-					.freezeExport(meta, summary, tickHistory.get(0).getTickNumber(), currentGameTick).toBuilder()
-					.journalTicks(new ArrayList<>(tickHistory)).build();
-			}
-			catch (Exception e)
-			{
-				log.debug("Failed to build v2 death export: {}", e.getMessage());
-			}
-		}
-
-		// Create death record (carries the rich export so a single Copy emits everything)
-		TickRecording death = TickRecording.builder().timestamp(deathContext.timestamp).killerName(killer)
-			.killerConfidence(killerConfidence).killerBasis(killerBasis).fatalHitBasis(fatalBasis)
-			.fatalSourceResolution(frozenExport == null || frozenExport.getSummary() == null ? null
-				: frozenExport.getSummary().getSourceResolution())
-			.fatalHitCandidates(journalCandidates).unresolvedImpactObservations(unresolved)
-			.unresolvedImpactObservationCount(unresolvedCount).location(locationStr).ticks(new ArrayList<>(tickHistory))
-			.eventsBeforeSnapshot(true).finalHp(0).finalHpKnown(true) // This wrapper records an observed death, independently of resource reads.
-			.totalDamageReceived(totalDamage).build();
-
-		// The selected window no longer depends on the rolling buffer. Finish and persist it on
-		// the ordered storage worker, which drains already accepted recordings on shutdown.
-		DeathRecordingV2 selectedExport = frozenExport;
+		String locationText = location == null ? "Unknown" : "(" + location.getX() + ", " + location.getY() + ")";
+		DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis()).rsn(deathContext.name)
+			.world(deathContext.world).worldKnown(deathContext.worldKnown)
+			.captureIssues(deathContext.issues.isEmpty() ? null : new ArrayList<>(deathContext.issues))
+			.deathTick(currentGameTick).bufferTicks(RecordingLimits.ticks(config.ticksToRecord())).captureRadius(0)
+			.captureSettings(captureSettings()).build();
+		DeathRecordingV2.Summary summary = DeathRecordingV2.Summary.builder()
+			.unresolvedImpactObservations(
+				unresolvedImpactTick == currentGameTick ? new ArrayList<>(unresolvedImpactObservations)
+					: Collections.emptyList())
+			.unresolvedImpactObservationCount(unresolvedImpactTick == currentGameTick ? unresolvedImpactCount : 0)
+			.totalDamageTakenInBuffer(TickRecording.calculateTotalDamage(history)).ticksCaptured(history.size())
+			.build();
+		DeathRecordingV2 frozen = recorder.freezeExport(meta, summary, history.get(0).getTickNumber(), currentGameTick);
 		TickReplayLoggerPanel currentPanel = panel;
-		recordingStorage.addDeath(() ->
-		{
-			if (selectedExport != null)
+		recordingStorage.addDeath(() -> TickRecording.fromPrepared(recorder.completeExport(frozen),
+			deathContext.timestamp, locationText, true)).whenComplete((ignored, error) ->
 			{
-				DeathRecordingV2 completed = exportingRecorder.completeExport(selectedExport);
-				completed = completed.toBuilder()
-					.journalTicks(ResolverV1Recording.projectJournalTicks(death.getTicks(), completed)).build();
-				DeathRecordingV2.Summary resolved = completed.getSummary();
-				return death.toBuilder().richExportJson(gson.toJson(completed))
-					.ticks(completed.getJournalTicks() == null ? death.getTicks() : completed.getJournalTicks())
-					.killerName(resolved == null ? death.getKillerName() : resolved.getKillerName())
-					.killerConfidence(resolved == null ? death.getKillerConfidence() : resolved.getKillerConfidence())
-					.killerBasis(resolved == null ? death.getKillerBasis() : resolved.getKillerBasis())
-					.fatalSourceResolution(
-						resolved == null ? death.getFatalSourceResolution() : resolved.getSourceResolution())
-					.build();
-			}
-			return death;
-		}).whenComplete((ignored, error) ->
-		{
-			if (currentPanel != null)
-			{
-				currentPanel.storageCompleted(error);
-			}
-			if (error != null)
-			{
-				log.error("Could not save the death recording", error);
-			}
-		});
-
-		log.debug("Death recorded: Killed by {} at {}. {} ticks captured, {} total damage received.", killer,
-			locationStr, tickHistory.size(), totalDamage);
+				if (currentPanel != null)
+				{
+					currentPanel.storageCompleted(error);
+				}
+				if (error != null)
+				{
+					log.error("Could not save the death recording", error);
+				}
+			});
 	}
 
 	@Subscribe
@@ -1387,6 +1167,12 @@ public class TickReplayLoggerPlugin extends Plugin
 				"disappearsOnGameCycle", hitsplat.getDisappearsOnGameCycle(), "renderingKnown", false),
 			context);
 
+		ObservedEvent callback = worldRecorder == null ? null : worldRecorder.originalObservation(sequence);
+		if (callback == null)
+		{
+			return;
+		}
+
 		// Zero HP observations still compete for a projectile; zero does not prove a miss.
 		if (damage == 0 && !possibleHp && !"HP".equals(surface) && hitsplatType != HitsplatID.BLOCK_ME
 			&& hitsplatType != HitsplatID.BLOCK_OTHER)
@@ -1398,16 +1184,8 @@ public class TickReplayLoggerPlugin extends Plugin
 		// isMine() alone doesn't catch environmental damage (acid pools, poison, etc.)
 		if (localPlayer == null && actor instanceof Player)
 		{
-			UnassignedHit deferred = new UnassignedHit();
-			deferred.actor = actor;
-			deferred.amount = damage;
-			deferred.type = hitsplatType;
-			deferred.surface = surface;
-			deferred.hp = callbackHp;
-			deferred.sequence = sequence;
-			deferred.context = context;
-			deferred.graphicsObservation = graphicsAtImpact;
-			unassignedHits.add(deferred);
+			unassignedHits.add(new UnassignedHit(actor, new PendingHit(callback, context, null, null,
+				PrayerObservation.unavailable(), Collections.emptyList())));
 			return;
 		}
 		if (actor == localPlayer)
@@ -1455,14 +1233,9 @@ public class TickReplayLoggerPlugin extends Plugin
 					return null;
 				}), callbackIssues);
 			}
-			PrayerObservation prayerObservation = callbackPrayer;
-			List<String> prayers = prayerObservation == null ? Collections.emptyList()
-				: getActivePrayers(prayerObservation);
 			WorldView view = nativeScope.view;
-			PendingHit pending = new PendingHit(damage, hitsplatType, determineDamageType(hitsplat),
-				prayers == null ? Collections.emptyList() : prayers, impactPosition, nativeScope, context.cycle,
-				sequence, prayerObservation == null ? PrayerObservation.unavailable() : prayerObservation,
-				contactWitnesses, context.epoch, graphicsAtImpact);
+			PendingHit pending = new PendingHit(callback, context, impactPosition, nativeScope,
+				callbackPrayer == null ? PrayerObservation.unavailable() : callbackPrayer, contactWitnesses);
 			pending.defenderName = actorState.get("name") instanceof String ? (String) actorState.get("name") : null;
 			for (Map<String, Object> witness : contactWitnesses)
 			{
@@ -1486,13 +1259,11 @@ public class TickReplayLoggerPlugin extends Plugin
 					return null;
 				});
 			}
-			pending.inventorySourceObservation = inventorySourceObservation;
 			pending.hpOutcomeKnown = isPlayerDamageType;
 			pending.impactSceneKey = context.primaryKnown && context.localView == view ? context.primarySceneKey : null;
-			pending.captureIssues.addAll(callbackIssues);
 			if (!pending.hpOutcomeKnown && resourceImpactQueueCount++ >= MAX_RESOURCE_IMPACTS_PER_TICK)
 			{
-				tickRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callback retained");
+				worldRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callback retained");
 				return;
 			}
 			pendingHits.add(pending);
@@ -1516,8 +1287,6 @@ public class TickReplayLoggerPlugin extends Plugin
 			DamageEvent.DamageType damageType = determineDamageType(hitsplat);
 			// The currently equipped weapon/animation does not identify an arriving
 			// projectile, reflected hit or summon hit. Ownership is recorded separately.
-			DamageEvent damageEvent = DamageEvent.dealt(damage, damageType, targetName);
-			tickRecorder.addDamageEvent(damageEvent);
 			recordNpcDamage(npc, hitsplat, damageType, sequence, true, context, graphicsAtImpact);
 
 			log.debug("DAMAGE: Dealt {} to {}", damage, targetName);
@@ -1761,8 +1530,8 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		catch (RuntimeException unavailable)
 		{
-			tickRecorder.markStateUnavailable(stage);
-			tickRecorder.addCaptureIssue(stage + ": remainingCycles: " + unavailable.getClass().getSimpleName());
+			worldRecorder.markStateUnavailable(stage);
+			worldRecorder.addCaptureIssue(stage + ": remainingCycles: " + unavailable.getClass().getSimpleName());
 			return false; // An unavailable lifetime does not establish that the object expired.
 		}
 	}
@@ -2488,18 +2257,18 @@ public class TickReplayLoggerPlugin extends Plugin
 			settledIssues.add("settledLocalPlayer: unavailable");
 		}
 		currentGameTick++;
-		tickRecorder.startNewTick();
+		worldRecorder.startNewTick();
 		if (worldRecorder != null)
 		{
 			worldRecorder.advanceTick(currentGameTick);
 		}
 		Integer apiTick = readHitContext("boundaryApiTickCount", client::getTickCount, settledIssues);
 		Integer cycle = readHitContext("boundaryGameCycle", client::getGameCycle, settledIssues);
-		tickRecorder.setBoundaryContext(state == null ? null : state.name(), apiTick, cycle);
+		worldRecorder.setBoundaryContext(state == null ? null : state.name(), apiTick, cycle);
 		settleUnassignedIntake(localPlayer);
 		if (localPlayer == null)
 		{
-			tickRecorder.markStateUnavailable("localPlayer");
+			worldRecorder.markStateUnavailable("localPlayer");
 			for (PendingHit hit : pendingHits)
 			{
 				hit.captureIssues.addAll(settledIssues);
@@ -2520,13 +2289,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		finally
 		{
-			runSettledStage("resourceImpactContext", this::flushResourceImpactContexts);
 			projectilesThisTick.clear();
 			for (String issue : settledIssues)
 			{
-				tickRecorder.addCaptureIssue(issue);
+				worldRecorder.addCaptureIssue(issue);
 			}
-			tickRecorder.finalizeTick();
+			worldRecorder.finalizeTick();
 		}
 
 		if (pendingDeath != null)
@@ -2562,12 +2330,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		// Set telemetry data
 		if (config.trackTickTime() && tickDuration > 0)
 		{
-			tickRecorder.setTickDuration(tickDuration);
+			worldRecorder.setTickDuration(tickDuration);
 		}
 		if (config.trackPing())
 		{
-			tickRecorder.setPing(currentPingMs);
-			tickRecorder.setPacketLoss(getPacketLossPercent());
+			worldRecorder.setPing(currentPingMs);
+			worldRecorder.setPacketLoss(getPacketLossPercent());
 		}
 	}
 
@@ -2575,10 +2343,10 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		causalSceneEpoch++;
 		String issue = "settledContext: " + reason;
-		tickRecorder.addCaptureIssue(issue);
-		tickRecorder.markStateUnavailable("movement");
-		tickRecorder.markStateUnavailable("callbackCoverage");
-		tickRecorder.updateObservedState(null, null, null, null, Collections.emptyList(), false);
+		worldRecorder.addCaptureIssue(issue);
+		worldRecorder.markStateUnavailable("movement");
+		worldRecorder.markStateUnavailable("callbackCoverage");
+		worldRecorder.updateObservedState(null, null, null, null, Collections.emptyList(), false);
 		for (PendingHit hit : pendingHits)
 		{
 			hit.captureIssues.add(issue);
@@ -2596,7 +2364,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		activeEffectSpotanims.clear();
 		capturedWorld = 0;
 		unavailableWorldSnapshot(reason);
-		runSettledStage("sourceResolution", this::resolveRecordedSources);
 	}
 
 	private void captureReadyGameTick(Player localPlayer, List<String> settledIssues)
@@ -2648,7 +2415,7 @@ public class TickReplayLoggerPlugin extends Plugin
 				if (config.trackMovement() && distance > 0)
 				{
 					MovementData movement = MovementData.completed(distance);
-					tickRecorder.setMovement(movement);
+					worldRecorder.setMovement(movement);
 				}
 			}
 			lastPlayerPosition = currentPosition;
@@ -2659,7 +2426,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			lastPlayerPosition = null;
 			lastMovementScope = null;
 			lastCaptureWorld = null;
-			tickRecorder.markStateUnavailable("movement");
+			worldRecorder.markStateUnavailable("movement");
 			settledIssues.add("settledMovement: " + unavailable.getClass().getSimpleName());
 		}
 
@@ -2718,7 +2485,6 @@ public class TickReplayLoggerPlugin extends Plugin
 						? PlayerAction.prayerDrained(prayer, reason)
 						: PlayerAction.builder().type(PlayerAction.ActionType.PRAYER_DEACTIVATED).target(prayer)
 							.description(prayer + " (" + reason + ")").build();
-					tickRecorder.addPlayerAction(drainedAction);
 					recordAction(drainedAction, null, null, 0, "DERIVED");
 
 					// Rich capture: a prayer-disable / prayer-drain combat effect.
@@ -2747,7 +2513,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		lastTickPrayerPoints = currentPrayer == null ? 0 : currentPrayer;
 
 		// Update state
-		tickRecorder.updateObservedState(currentHp, maxHp, currentPrayer, maxPrayer, activePrayers, prayerStateKnown);
+		worldRecorder.updateObservedState(currentHp, maxHp, currentPrayer, maxPrayer, activePrayers, prayerStateKnown);
 
 		if (worldRecorder != null && config.captureWorldSnapshots())
 		{
@@ -2788,80 +2554,10 @@ public class TickReplayLoggerPlugin extends Plugin
 			activeEffectSpotanims.clear();
 		}
 		runSettledStage("worldSnapshot", () -> captureWorldSnapshot(localPlayer));
-		runSettledStage("sourceResolution", this::resolveRecordedSources);
 		capturedRsn = readHitContext("settledPlayerName", () -> localPlayer == null ? null : localPlayer.getName(),
 			settledIssues);
 		Integer world = readHitContext("settledWorld", client::getWorld, settledIssues);
 		capturedWorld = world == null ? 0 : world;
-	}
-
-	private void resolveRecordedSources()
-	{
-		if (worldRecorder == null || sourceWorker == null)
-		{
-			return;
-		}
-		flushResourceImpactContexts();
-		List<DamageRecord> hits = new ArrayList<>(worldRecorder.receivedAtTick(currentGameTick));
-		hits.addAll(resourceImpactContexts.values());
-		resourceImpactContexts.clear();
-		if (hits.isEmpty())
-		{
-			return;
-		}
-		WorldSnapshotRecorder recorder = worldRecorder;
-		TickRecorder journal = tickRecorder;
-		ResolverV1Recording.EvidenceWindow window = recorder.freezeSourceEvidence(currentGameTick, observationSequence,
-			++sourceEvidenceRevision, hits);
-		sourceWorker.submit(window, hits, (resolved, failure) ->
-		{
-			if (worldRecorder != recorder || tickRecorder != journal)
-			{
-				return;
-			}
-			if (failure != null)
-			{
-				log.warn("Could not resolve recorded source observations", failure);
-				return;
-			}
-			Map<Integer, Map<Long, DamageRecord>> byTick = new LinkedHashMap<>();
-			for (Map.Entry<Long, DamageRecord> result : resolved.entrySet())
-			{
-				byTick.computeIfAbsent(result.getValue().getImpactTick(), ignored -> new LinkedHashMap<>())
-					.put(result.getKey(), result.getValue());
-			}
-			for (Map.Entry<Integer, Map<Long, DamageRecord>> tick : byTick.entrySet())
-			{
-				recorder.applyResolvedDamageRecords(tick.getKey(), tick.getValue());
-				journal.applyResolvedDamageRecords(tick.getKey(), tick.getValue());
-			}
-		});
-	}
-
-	private void flushResourceImpactContexts()
-	{
-		if (resourceImpactContexts.isEmpty())
-		{
-			return;
-		}
-		Map<Long, Map<String, Object>> enrichments = new LinkedHashMap<>();
-		for (DamageRecord context : resourceImpactContexts.values())
-		{
-			List<String> possible = damageMap == null ? Arrays.asList("HP", "UNKNOWN")
-				: damageMap.catalog().possibleOutcomeSurfaces(context.getHitsplatType());
-			enrichments.put(context.getObservationSequence(),
-				data("attributionContext",
-					context.toBuilder().attributionCandidates(null).observedHazardContacts(null).build(),
-					"attributionCandidates", context.getAttributionCandidates(), "observedHazardContacts",
-					context.getObservedHazardContacts(), "possibleOutcomeSurfaces", possible,
-					"attributionCaptureStatus", "RETAINED_IMPACT_CONTEXT", "resourceOutcomeStatus", "UNRESOLVED"));
-			tickRecorder.addEffectNote(resourceImpactNote(context.getAmount(), possible, "Unknown"),
-				context.getObservationSequence());
-		}
-		if (worldRecorder != null)
-		{
-			worldRecorder.enrichHitsplatObservations(currentGameTick, enrichments);
-		}
 	}
 
 	/** Isolate optional stages; a failed channel is not an empty observation. */
@@ -2874,8 +2570,8 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		catch (RuntimeException unavailable)
 		{
-			tickRecorder.markStateUnavailable(name);
-			tickRecorder.addCaptureIssue(name + ": " + unavailable.getClass().getSimpleName());
+			worldRecorder.markStateUnavailable(name);
+			worldRecorder.addCaptureIssue(name + ": " + unavailable.getClass().getSimpleName());
 			return false;
 		}
 	}
@@ -2888,8 +2584,8 @@ public class TickReplayLoggerPlugin extends Plugin
 		{
 			runSettledStage("actorTimingReset", captureService::invalidateActorTiming);
 		}
-		tickRecorder.markStateUnavailable("worldSnapshot");
-		tickRecorder.addCaptureIssue("worldSnapshot: " + issue);
+		worldRecorder.markStateUnavailable("worldSnapshot");
+		worldRecorder.addCaptureIssue("worldSnapshot: " + issue);
 	}
 
 	@Subscribe
@@ -2951,7 +2647,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		catch (RuntimeException unavailable)
 		{
-			tickRecorder.addCaptureIssue("menuSelfDamageContext: " + unavailable.getClass().getSimpleName());
+			worldRecorder.addCaptureIssue("menuSelfDamageContext: " + unavailable.getClass().getSimpleName());
 		}
 		if (option == null)
 		{
@@ -3059,7 +2755,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		// Add action to current tick if we captured something
 		if (action != null)
 		{
-			tickRecorder.addPlayerAction(action);
 			recordAction(action, related, itemId, sequence, "INPUT", context);
 		}
 	}
@@ -3184,7 +2879,6 @@ public class TickReplayLoggerPlugin extends Plugin
 					.itemName(weaponName).description("Special energy decreased (" + previousSpecPercent / 10 + "% to "
 						+ currentSpecPercent / 10 + "%)")
 					.build();
-				tickRecorder.addPlayerAction(specAction);
 				recordAction(specAction, null, null, sequence, "RESOURCE_CHANGE", context);
 				log.debug("ACTION: Special attack with {}", weaponName);
 			}
@@ -3481,8 +3175,8 @@ public class TickReplayLoggerPlugin extends Plugin
 				sceneScopeSignature = null;
 				primarySceneReserved = false;
 				needSceneCapture = true;
-				tickRecorder.markStateUnavailable("nativeContext");
-				tickRecorder.addCaptureIssue(
+				worldRecorder.markStateUnavailable("nativeContext");
+				worldRecorder.addCaptureIssue(
 					"nativeContext: primary scene scope unavailable; independent observations retained");
 			}
 			if (scopeKnown && (needSceneCapture || !worldRecorder.hasScene(currentSceneKey)))
@@ -3507,10 +3201,10 @@ public class TickReplayLoggerPlugin extends Plugin
 				}
 				if (!snapshotIssues.isEmpty())
 				{
-					tickRecorder.markStateUnavailable("sceneMetadata");
+					worldRecorder.markStateUnavailable("sceneMetadata");
 					for (String issue : snapshotIssues)
 					{
-						tickRecorder.addCaptureIssue(issue);
+						worldRecorder.addCaptureIssue(issue);
 					}
 				}
 			}
@@ -3623,17 +3317,11 @@ public class TickReplayLoggerPlugin extends Plugin
 	{
 		if (resourceImpactQueueCount > MAX_RESOURCE_IMPACTS_PER_TICK)
 		{
-			tickRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callbacks retained");
+			worldRecorder.addCaptureIssue("resourceImpacts: attribution queue limit; original callbacks retained");
 		}
-		pendingHits.sort(Comparator.comparingLong(hit -> hit.sequence));
+		pendingHits.sort(Comparator.comparingLong(hit -> hit.original.getSequence()));
 		for (PendingHit hit : pendingHits)
 		{
-			if (hit.hpOutcomeKnown)
-			{
-				tickRecorder
-					.addDamageEvent(DamageEvent.received(hit.amount, hit.damageType, "Unknown", "UNKNOWN", "UNKNOWN")
-						.toBuilder().observationSequence(hit.sequence).build());
-			}
 			buildReceivedDamageRecord(hit);
 		}
 		pendingHits.clear();
@@ -3692,12 +3380,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 	}
 
-	/** Called only on user save/pause; buffered observations need no off-thread client API calls. */
-	String captureLiveExport(List<TickData> journalTicks)
-	{
-		return prepareLiveExport(journalTicks).get();
-	}
-
 	/** Shared factual provenance for death and manually saved recordings. */
 	private DeathRecordingV2.Meta.MetaBuilder exportMetadata()
 	{
@@ -3715,30 +3397,34 @@ public class TickReplayLoggerPlugin extends Plugin
 			.referenceCatalogId(damageMap == null ? null : damageMap.catalog().id());
 	}
 
-	/** Freeze finished DTOs now; the returned task performs no RuneLite API reads. */
-	private Supplier<String> prepareLiveExport(List<TickData> journalTicks)
+	/** The EDT requests one client-thread selection; only the returned completion performs interpretation. */
+	private void requestLiveCapture(Consumer<TickRecording.CapturedWindow> receiver)
 	{
-		if (journalTicks.isEmpty() || worldRecorder == null)
-		{
-			return () -> null;
-		}
 		WorldSnapshotRecorder recorder = worldRecorder;
-		int first = journalTicks.get(0).getTickNumber();
-		int last = journalTicks.get(journalTicks.size() - 1).getTickNumber();
-		DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis()).rsn(capturedRsn)
-			.world(capturedWorld).snapshotTick(last).bufferTicks(journalTicks.size()).captureSettings(captureSettings())
-			.build();
-		DeathRecordingV2.Summary summary = DeathRecordingV2.Summary.builder()
-			.totalDamageTakenInBuffer(TickRecording.calculateTotalDamage(journalTicks))
-			.ticksCaptured(journalTicks.size()).build();
-		DeathRecordingV2 frozen = recorder.freezeExport(meta, summary, first, last).toBuilder()
-			.journalTicks(new ArrayList<>(journalTicks)).build();
-		return () ->
+		if (clientThread == null || recorder == null)
 		{
-			DeathRecordingV2 completed = recorder.completeExport(frozen);
-			return gson.toJson(completed.toBuilder()
-				.journalTicks(ResolverV1Recording.projectJournalTicks(journalTicks, completed)).build());
-		};
+			receiver.accept(null);
+			return;
+		}
+		clientThread.invokeLater(() ->
+		{
+			TickRecording.CapturedWindow captured = null;
+			if (worldRecorder == recorder)
+			{
+				try
+				{
+					DeathRecordingV2.Meta meta = exportMetadata().exportedAtMs(System.currentTimeMillis())
+						.rsn(capturedRsn).world(capturedWorld).worldKnown(capturedWorld > 0)
+						.captureSettings(captureSettings()).build();
+					captured = recorder.captureLiveWindow(meta);
+				}
+				catch (RuntimeException unavailable)
+				{
+					log.warn("Could not freeze the requested live capture", unavailable);
+				}
+			}
+			receiver.accept(captured);
+		});
 	}
 
 	private void buildReceivedDamageRecord(PendingHit hit)
@@ -3748,13 +3434,20 @@ public class TickReplayLoggerPlugin extends Plugin
 			return;
 		}
 		List<Map<String, Object>> witnesses = new ArrayList<>(hit.sourceWitnesses);
-		if (hit.epoch != causalSceneEpoch)
+		Object inventory = hit.original.getData().get("inventorySourceObservation");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> inventoryObservation = inventory instanceof Map ? (Map<String, Object>) inventory : null;
+		Object actor = hit.original.getData().get("actorState");
+		Object graphics = actor instanceof Map ? ((Map<?, ?>) actor).get("graphicsState") : null;
+		DamageEvent.DamageType type = DamageEvent.DamageType
+			.fromReference(damageMap == null ? null : damageMap.catalog().hitsplatDamageType(hit.type()));
+		if (hit.context.epoch != causalSceneEpoch)
 		{
-			hit.captureIssues
-				.add("impactContextEpoch: CHANGED_BEFORE_FINALIZATION " + hit.epoch + " -> " + causalSceneEpoch);
+			hit.captureIssues.add(
+				"impactContextEpoch: CHANGED_BEFORE_FINALIZATION " + hit.context.epoch + " -> " + causalSceneEpoch);
 		}
 		if (hit.nativeScope != null && hit.nativeScope.known() && activeHitScope != null && activeHitScope.known()
-			&& hit.epoch == causalSceneEpoch && hit.nativeScope.view == nativeView()
+			&& hit.context.epoch == causalSceneEpoch && hit.nativeScope.view == nativeView()
 			&& hit.nativeScope.scene == nativeScene()
 			&& (hit.position == null ? hit.nativeScope.plane : hit.position.getPlane()) == nativePlane()
 			&& hit.nativeScope.baseX == nativeBaseX() && hit.nativeScope.baseY == nativeBaseY())
@@ -3790,34 +3483,35 @@ public class TickReplayLoggerPlugin extends Plugin
 				witnesses.add(Collections.unmodifiableMap(witness));
 			}
 		}
-		if (damageMap != null && hit.inventorySourceObservation != null)
+		if (damageMap != null && inventoryObservation != null)
 		{
 			witnesses.addAll(
-				damageMap.catalog().inventorySourceHints().witnesses(hit.inventorySourceObservation, hit.sequence));
+				damageMap.catalog().inventorySourceHints().witnesses(inventoryObservation, hit.original.getSequence()));
 		}
 		WorldPoint position = hit.position;
 		DamageRecord record = DamageRecord.builder().direction(hit.hpOutcomeKnown ? "RECEIVED" : "RESOURCE_IMPACT")
 			.defenderRef("player").defenderName(hit.defenderName).defenderIdentityEvidence(hit.defenderIdentityEvidence)
 			.captureIssues(hit.captureIssues.isEmpty() ? null : new ArrayList<>(hit.captureIssues))
-			.impactTick(currentGameTick).observedCycle(hit.observedCycle).observationSequence(hit.sequence)
-			.impactContextEpoch(hit.epoch).finalizationContextEpoch(causalSceneEpoch).amount(hit.amount)
-			.hitsplatType(hit.hitsplatType).hitsplatTypeKnown(true).damageType(damageTypeString(hit.damageType))
-			.damageTypeEvidence(hit.damageType == DamageEvent.DamageType.UNKNOWN ? "UNKNOWN" : "HITSPLAT_TYPE")
+			.impactTick(currentGameTick).observedCycle(hit.original.getGameCycle())
+			.observationSequence(hit.original.getSequence()).impactContextEpoch(hit.context.epoch)
+			.finalizationContextEpoch(causalSceneEpoch).amount(hit.amount()).hitsplatType(hit.type())
+			.hitsplatTypeKnown(true).damageType(damageTypeString(type))
+			.damageTypeEvidence(type == DamageEvent.DamageType.UNKNOWN ? "UNKNOWN" : "HITSPLAT_TYPE")
 			.damageTypeCandidates(Collections.emptyList())
-			.damageRecurrence(typedStatusHit(hit.hitsplatType) ? "UNKNOWN" : null)
-			.damageRecurrenceEvidence(typedStatusHit(hit.hitsplatType) ? "HITSPLAT_TYPE_ONLY" : null)
-			.attackerName("Unknown").attribution("UNKNOWN").attributionEvidence("UNRESOLVED_OBSERVATIONS")
-			.determination("UNKNOWN").launchTick(currentGameTick).launchTickEstimated(true).launchPositionKnown(false)
+			.damageRecurrence(typedStatusHit(hit.type()) ? "UNKNOWN" : null)
+			.damageRecurrenceEvidence(typedStatusHit(hit.type()) ? "HITSPLAT_TYPE_ONLY" : null).attackerName("Unknown")
+			.attribution("UNKNOWN").attributionEvidence("UNRESOLVED_OBSERVATIONS").determination("UNKNOWN")
+			.launchTick(currentGameTick).launchTickEstimated(true).launchPositionKnown(false)
 			.launchPrayerStateKnown(false).launchStateEvidence("UNOBSERVED").impactPositionKnown(position != null)
 			.impactSceneKey(hit.impactSceneKey)
 			.impactWorldViewId(hit.nativeScope == null ? null : hit.nativeScope.viewId)
 			.impactPlane(hit.nativeScope == null ? null : hit.nativeScope.plane)
 			.impactX(position == null ? 0 : position.getX()).impactY(position == null ? 0 : position.getY())
-			.defenderGraphicsAtImpact(hit.graphicsObservation)
+			.defenderGraphicsAtImpact(graphics instanceof ActorGraphicsState ? (ActorGraphicsState) graphics : null)
 			.defenderPrayerStateAtImpact(hit.prayerObservation.toState())
 			.impactPrayerStateKnown(
 				hit.prayerObservation.isFlagsComplete() && hit.prayerObservation.isOverheadResolved())
-			.prayersAtImpact(hit.prayerObservation.isAvailable() ? hit.prayers : null)
+			.prayersAtImpact(hit.prayerObservation.isAvailable() ? getActivePrayers(hit.prayerObservation) : null)
 			.overheadAtImpact(hit.prayerObservation.getOverhead()).overheadIconAtImpact(hit.prayerObservation.getIcon())
 			.reportedPrayersAtImpact(
 				hit.prayerObservation.getFlags().isEmpty() ? null : hit.prayerObservation.getReported())
@@ -3826,22 +3520,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			.overheadAtImpactEvidence(hit.prayerObservation.getEvidence())
 			.observedHazardContacts(Collections.unmodifiableList(new ArrayList<>(hit.hazardWitnesses)))
 			.attributionCandidates(Collections.unmodifiableList(witnesses)).build();
-		if (hit.hpOutcomeKnown)
-		{
-			worldRecorder.addDamage(record);
-		}
-		else
-		{
-			resourceImpactContexts.put(hit.sequence, record);
-		}
-	}
-
-	private static String resourceImpactNote(int amount, List<String> surfaces, String source)
-	{
-		String outcome = surfaces.contains("SKILL") ? "HP/stat"
-			: surfaces.contains("COMBAT_RESOURCE") ? "HP/resource" : "HP/unknown";
-		String label = SourceResolutionLabels.usableName(source);
-		return "Impact " + amount + " (" + outcome + ") from " + (label == null ? "Unknown" : label);
+		worldRecorder.addDamage(record);
 	}
 
 	/**
@@ -3869,7 +3548,6 @@ public class TickReplayLoggerPlugin extends Plugin
 							.startTick(currentGameTick).durationTicks(null).magnitude("-" + drop + " " + names[i])
 							.observedVia("skillDelta").evidence("OBSERVED_SKILL_DELTA; cause not established")
 							.journalNote("-" + drop + " " + names[i]).mapRef(null).build());
-					tickRecorder.addEffectNote("-" + drop + " " + names[i]);
 				}
 			}
 		}
@@ -3933,11 +3611,11 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		for (String issue : issues)
 		{
-			tickRecorder.addCaptureIssue(issue);
+			worldRecorder.addCaptureIssue(issue);
 		}
 		if (!collectionKnown || !primaryKnown)
 		{
-			tickRecorder.markStateUnavailable("effectGraphics");
+			worldRecorder.markStateUnavailable("effectGraphics");
 		}
 		if (!collectionKnown && !primaryKnown && present.isEmpty())
 		{
@@ -3960,7 +3638,6 @@ public class TickReplayLoggerPlugin extends Plugin
 				.magnitude(null).observedVia("spotanim:" + id).evidence("PINNED_LOCAL_GRAPHIC_REFERENCE")
 				.referenceRuleKey(rule.get("key").getAsString()).referenceCatalogId(damageMap.catalog().id())
 				.journalNote(note).build());
-			tickRecorder.addEffectNote(note);
 		}
 		activeEffectSpotanims.clear();
 		activeEffectSpotanims.addAll(present);
@@ -4023,7 +3700,6 @@ public class TickReplayLoggerPlugin extends Plugin
 				.observedVia("varp:" + variable).observedRawValue(poison).previousRawValue(lastPoisonVarp)
 				.evidence("OBSERVED_VARIABLE_CATEGORY_TRANSITION").referenceRuleKey("poison_venom_client_state")
 				.referenceCatalogId(damageMap.catalog().id()).journalNote(note).mapRef(null).build());
-			tickRecorder.addEffectNote(note);
 		}
 		lastPoisonVarp = poison;
 		poisonBaselineObserved = true;
@@ -4431,9 +4107,9 @@ public class TickReplayLoggerPlugin extends Plugin
 			recorded.put("captureStatus", "PARTIAL_EVENT_CONTEXT");
 			recorded.put("captureIssues", recordedIssues);
 		}
-		worldRecorder
-			.addObservation(ObservedEvent.builder().tick(eventTick()).gameCycle(c.cycle).sequence(sequence).type(type)
-				.actorRef(ref).actorName(name).relatedActorRef(relatedRef).sceneKey(sceneKey).data(recorded).build());
+		worldRecorder.addObservation(ObservedEvent.builder().tick(eventTick()).gameCycle(c.cycle).sequence(sequence)
+			.type(type).actorRef(ref).actorName(name).relatedActorRef(relatedRef).sceneKey(sceneKey)
+			.data(Collections.unmodifiableMap(recorded)).build());
 		return sequence;
 	}
 
@@ -4445,7 +4121,7 @@ public class TickReplayLoggerPlugin extends Plugin
 	private void recordAction(PlayerAction action, Actor target, Integer itemId, long sequence, String kind,
 		CallbackContext context)
 	{
-		if (worldRecorder == null || !config.captureWorldSnapshots())
+		if (worldRecorder == null)
 		{
 			return;
 		}
@@ -4630,15 +4306,21 @@ public class TickReplayLoggerPlugin extends Plugin
 		return fields.value("localWorldViewId", location::getWorldView);
 	}
 
-	private void observeObject(String kind, TileObject object, boolean spawn)
+	private void observeObject(String kind, TileObject object, boolean spawn, Tile eventTile)
 	{
-		if (object == null || captureService == null || !config.captureWorldSnapshots())
+		if (captureService == null)
 		{
+			return;
+		}
+		if (object == null || !config.captureWorldSnapshots())
+		{
+			captureService.sceneMembershipChanged(null, null);
 			return;
 		}
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			return;
 		}
 		if (!context.ready)
@@ -4661,6 +4343,7 @@ public class TickReplayLoggerPlugin extends Plugin
 				fields.unavailable("worldY", "WORLD_LOCATION_UNAVAILABLE");
 			}
 			WorldView view = fields.sample("worldView", object::getWorldView);
+			captureService.sceneMembershipChanged(view, eventTile);
 			if (view != null)
 			{
 				fields.value("worldViewId", view::getId);
@@ -4682,10 +4365,12 @@ public class TickReplayLoggerPlugin extends Plugin
 		try
 		{
 			plane = object.getPlane();
-			tracker = captureService.objects(client, object.getWorldView(), plane);
+			WorldView objectView = object.getWorldView();
+			captureService.sceneMembershipChanged(objectView, eventTile);
+			tracker = captureService.objects(client, objectView, plane);
 			ObservedObjectState state = tracker.observation(client, kind, object);
-			Map<String, Object> values = new LinkedHashMap<>(data("object", state, "nativeSceneKey",
-				captureService.additionalSceneKey(client, object.getWorldView(), plane)));
+			Map<String, Object> values = new LinkedHashMap<>(
+				data("object", state, "nativeSceneKey", captureService.additionalSceneKey(client, objectView, plane)));
 			if (state != null && state.getObservationIssues() != null)
 			{
 				values.put("captureStatus", "PARTIAL_OBJECT_OBSERVATION");
@@ -4695,6 +4380,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		catch (RuntimeException error)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			// Preserve a lifecycle fact even when its definition/position cannot be read.
 			Integer id = null, viewId = null;
 			try
@@ -4725,17 +4411,24 @@ public class TickReplayLoggerPlugin extends Plugin
 
 	private void observeGroundItem(String type, Tile tile, TileItem item, Integer oldQuantity, Integer newQuantity)
 	{
-		if (item == null || captureService == null || !config.captureWorldSnapshots())
+		if (captureService == null)
 		{
+			return;
+		}
+		if (item == null || !config.captureWorldSnapshots())
+		{
+			captureService.sceneMembershipChanged(null, null);
 			return;
 		}
 		CallbackContext context = callbackContext();
 		if (!context.allowed)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			return;
 		}
 		if (!context.ready)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			CallbackFieldObservation fields = new CallbackFieldObservation();
 			fields.put("oldQuantity", oldQuantity);
 			fields.put("newQuantity", newQuantity);
@@ -4762,6 +4455,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		if (tile == null)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			return;
 		}
 		GroundItemTracker tracker = null;
@@ -4776,6 +4470,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			{
 				nativeView = client.getTopLevelWorldView();
 			}
+			captureService.sceneMembershipChanged(nativeView, tile);
 			boolean known = WorldViews.containsTile(nativeView, tile);
 			String key = known ? captureService.additionalSceneKey(client, nativeView, tile.getPlane()) : null;
 			if (known)
@@ -4791,6 +4486,7 @@ public class TickReplayLoggerPlugin extends Plugin
 		}
 		catch (RuntimeException error)
 		{
+			captureService.sceneMembershipChanged(null, null);
 			values.put("captureStatus", "PARTIAL_GROUND_ITEM_OBSERVATION");
 			values.put("contextErrorClass", error.getClass().getSimpleName());
 			try
@@ -4840,49 +4536,49 @@ public class TickReplayLoggerPlugin extends Plugin
 	@Subscribe
 	public void onGameObjectSpawned(GameObjectSpawned e)
 	{
-		observeObject("gameObject", e.getGameObject(), true);
+		observeObject("gameObject", e.getGameObject(), true, e.getTile());
 	}
 
 	@Subscribe
 	public void onGameObjectDespawned(GameObjectDespawned e)
 	{
-		observeObject("gameObject", e.getGameObject(), false);
+		observeObject("gameObject", e.getGameObject(), false, e.getTile());
 	}
 
 	@Subscribe
 	public void onGroundObjectSpawned(GroundObjectSpawned e)
 	{
-		observeObject("groundObject", e.getGroundObject(), true);
+		observeObject("groundObject", e.getGroundObject(), true, e.getTile());
 	}
 
 	@Subscribe
 	public void onGroundObjectDespawned(GroundObjectDespawned e)
 	{
-		observeObject("groundObject", e.getGroundObject(), false);
+		observeObject("groundObject", e.getGroundObject(), false, e.getTile());
 	}
 
 	@Subscribe
 	public void onWallObjectSpawned(WallObjectSpawned e)
 	{
-		observeObject("wallObject", e.getWallObject(), true);
+		observeObject("wallObject", e.getWallObject(), true, e.getTile());
 	}
 
 	@Subscribe
 	public void onWallObjectDespawned(WallObjectDespawned e)
 	{
-		observeObject("wallObject", e.getWallObject(), false);
+		observeObject("wallObject", e.getWallObject(), false, e.getTile());
 	}
 
 	@Subscribe
 	public void onDecorativeObjectSpawned(DecorativeObjectSpawned e)
 	{
-		observeObject("decorativeObject", e.getDecorativeObject(), true);
+		observeObject("decorativeObject", e.getDecorativeObject(), true, e.getTile());
 	}
 
 	@Subscribe
 	public void onDecorativeObjectDespawned(DecorativeObjectDespawned e)
 	{
-		observeObject("decorativeObject", e.getDecorativeObject(), false);
+		observeObject("decorativeObject", e.getDecorativeObject(), false, e.getTile());
 	}
 
 	@Subscribe

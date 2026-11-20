@@ -76,7 +76,7 @@ public class ResolverEvidenceWindowTest
 		}
 		assertEquals(1, observations.size());
 		assertEquals(gson.toJsonTree(recording.getEvents().getObservations().get(0).getData()), observations.get(0).actor());
-		SourceResolution result = adapter.resolveHit(recording.getEvents().getDamageEvents().get(0)).getSourceResolution();
+		SourceResolution result = adapter.enrich(recording).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertEquals(1, result.getCandidates().size());
 		assertTrue(result.getCandidates().get(0).getEvidence().contains("RESOLVER_V1:synthetic:direct"));
 		assertTrue(result.getCandidates().get(0).getEvidence().contains("RESOLVER_V1:synthetic:area"));
@@ -108,24 +108,25 @@ public class ResolverEvidenceWindowTest
 	}
 
 	@Test
-	public void fatalSummaryReusesCanonicalAnnotationsOnlyForTheSameOriginalCallback()
+	public void workerSelectsFatalFromTheObservedDeathWindowRatherThanAPreselectedSummary()
 	{
 		Gson gson = new Gson(); DeathRecordingV2 base = minimal(false, true);
 		DamageRecord raw = base.getEvents().getDamageEvents().get(0);
-		DeathRecordingV2 input = base.toBuilder().summary(DeathRecordingV2.Summary.builder().fatalHit(raw)
+		DeathRecordingV2 input = base.toBuilder().meta(DeathRecordingV2.Meta.builder().deathTick(raw.getImpactTick()).build())
+			.summary(DeathRecordingV2.Summary.builder().fatalHit(raw)
 			.fatalHitCandidates(Collections.singletonList(raw)).killerName("Original death selection").killerBasis("ORIGINAL_BASIS").build()).build();
 		String frozen = gson.toJson(input);
 		DeathRecordingV2 resolved = ResolverV1Recording.resolve(input, gson);
 		assertEquals(gson.toJson(resolved.getEvents().getDamageEvents().get(0)), gson.toJson(resolved.getSummary().getFatalHit()));
 		assertEquals(gson.toJson(resolved.getSummary().getFatalHit()), gson.toJson(resolved.getSummary().getFatalHitCandidates().get(0)));
-		assertEquals("Original death selection", resolved.getSummary().getKillerName());
-		assertEquals("ORIGINAL_BASIS", resolved.getSummary().getKillerBasis());
+		assertEquals(resolved.getEvents().getDamageEvents().get(0).getAttackerName(), resolved.getSummary().getKillerName());
+		assertEquals("SELECTED_RECORD_SOURCE_ONLY", resolved.getSummary().getKillerBasis());
 		assertEquals(frozen, gson.toJson(input));
 		for (DamageRecord different : Arrays.asList(raw.toBuilder().amount(raw.getAmount() + 1).build(),
 			raw.toBuilder().impactContextEpoch(1L).build(), raw.toBuilder().finalizationContextEpoch(1L).build()))
 		{
 			DeathRecordingV2 mismatched = input.toBuilder().summary(input.getSummary().toBuilder().fatalHit(different).build()).build();
-			assertEquals(gson.toJson(different), gson.toJson(ResolverV1Recording.resolve(mismatched, gson).getSummary().getFatalHit()));
+			assertEquals(gson.toJson(resolved.getSummary().getFatalHit()), gson.toJson(ResolverV1Recording.resolve(mismatched, gson).getSummary().getFatalHit()));
 		}
 	}
 
@@ -135,13 +136,14 @@ public class ResolverEvidenceWindowTest
 		Gson gson = new Gson(); DeathRecordingV2 base = minimal(false, true);
 		DamageRecord last = base.getEvents().getDamageEvents().get(0);
 		DamageRecord unknown = last.toBuilder().observationSequence(18L).observedCycle(299).amount(4).build();
-		DeathRecordingV2 input = base.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Arrays.asList(unknown, last))
+		DeathRecordingV2 input = base.toBuilder().meta(DeathRecordingV2.Meta.builder().deathTick(last.getImpactTick()).build())
+			.events(DeathRecordingV2.Events.builder().damageEvents(Arrays.asList(unknown, last))
 			.observations(base.getEvents().getObservations()).build()).summary(DeathRecordingV2.Summary.builder().fatalHit(last)
 			.fatalHitCandidates(Arrays.asList(unknown, last)).killerName("Unknown").killerConfidence("UNKNOWN")
 			.killerBasis("MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS").fatalHitBasis("LAST_POSITIVE_RECEIVED_CALLBACK_IN_DEATH_TICK").build()).build();
 		DeathRecordingV2 resolved = ResolverV1Recording.resolve(input, gson);
 		assertEquals("Uncatalogued NPC", com.tickreplaylogger.util.SourceResolutionLabels.label(resolved.getEvents().getDamageEvents().get(1).getSourceResolution()));
-		assertEquals("Unknown", resolved.getSummary().getFatalHit().getAttackerName());
+		assertEquals(resolved.getEvents().getDamageEvents().get(1).getAttackerName(), resolved.getSummary().getFatalHit().getAttackerName());
 		assertEquals("Unknown", resolved.getSummary().getKillerName());
 		assertEquals(2, resolved.getSummary().getFatalHitCandidates().size());
 		assertTrue(resolved.getSummary().getFatalHitCandidates().get(0).getSourceResolution().getCandidates().isEmpty());
@@ -297,7 +299,7 @@ public class ResolverEvidenceWindowTest
 		assertEquals("Uncatalogued NPC", com.tickreplaylogger.util.SourceResolutionLabels.label((SourceResolution) derived.getData().get("sourceResolution")));
 		assertEquals(Arrays.asList("HP", "PRAYER"), derived.getData().get("possibleOutcomeSurfaces"));
 		assertEquals("UNRESOLVED", derived.getData().get("resourceOutcomeStatus"));
-		assertEquals("Impact 12 (HP / PRAYER) from Uncatalogued NPC", resolved.getJournalTicks().get(0).getEffectNotes().get(0));
+		assertEquals("Impact 12 (HP/prayer) from Uncatalogued NPC", resolved.getJournalTicks().get(0).getEffectNotes().get(0));
 		assertEquals(frozen, gson.toJson(input));
 		Map<String, Object> linkedFields = new LinkedHashMap<>(fields);
 		linkedFields.put("attributionContext", context.toBuilder().defenderIdentityEvidence("SETTLED_LOCAL_REFERENCE_MATCH").build());
@@ -305,7 +307,7 @@ public class ResolverEvidenceWindowTest
 			.type(hp.getType()).sceneKey(hp.getSceneKey()).data(linkedFields).build();
 		DeathRecordingV2 linkedInput = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Collections.emptyList())
 			.observations(Arrays.asList(base.getEvents().getObservations().get(0), linked)).build()).build();
-		assertEquals("Impact 12 (HP / PRAYER) from Uncatalogued NPC", ResolverV1Recording.resolve(linkedInput, gson).getJournalTicks().get(0).getEffectNotes().get(0));
+		assertEquals("Impact 12 (HP/prayer) from Uncatalogued NPC", ResolverV1Recording.resolve(linkedInput, gson).getJournalTicks().get(0).getEffectNotes().get(0));
 	}
 
 	private static DeathRecordingV2 minimal(boolean player, boolean nativeKnown)
@@ -363,7 +365,7 @@ public class ResolverEvidenceWindowTest
 	}
 
 	@Test
-	public void individualCompletionAndExportUseTheSameOriginalWindowAndProjection() throws Exception
+	public void frozenSelectionAndExportUseTheSameOriginalWindowAndProjection() throws Exception
 	{
 		Gson gson = new Gson();
 		DeathRecordingV2 original;
@@ -377,13 +379,13 @@ public class ResolverEvidenceWindowTest
 		DeathRecordingV2.Events events = original.getEvents();
 		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(original.getTicks(), original.getScenes(),
 			events.getObservations(), events.getDamageEvents(), events.getCaptureGaps(), Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE, 7);
-		ResolverV1Recording live = new ResolverV1Recording(window, gson);
+		DeathRecordingV2 selected = ResolverV1Recording.resolve(ResolverTestCatalog.recording(window), gson);
 		DeathRecordingV2 exported = ResolverV1Recording.resolve(original, gson);
 		assertEquals(events.getDamageEvents().size(), exported.getEvents().getDamageEvents().size());
 		for (int i = 0; i < events.getDamageEvents().size(); i++)
 		{
 			DamageRecord hit = events.getDamageEvents().get(i);
-			assertEquals(gson.toJson(exported.getEvents().getDamageEvents().get(i)), gson.toJson(live.resolveHit(hit)));
+			assertEquals(gson.toJson(exported.getEvents().getDamageEvents().get(i)), gson.toJson(selected.getEvents().getDamageEvents().get(i)));
 		}
 		assertEquals(frozen, gson.toJson(original));
 	}

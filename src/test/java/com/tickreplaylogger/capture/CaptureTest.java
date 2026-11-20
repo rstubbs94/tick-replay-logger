@@ -320,12 +320,17 @@ public class CaptureTest
 	}
 
 	@Test
-	public void environmentalAndNpcAttackRulesAreLoadedFromTheResearchBundle()
+	public void environmentalAndNpcAttackAuthoringReferencesRetainTheirFrozenRules() throws Exception
 	{
 		DamageMap map = DamageMap.load(new Gson());
 		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
-		com.google.gson.JsonObject environmental = RuntimeCatalog.load(new Gson()).section("capture")
-			.getAsJsonObject("damageRules").getAsJsonObject("environmental");
+		com.google.gson.JsonObject authored;
+		try (java.io.InputStream input = getClass().getResourceAsStream("/com/tickreplaylogger/damage_map.json"))
+		{
+			authored = new Gson().fromJson(new java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8),
+				com.google.gson.JsonObject.class);
+		}
+		com.google.gson.JsonObject environmental = authored.getAsJsonObject("damageRules").getAsJsonObject("environmental");
 		assertEquals("unknown", environmental.get("damageType").getAsString());
 		assertEquals(5, environmental.getAsJsonArray("sourceKeys").size());
 		for (com.google.gson.JsonElement key : environmental.getAsJsonArray("sourceKeys"))

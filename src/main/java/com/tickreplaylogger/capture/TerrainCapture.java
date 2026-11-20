@@ -38,6 +38,8 @@ public final class TerrainCapture
 	private int previousPlane = -1;
 	private boolean nativeGridAvailable;
 	private List<TileSurface> previousSnapshot;
+	private SceneCaptureTraversal membership;
+	private List<SurfaceSample> samples;
 	private Map<String, Object> coverage = new LinkedHashMap<>();
 
 	public void clearCoverage()
@@ -58,6 +60,8 @@ public final class TerrainCapture
 		previousScene = null;
 		previousPlane = -1;
 		previousSnapshot = null;
+		membership = null;
+		samples = null;
 		nativeGridAvailable = false;
 		clearCoverage();
 	}
@@ -68,6 +72,11 @@ public final class TerrainCapture
 	}
 
 	public List<TileSurface> capture(Scene scene, int plane)
+	{
+		return capture(scene, plane, null);
+	}
+
+	List<TileSurface> capture(Scene scene, int plane, SceneCaptureTraversal traversal)
 	{
 		nativeGridAvailable = false;
 		clearCoverage();
@@ -100,99 +109,21 @@ public final class TerrainCapture
 			previousSnapshot = null;
 			previousScene = scene;
 			previousPlane = plane;
+			samples = null;
 		}
 		List<TileSurface> out = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
-		int visited = 0;
 		short[][][] underlays = scene.getUnderlayIds(), overlays = scene.getOverlayIds();
 		byte[][][] shapes = scene.getTileShapes();
-		if (tiles != null && tiles.length > 1024)
+		if (samples == null || traversal == null || membership != traversal || previousPlane != plane)
 		{
-			throw new IllegalStateException("Terrain width exceeds supported bounds");
+			samples = select(scene, plane, all, tiles, traversal);
+			membership = traversal;
 		}
-		for (int x = 0; tiles != null && x < tiles.length; x++)
+		for (SurfaceSample sample : samples)
 		{
-			if (tiles[x] != null)
-			{
-				if (tiles[x].length > 1024)
-				{
-					throw new IllegalStateException("Terrain height exceeds supported bounds");
-				}
-				for (int y = 0; y < tiles[x].length; y++)
-				{
-					if (++visited > 32768)
-					{
-						throw new IllegalStateException("Terrain scope exceeds supported tile count");
-					}
-					Tile tile = tiles[x][y];
-					if (tile == null)
-					{
-						continue;
-					}
-					add(tile, x, y, tiles.length, tiles[x].length, false, underlays, overlays, shapes, out, seen);
-					Tile bridge = tile.getBridge();
-					if (bridge != null && bridge != tile)
-					{
-						add(bridge, x, y, tiles.length, tiles[x].length, true, underlays, overlays, shapes, out, seen);
-					}
-				}
-			}
-		}
-		// A bridge link can be the only API route to a tile on another reported plane.
-		// Retain its source path, while treating it as canonical for that plane when no array tile exists.
-		Set<Tile> chain = Collections.newSetFromMap(new IdentityHashMap<>(4));
-		for (int sourcePlane = 0; sourcePlane < all.length; sourcePlane++)
-		{
-			Tile[][] source = all[sourcePlane];
-			if (source == null)
-			{
-				continue;
-			}
-			if (source.length > 1024)
-			{
-				throw new IllegalStateException("Linked terrain width exceeds bounds");
-			}
-			int inspected = 0;
-			for (int x = 0; x < source.length; x++)
-			{
-				if (source[x] != null)
-				{
-					if (source[x].length > 1024)
-					{
-						throw new IllegalStateException("Linked terrain height exceeds bounds");
-					}
-					for (int y = 0; y < source[x].length; y++)
-					{
-						if (++inspected > 32768)
-						{
-							throw new IllegalStateException("Linked terrain scope exceeds bounds");
-						}
-						if (tiles != null && x < tiles.length && tiles[x] != null && y < tiles[x].length
-							&& tiles[x][y] != null)
-						{
-							continue;
-						}
-						Tile candidate = source[x][y];
-						if (candidate == null)
-						{
-							continue;
-						}
-						boolean linked = false;
-						chain.clear();
-						while (candidate != null && chain.add(candidate))
-						{
-							if (candidate.getPlane() == plane)
-							{
-								add(candidate, x, y, source.length, source[x].length, false, underlays, overlays,
-									shapes, out, seen, sourcePlane, linked, "LINKED_CANONICAL_PLANE_TILE");
-								break;
-							}
-							candidate = candidate.getBridge();
-							linked = true;
-						}
-					}
-				}
-			}
+			add(sample.tile, sample.x, sample.y, sample.width, sample.height, sample.bridge, underlays, overlays,
+				shapes, out, seen, sample.sourcePlane, sample.viaBridge, sample.evidence);
 		}
 		coverage.put("samplingCompleted", true);
 		if (!nativeGridAvailable && out.isEmpty())
@@ -206,6 +137,133 @@ public final class TerrainCapture
 		}
 		previousSnapshot = Collections.unmodifiableList(out);
 		return previousSnapshot;
+	}
+
+	private static final class SurfaceSample
+	{
+		final Tile tile;
+		final int x, y, width, height, sourcePlane;
+		final boolean bridge, viaBridge;
+		final String evidence;
+
+		SurfaceSample(Tile tile, int x, int y, int width, int height, boolean bridge, int sourcePlane,
+			boolean viaBridge, String evidence)
+		{
+			this.tile = tile;
+			this.x = x;
+			this.y = y;
+			this.width = width;
+			this.height = height;
+			this.bridge = bridge;
+			this.sourcePlane = sourcePlane;
+			this.viaBridge = viaBridge;
+			this.evidence = evidence;
+		}
+	}
+
+	private List<SurfaceSample> select(Scene scene, int plane, Tile[][][] all, Tile[][] selected,
+		SceneCaptureTraversal traversal)
+	{
+		List<SurfaceSample> result = new ArrayList<>();
+		for (int sourcePlane = 0; sourcePlane < all.length; sourcePlane++)
+		{
+			Tile[][] grid = all[sourcePlane];
+			if (grid == null)
+			{
+				continue;
+			}
+			int count = 0;
+			if (grid.length > 1024)
+			{
+				throw new IllegalStateException("Terrain width exceeds supported bounds");
+			}
+			for (Tile[] column : grid)
+			{
+				if (column != null)
+				{
+					count += column.length;
+					if (column.length > 1024 || count > 32768)
+					{
+						throw new IllegalStateException("Terrain scope exceeds supported bounds");
+					}
+				}
+			}
+		}
+		// Standalone callers seed their own membership; runtime supplies its lifecycle-maintained census.
+		List<SceneCaptureTraversal.TileSlot> slots;
+		if (traversal == null)
+		{
+			slots = new ArrayList<>();
+			for (int p = 0; p < all.length; p++)
+			{
+				if (all[p] != null)
+				{
+					for (int x = 0; x < all[p].length; x++)
+					{
+						if (all[p][x] != null)
+						{
+							for (int y = 0; y < all[p][x].length; y++)
+							{
+								if (all[p][x][y] != null)
+								{
+									slots.add(new SceneCaptureTraversal.TileSlot(all[p][x][y], p, x, y));
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			slots = traversal.slots;
+		}
+		if (traversal != null && traversal.bridgeFailures > 0)
+		{
+			throw new IllegalStateException("Terrain bridge membership unavailable");
+		}
+		for (SceneCaptureTraversal.TileSlot slot : slots)
+		{
+			int x = slot.x, y = slot.y, p = slot.plane;
+			Tile[][] grid = all[p];
+			if (p != plane)
+			{
+				continue;
+			}
+			result.add(new SurfaceSample(slot.tile, x, y, grid.length, grid[x].length, false, plane, false,
+				"SCENE_ARRAY_TILE"));
+			Tile bridge = traversal == null ? slot.tile.getBridge() : traversal.bridge(slot.tile);
+			if (bridge != null && bridge != slot.tile)
+			{
+				result.add(
+					new SurfaceSample(bridge, x, y, grid.length, grid[x].length, true, plane, true, "BRIDGE_UNDERLAY"));
+			}
+		}
+		Set<Tile> chain = Collections.newSetFromMap(new IdentityHashMap<>());
+		for (SceneCaptureTraversal.TileSlot slot : slots)
+		{
+			int x = slot.x, y = slot.y, p = slot.plane;
+			if (selected != null && x < selected.length && selected[x] != null && y < selected[x].length
+				&& selected[x][y] != null)
+			{
+				continue;
+			}
+			Tile candidate = slot.tile;
+			boolean linked = false;
+			chain.clear();
+			while (candidate != null && chain.add(candidate))
+			{
+				if ((traversal == null ? candidate.getPlane() : traversal.reportedPlane(candidate)) == plane)
+				{
+					result.add(new SurfaceSample(candidate, x, y, all[p].length, all[p][x].length, false, p, linked,
+						"LINKED_CANONICAL_PLANE_TILE"));
+					break;
+				}
+				candidate = traversal == null ? candidate.getBridge() : traversal.bridge(candidate);
+				linked = true;
+			}
+		}
+		return result;
 	}
 
 	private void add(Tile tile, int x, int y, int width, int height, boolean bridge, short[][][] underlays,

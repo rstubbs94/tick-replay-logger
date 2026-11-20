@@ -214,10 +214,87 @@ public class SceneCaptureTraversalTest
 		}
 	}
 
+	@Test
+	public void lifecycleMembershipReusesSlotsButFreshlySamplesObjectAndItemValues()
+	{
+		Fixture f = new Fixture();
+		SceneCaptureTraversal membership = SceneCaptureTraversal.capture(f.client, f.view);
+		ObjectStateTracker objects = new ObjectStateTracker();
+		GroundItemTracker items = new GroundItemTracker();
+		List<ObservedObjectState> before = objects.snapshot(f.client, "scene", f.view, 2, membership);
+		List<GroundItemState> beforeItems = items.snapshot(f.client, "scene", f.view, 1, membership);
+		int slots = f.slots, bridges = f.bridges, itemReads = f.itemReads;
+		f.config = 77; f.quantity = 9;
+		assertEquals(Integer.valueOf(77), objects.snapshot(f.client, "scene", f.view, 2, membership).get(0).getConfig());
+		assertEquals(Integer.valueOf(9), items.snapshot(f.client, "scene", f.view, 1, membership).get(0).getQuantity());
+		assertEquals("Unchanged membership must not reread scene object slots", slots, f.slots);
+		assertEquals("Item values are fresh without reenumerating every tile", itemReads, f.itemReads);
+		assertEquals(bridges, f.bridges);
+		assertEquals(Integer.valueOf(0), before.get(0).getConfig());
+		assertEquals(Integer.valueOf(1), beforeItems.get(0).getQuantity());
+		f.objectPresent = false; f.itemPresent = false;
+		assertTrue(membership.changed(f.base)); assertTrue(membership.changed(f.bridge));
+		assertTrue(objects.snapshot(f.client, "scene", f.view, 2, membership).isEmpty());
+		assertTrue(items.snapshot(f.client, "scene", f.view, 1, membership).isEmpty());
+		assertEquals(bridges, f.bridges);
+		assertEquals(1, before.size()); assertEquals(1, beforeItems.size());
+	}
+
+	@Test
+	public void failedMembershipDoesNotPolluteAnotherPlaneOrBecomeAnAbsenceWitness()
+	{
+		Fixture f = new Fixture(); f.failItems = true;
+		SceneCaptureTraversal membership = SceneCaptureTraversal.capture(f.client, f.view);
+		GroundItemTracker failed = new GroundItemTracker(), other = new GroundItemTracker();
+		failed.snapshot(f.client, "scene", f.view, 1, membership);
+		assertFalse((Boolean) failed.coverage().get("complete"));
+		other.snapshot(f.client, "scene", f.view, 0, membership);
+		assertEquals(Boolean.TRUE, other.coverage().get("complete"));
+		f.failItems = false; membership.retryFailures();
+		assertEquals(1, failed.snapshot(f.client, "scene", f.view, 1, membership).size());
+		assertEquals(Boolean.TRUE, failed.coverage().get("complete"));
+		f.failObject = true; membership.changed(f.base); membership.objectRows(f.base);
+		assertEquals("IllegalStateException", membership.objectErrors(f.base).get("ground object"));
+	}
+
+	@Test
+	public void reportedPlaneAndLifecycleMembershipUseOneIdentityIndexForLargeScenes()
+	{
+		int count = 2048;
+		int[] equalityCalls = { 0 }, planeReads = { 0 };
+		Tile[][][] grid = new Tile[3][2][1024];
+		for (int i = 0; i < count; i++)
+		{
+			grid[0][i / 1024][i % 1024] = (Tile) java.lang.reflect.Proxy.newProxyInstance(Tile.class.getClassLoader(),
+				new Class<?>[] { Tile.class }, (proxy, method, args) ->
+				{
+					if (method.getName().equals("equals")) { equalityCalls[0]++; return proxy == args[0]; }
+					if (method.getName().equals("getPlane")) { planeReads[0]++; return 2; }
+					if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
+					return null;
+				});
+		}
+		Scene scene = NpcSnapshotCaptureTest.stub(Scene.class, (name, args) -> name.equals("getTiles") ? grid : null);
+		WorldView view = NpcSnapshotCaptureTest.stub(WorldView.class, (name, args) -> name.equals("getScene") ? scene : null);
+		SceneCaptureTraversal membership = SceneCaptureTraversal.capture(null, view);
+		for (Tile[] column : grid[0]) for (Tile tile : column)
+		{
+			assertEquals(2, membership.reportedPlane(tile));
+			assertTrue(membership.changed(tile));
+			assertEquals(2, membership.reportedPlane(tile));
+		}
+		Tile foreign = NpcSnapshotCaptureTest.stub(Tile.class, (name, args) -> null);
+		assertEquals(Integer.MIN_VALUE, membership.reportedPlane(foreign));
+		assertFalse(membership.changed(foreign));
+		assertEquals("Plane metadata is sampled once, not once per lookup", count, planeReads[0]);
+		assertEquals("Identity lookups must not search the tile list for every terrain candidate or callback", 0, equalityCalls[0]);
+	}
+
 	private static final class Fixture
 	{
-		int bridges, slots, tilePlaneReads, config, quantity = 1;
-		boolean failObject, failBridge;
+		int bridges, slots, tilePlaneReads, itemReads, config, quantity = 1;
+		boolean failObject, failBridge, failItems;
+		boolean objectPresent = true, itemPresent = true;
 		Tile[][][] arrays = new Tile[3][1][1];
 		final WorldView view = NpcSnapshotCaptureTest.stub(WorldView.class,
 			(n, a) -> n.equals("getId") ? 0 : n.equals("getScene") ? scene() : null);
@@ -295,7 +372,7 @@ public class SceneCaptureTraversalTest
 					slots++;
 					if (failObject && n.equals("getGroundObject"))
 						throw new IllegalStateException("unavailable object slot");
-					return plane == 0 && n.equals("getGroundObject") ? object : null;
+					return plane == 0 && n.equals("getGroundObject") && objectPresent ? object : null;
 				}
 				if (n.equals("getPlane"))
 				{
@@ -303,7 +380,11 @@ public class SceneCaptureTraversalTest
 					return plane;
 				}
 				if (n.equals("getGroundItems"))
-					return plane == 1 ? Collections.singletonList(item) : Collections.emptyList();
+				{
+					itemReads++;
+					if (plane == 1 && failItems) throw new IllegalStateException("Item membership unavailable");
+					return plane == 1 && itemPresent ? Collections.singletonList(item) : Collections.emptyList();
+				}
 				if (n.equals("getLocalLocation"))
 					return new LocalPoint(64, 64);
 				if (n.equals("getWorldLocation"))

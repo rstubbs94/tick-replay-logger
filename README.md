@@ -23,6 +23,8 @@ When more than one source fits, the replay can show their names together.
 Damage sources still show **Unknown** when there is not enough information
 to identify them. Matching uses recorded attacks, projectiles, hit types and
 positions together with known attack rules to interpret damage after it happens.
+Live View shows the observations being collected. Damage-source matching runs
+in the background when a death or manual snapshot is captured.
 The plugin records information; it does not control your character or tell you
 what to do during a fight.
 
@@ -68,7 +70,8 @@ Exports now include more information about NPCs, positions, animations,
 projectiles, objects and floor tiles, alongside the tick log, damage records,
 tick intervals and sampled ping.
 Large exports are compressed to make them smaller without removing information.
-Copying runs in the background so the panel can keep responding.
+Damage matching, saving and copying run in the background so recording can
+continue while a completed capture is processed.
 
 For file-format and decoding details, see [the export documentation](docs/export-schema-v1.3.md).
 

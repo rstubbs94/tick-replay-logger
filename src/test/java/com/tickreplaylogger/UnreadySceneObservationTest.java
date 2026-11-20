@@ -503,7 +503,15 @@ public class UnreadySceneObservationTest
 
 	private static Object call(Object o, String name) throws Exception
 	{
-		Method m = o.getClass().getDeclaredMethod(name);
+		Method m;
+		try
+		{
+			m = o.getClass().getDeclaredMethod(name);
+		}
+		catch (NoSuchMethodException inherited)
+		{
+			m = o.getClass().getMethod(name);
+		}
 		m.setAccessible(true);
 		return m.invoke(o);
 	}

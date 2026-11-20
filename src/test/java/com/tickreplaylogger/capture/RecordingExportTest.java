@@ -58,41 +58,30 @@ public class RecordingExportTest
 	}
 
 	@Test
-	public void streamingCompletionCountsExistingCollidingActionsAndHitsBeforeAddingMissingCopies()
+	public void typedExportPreservesEveryDuplicateReceiptWithoutReopeningOrRepairingJson()
 	{
 		Gson gson = new Gson();
-		PlayerAction action = PlayerAction.ate("Shark");
-		TickData tick = TickData.builder().tickNumber(1).playerActions(Arrays.asList(action, action))
-			.damageEvents(Arrays.asList(DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Target"),
-				DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Target")))
-			.build();
-		JsonObject root = new JsonObject();
-		root.addProperty("schemaVersion", "1.3");
-		JsonObject events = new JsonObject();
-		root.add("events", events);
-		com.google.gson.JsonArray actions = new com.google.gson.JsonArray();
-		JsonObject existing = new JsonObject();
-		existing.addProperty("tick", 1);
-		existing.addProperty("type", action.getType().name());
-		existing.addProperty("detail", action.getDescription());
-		actions.add(existing);
-		events.add("playerActions", actions);
-		com.google.gson.JsonArray hits = new com.google.gson.JsonArray();
-		JsonObject hit = new JsonObject();
-		hit.addProperty("direction", "DEALT");
-		hit.addProperty("impactTick", 1);
-		hit.addProperty("amount", 7);
-		hit.addProperty("defenderName", "<col=ffffff>Target</col>");
-		hits.add(hit);
-		events.add("damageEvents", hits);
-		TickRecording recording = TickRecording.builder().ticks(Collections.singletonList(tick))
-			.richExportJson(gson.toJson(root)).build();
-		JsonObject result = gson.fromJson(RecordingExport.forViewer(recording, gson), JsonObject.class);
-		assertEquals(2, result.getAsJsonObject("events").getAsJsonArray("playerActions").size());
-		assertEquals(2, result.getAsJsonObject("events").getAsJsonArray("damageEvents").size());
-		assertEquals("<col=ffffff>Target</col>", result.getAsJsonObject("events").getAsJsonArray("damageEvents").get(0)
-			.getAsJsonObject().get("defenderName").getAsString());
-		assertEquals(14, result.getAsJsonObject("summary").get("totalDamageDealtInBuffer").getAsInt());
+		com.tickreplaylogger.model.world.DeathRecordingV2.Events.PlayerActionRecord action =
+			com.tickreplaylogger.model.world.DeathRecordingV2.Events.PlayerActionRecord.builder().tick(1).type("EAT").detail("Shark").build();
+		com.tickreplaylogger.model.world.DamageRecord hit = com.tickreplaylogger.model.world.DamageRecord.builder()
+			.direction("DEALT").impactTick(1).amount(7).defenderName("<col=ffffff>Target</col>").build();
+		TickData tick = TickData.builder().tickNumber(1).playerActions(Arrays.asList(PlayerAction.ate("Shark"), PlayerAction.ate("Shark")))
+			.damageEvents(Arrays.asList(DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Target"), DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Target"))).build();
+		com.tickreplaylogger.model.world.DeathRecordingV2 payload = com.tickreplaylogger.model.world.DeathRecordingV2.builder()
+			.journalTicks(Collections.singletonList(tick)).events(com.tickreplaylogger.model.world.DeathRecordingV2.Events.builder()
+				.playerActions(Arrays.asList(action, action)).damageEvents(Arrays.asList(hit, hit)).build()).build();
+		TickRecording recording = TickRecording.fromPrepared(payload, 1, "Live Snapshot", false);
+		String before = gson.toJson(payload);
+		String exported = RecordingExport.forViewer(recording, gson);
+		assertEquals(before, exported);
+		com.tickreplaylogger.model.world.DeathRecordingV2 decoded = gson.fromJson(exported, com.tickreplaylogger.model.world.DeathRecordingV2.class);
+		assertEquals(2, decoded.getEvents().getPlayerActions().size());
+		assertEquals(2, decoded.getEvents().getDamageEvents().size());
+		assertEquals(14, decoded.getEvents().getDamageEvents().stream().mapToInt(d -> d.getAmount()).sum());
+		assertEquals("<col=ffffff>Target</col>", decoded.getEvents().getDamageEvents().get(0).getDefenderName());
+		assertEquals(2, decoded.getJournalTicks().get(0).getDamageEvents().size());
+		assertSame(payload, recording.getPreparedExport());
+		assertEquals(before, RecordingExport.forViewer(recording, gson));
 	}
 
 	@Test
@@ -106,38 +95,12 @@ public class RecordingExportTest
 	}
 
 	@Test
-	public void latestExportIncludesJournalMultiplicityWithoutChangingTheSavedCapture()
+	public void historicalIntermediatePayloadIsKeptOpaqueRatherThanRepairedFromAnotherJournal()
 	{
-		Gson gson = new Gson();
-		TickData tick = TickData.builder().tickNumber(1)
-			.playerActions(Arrays.asList(PlayerAction.ate("Shark"), PlayerAction.ate("Shark")))
-			.damageEvents(Arrays.asList(
-				DamageEvent.builder().direction(DamageEvent.DamageDirection.DEALT).amount(7).source("Observed target")
-					.build(),
-				DamageEvent.builder().direction(DamageEvent.DamageDirection.DEALT).amount(7).source("Observed target")
-					.build()))
-			.build();
-		TickRecording recording = TickRecording.builder().ticks(Collections.singletonList(tick)).richExportJson(
-			"{\"schemaVersion\":\"1.3\",\"events\":{\"damageEvents\":[{\"direction\":\"RECEIVED\",\"amount\":12}]},\"summary\":{}}")
-			.build();
-		String original = gson.toJson(recording);
-		String copied = RecordingExport.forViewer(recording, gson);
-		JsonObject exported = gson.fromJson(copied, JsonObject.class);
-		assertEquals("1.3", exported.get("schemaVersion").getAsString());
-		assertEquals(1, exported.getAsJsonArray("journalTicks").size());
-		assertEquals(2, exported.getAsJsonObject("events").getAsJsonArray("playerActions").size());
-		com.tickreplaylogger.model.world.DeathRecordingV2 rich = gson.fromJson(copied,
-			com.tickreplaylogger.model.world.DeathRecordingV2.class);
-		assertEquals(2,
-			rich.getEvents().getDamageEvents().stream().filter(d -> "DEALT".equals(d.getDirection())).count());
-		assertEquals(14, rich.getEvents().getDamageEvents().stream().filter(d -> "DEALT".equals(d.getDirection()))
-			.mapToInt(d -> d.getAmount()).sum());
-		assertEquals(12, rich.getEvents().getDamageEvents().stream().filter(d -> "RECEIVED".equals(d.getDirection()))
-			.mapToInt(d -> d.getAmount()).sum());
-		assertEquals(original, gson.toJson(recording));
-		// Copying the completed payload again must preserve duplicate click multiplicity without adding duplicates.
-		TickRecording again = gson.fromJson(original, TickRecording.class);
-		again.setRichExportJson(copied);
-		assertEquals(exported, gson.fromJson(RecordingExport.forViewer(again, gson), JsonObject.class));
+		String original = "{\"schemaVersion\":\"1.3\",\"events\":{\"damageEvents\":[{\"amount\":12}]}}";
+		TickRecording recording = TickRecording.builder().richExportJson(original)
+			.ticks(Collections.singletonList(TickData.builder().tickNumber(1)
+				.damageEvents(Collections.singletonList(DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Target"))).build())).build();
+		assertEquals(original, RecordingExport.forViewer(recording, new Gson()));
 	}
 }

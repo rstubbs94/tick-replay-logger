@@ -17,14 +17,19 @@ public class CanonicalMechanicsProjectionTest
 {
 	private final Gson gson = new Gson();
 
-	@Test public void projectionRetainsEveryOriginalSectionAndSeparatesLineageFromSemanticIdentity() throws Exception
+	@Test public void projectionRetainsConsumedFactsAndSeparatesLineageFromSemanticIdentity() throws Exception
 	{
 		RuntimeCatalog packaged = RuntimeCatalog.load(gson);
 		JsonObject original = resource("combat_catalog.json");
 		JsonObject authored=packaged.section("references").deepCopy();
 		assertNotNull(authored.remove("inventorySourceCapture"));
-		assertJsonSame("references",original,authored);
-		assertJsonSame("capture",resource("damage_map.json"),packaged.section("capture"));
+		for (Map.Entry<String,JsonElement> field : authored.entrySet())
+			assertJsonSame("references:"+field.getKey(),original.get(field.getKey()),field.getValue());
+		assertFalse("Old constraints are compiled once into current resolution rules",authored.has("attributionConstraints"));
+		assertFalse("Old mechanism tables remain in the test authoring input",authored.has("mechanismRules"));
+		JsonObject originalCapture=resource("damage_map.json");
+		for (Map.Entry<String,JsonElement> field : packaged.section("capture").entrySet())
+			assertJsonSame("capture:"+field.getKey(),originalCapture.get(field.getKey()),field.getValue());
 		JsonObject resolver = packaged.section("resolver");
 		Map<String,JsonObject> compiled=new HashMap<>();
 		for(JsonElement value:resolver.getAsJsonArray("resolutionRules"))
@@ -145,7 +150,7 @@ public class CanonicalMechanicsProjectionTest
 		JsonObject document=gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',resolutionRules:["
 			+"{id:'reference.first',role:'annotation',domain:'cue',source:{kind:'npc',ids:[900001]},effects:{annotations:{damageType:'ranged',determination:'attack'}},merge:{group:'base',priority:1,mode:'consensus'}},"
 			+"{id:'reference.second',role:'annotation',domain:'cue',source:{kind:'npc',ids:[900002]},effects:{annotations:{damageType:'magic',determination:'hit'}},merge:{group:'base',priority:1,mode:'consensus'}}]}",JsonObject.class);
-		ResolverV1 engine=new ResolverV1(document,gson,CombatCatalog.load(gson),DamageMap.load(gson));
+		ResolverV1 engine=new ResolverV1(document,gson,CombatCatalog.load(gson));
 		for(int id:new int[]{900001,900002,900003}) for(String kind:Arrays.asList("npc","object"))
 		{
 			JsonObject input=gson.fromJson("{hit:{recipientRef:'player',amount:1,hitsplatType:16,family:'ordinary',tick:10,cycle:30,sequence:2,scope:{sceneKey:'synthetic',worldViewId:0,plane:0}},cues:[{key:'actual-source',pattern:'direct_attack',targetRef:'player',source:{name:'Observed source',actorRef:'actual-source',scope:{sceneKey:'synthetic',worldViewId:0,plane:0}}}]}",JsonObject.class);

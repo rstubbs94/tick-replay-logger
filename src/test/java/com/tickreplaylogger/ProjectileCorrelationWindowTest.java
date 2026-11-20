@@ -139,7 +139,8 @@ public class ProjectileCorrelationWindowTest
 		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(Collections.emptyList(),
 			Collections.emptyList(), Arrays.asList(launch, impact), Collections.singletonList(hit), Collections.emptyList(),
 			99, 100, 20, 1);
-		return new ResolverV1Recording(window, new Gson(), null).resolveHit(hit);
+		return ResolverV1Recording.resolve(com.tickreplaylogger.capture.ResolverTestCatalog.recording(window), new Gson())
+			.getEvents().getDamageEvents().get(0);
 	}
 
 	private static NPC actor(WorldPoint point, WorldArea area)

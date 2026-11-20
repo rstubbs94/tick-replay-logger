@@ -65,74 +65,68 @@ public class TickRecording
 	// Total damage received in the recorded ticks
 	private final int totalDamageReceived;
 
-	// The full rich versioned export (DeathRecordingV2) for this death, serialized as JSON. This is the
-	// complete payload — scenes/collision, per-tick world snapshots, events, summary — that the "Copy"
-	// action emits for local recording analysis. Null for older/plain recordings; copy then falls
-	// back to the journal JSON.
+	// Opaque best-effort input from intermediate recordings; current captures use preparedExport.
 	private volatile String richExportJson;
+	// Current captures retain the completed typed payload. JSON is produced only when saving/copying.
+	private volatile com.tickreplaylogger.model.world.DeathRecordingV2 preparedExport;
 
-	@lombok.Getter(lombok.AccessLevel.NONE)
-	@lombok.Setter(lombok.AccessLevel.NONE)
-	@lombok.ToString.Exclude
-	private transient volatile PreparedEncounterTitle preparedEncounterTitle;
-
-	/** Immutable display-only cache. Payload matching uses identity, never its large hash/equality. */
-	public static final class PreparedEncounterTitle
+	public boolean hasRichExport()
 	{
-		private final String payload;
-		private final String originalName;
-		private final Boolean customLabel;
-		private final String catalogId;
-		private final String title;
+		return preparedExport != null || richExportJson != null && !richExportJson.isEmpty();
+	}
 
-		public PreparedEncounterTitle(String payload, String originalName, Boolean customLabel, String catalogId,
-			String title)
-		{
-			this.payload = payload;
-			this.originalName = originalName;
-			this.customLabel = customLabel;
-			this.catalogId = catalogId;
-			this.title = title;
-		}
+	public Object exportIdentity()
+	{
+		return preparedExport == null ? richExportJson : preparedExport;
+	}
 
-		public boolean matches(TickRecording recording, String catalogId)
-		{
-			return payload == recording.richExportJson && Objects.equals(originalName, recording.killerName)
-				&& Objects.equals(customLabel, recording.customLabel) && Objects.equals(this.catalogId, catalogId);
-		}
+	/** One original frozen window supplies both paused display and deferred retrospective processing. */
+	@Getter
+	public static final class CapturedWindow
+	{
+		private final List<TickData> ticks;
+		private final java.util.function.Supplier<com.tickreplaylogger.model.world.DeathRecordingV2> completion;
 
-		public String title()
+		public CapturedWindow(List<TickData> ticks,
+			java.util.function.Supplier<com.tickreplaylogger.model.world.DeathRecordingV2> completion)
 		{
-			return title;
+			this.ticks = Collections.unmodifiableList(new ArrayList<>(ticks));
+			this.completion = Objects.requireNonNull(completion);
 		}
 	}
 
-	public PreparedEncounterTitle preparedEncounterTitle()
+	public static TickRecording fromPrepared(com.tickreplaylogger.model.world.DeathRecordingV2 completed,
+		long timestamp, String location, boolean death)
 	{
-		return preparedEncounterTitle;
-	}
-
-	public void rememberEncounterTitle(PreparedEncounterTitle prepared)
-	{
-		preparedEncounterTitle = prepared;
-	}
-
-	public void setRichExportJson(String payload)
-	{
-		preparedEncounterTitle = null;
-		richExportJson = payload;
-	}
-
-	public void setKillerName(String name)
-	{
-		preparedEncounterTitle = null;
-		killerName = name;
-	}
-
-	public void setCustomLabel(Boolean custom)
-	{
-		preparedEncounterTitle = null;
-		customLabel = custom;
+		List<TickData> ticks = completed.getJournalTicks() == null ? Collections.emptyList()
+			: completed.getJournalTicks();
+		com.tickreplaylogger.model.world.DeathRecordingV2.Summary summary = completed.getSummary();
+		List<DamageEvent> fatal = new ArrayList<>();
+		if (summary != null && summary.getFatalHitCandidates() != null)
+		{
+			for (com.tickreplaylogger.model.world.DamageRecord hit : summary.getFatalHitCandidates())
+			{
+				fatal.add(DamageEvent.builder().direction(DamageEvent.DamageDirection.RECEIVED).amount(hit.getAmount())
+					.damageType(DamageEvent.DamageType.fromReference(hit.getDamageType())).source(hit.getAttackerName())
+					.confidence(hit.getAttribution()).determination(hit.getDetermination())
+					.observationSequence(hit.getObservationSequence()).sourceResolution(hit.getSourceResolution())
+					.build());
+			}
+		}
+		TickData last = ticks.isEmpty() ? null : ticks.get(ticks.size() - 1);
+		return builder().timestamp(timestamp).location(location).preparedExport(completed).ticks(ticks)
+			.eventsBeforeSnapshot(true).finalHp(death || last == null ? 0 : last.getCurrentHp())
+			.finalHpKnown(death || last != null && last.isStateKnown("currentHp"))
+			.totalDamageReceived(calculateTotalDamage(ticks))
+			.killerName(summary == null || summary.getKillerName() == null ? death ? "Unknown" : "Live Snapshot"
+				: summary.getKillerName())
+			.killerConfidence(summary == null ? null : summary.getKillerConfidence())
+			.killerBasis(summary == null ? null : summary.getKillerBasis())
+			.fatalHitBasis(summary == null ? null : summary.getFatalHitBasis())
+			.fatalSourceResolution(summary == null ? null : summary.getSourceResolution()).fatalHitCandidates(fatal)
+			.unresolvedImpactObservations(summary == null ? null : summary.getUnresolvedImpactObservations())
+			.unresolvedImpactObservationCount(summary == null ? 0 : summary.getUnresolvedImpactObservationCount())
+			.build();
 	}
 
 	/**

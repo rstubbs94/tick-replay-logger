@@ -84,9 +84,10 @@ public class TickReplayLoggerPanel extends PluginPanel
 	private final JButton liveSaveBtn;
 	private boolean liveRecording = true; // Controls display updates
 	private boolean liveViewEnabled = true;
-	private List<TickData> pausedSnapshot;
-	private java.util.function.Supplier<String> pausedRichExport;
-	private java.util.function.Function<List<TickData>, java.util.function.Supplier<String>> liveSnapshotPreparer;
+	private TickRecording.CapturedWindow pausedCapture;
+	private java.util.function.Consumer<java.util.function.Consumer<TickRecording.CapturedWindow>> liveCaptureRequester;
+	private long pauseGeneration;
+	private boolean liveSavePending;
 	private volatile boolean disposed;
 	private Timer liveSaveFeedbackTimer;
 	private boolean liveSaveFeedbackActive;
@@ -98,9 +99,6 @@ public class TickReplayLoggerPanel extends PluginPanel
 	// Gson for JSON export (injected from client)
 	private final Gson gson;
 	private SwingWorker<String, Void> clipboardExport;
-	private SwingWorker<Void, Void> encounterLabelsWorker;
-	private long encounterLabelsGeneration;
-	private final IdentityHashMap<String, TickRecording.PreparedEncounterTitle> encounterTitles = new IdentityHashMap<>();
 
 	// Config, for display options like collapsing unchanged ticks
 	private final com.tickreplaylogger.TickReplayLoggerConfig config;
@@ -341,14 +339,14 @@ public class TickReplayLoggerPanel extends PluginPanel
 	 */
 	private void toggleLiveUpdates()
 	{
+		long generation = ++pauseGeneration;
 		liveRecording = !liveRecording;
 		if (liveRecording)
 		{
 			liveStartStopBtn.setText("Pause");
 			liveStatusLabel.setText("Recording: Active");
 			liveStatusLabel.setForeground(new Color(80, 200, 80));
-			pausedSnapshot = null;
-			pausedRichExport = null;
+			pausedCapture = null;
 			refreshLiveTimeline();
 		}
 		else
@@ -356,15 +354,16 @@ public class TickReplayLoggerPanel extends PluginPanel
 			liveStartStopBtn.setText("Resume");
 			liveStatusLabel.setText("Recording: Paused");
 			liveStatusLabel.setForeground(new Color(255, 180, 80));
-			if (tickRecorder != null)
+			pausedCapture = null;
+			requestCapture(capture ->
 			{
-				pausedSnapshot = new ArrayList<>(tickRecorder.getTickHistory());
-				pausedRichExport = prepareLiveExport(pausedSnapshot);
-			}
-			else
-			{
-				pausedSnapshot = Collections.emptyList();
-			}
+				if (disposed || liveRecording || generation != pauseGeneration)
+				{
+					return;
+				}
+				pausedCapture = capture;
+				refreshLiveTimeline();
+			});
 		}
 
 		updateLiveSaveButtonState();
@@ -417,21 +416,15 @@ public class TickReplayLoggerPanel extends PluginPanel
 			{
 				clipboardExport.cancel(false);
 			}
-			encounterLabelsGeneration++;
-			if (encounterLabelsWorker != null)
-			{
-				encounterLabelsWorker.cancel(false);
-			}
-			encounterLabelsWorker = null;
-			encounterTitles.clear();
+
 			if (liveSaveFeedbackTimer != null)
 			{
 				liveSaveFeedbackTimer.stop();
 			}
 			playbackPanel.dispose();
-			pausedSnapshot = null;
-			pausedRichExport = null;
-			liveSnapshotPreparer = null;
+			pausedCapture = null;
+			liveCaptureRequester = null;
+			pauseGeneration++;
 			tickRecorder = null;
 			recordingsListContainer.removeAll();
 			liveTimelineContainer.removeAll();
@@ -461,83 +454,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 		{
 			return;
 		}
-		long generation = ++encounterLabelsGeneration;
-		if (encounterLabelsWorker != null)
-		{
-			encounterLabelsWorker.cancel(false);
-		}
-		encounterLabelsWorker = null;
-		List<TickRecording> deaths = recordingStorage.getDeaths();
-		List<TickRecording> saved = recordingStorage.getSavedRecordings();
-		List<TickRecording> all = new java.util.ArrayList<>(deaths);
-		all.addAll(saved);
-		IdentityHashMap<String, TickRecording.PreparedEncounterTitle> currentTitles = new IdentityHashMap<>();
-		boolean preparationNeeded = false;
-		for (TickRecording recording : all)
-		{
-			String payload = recording.getRichExportJson();
-			TickRecording.PreparedEncounterTitle cached = encounterTitles.get(payload);
-			if (cached != null)
-			{
-				recording.rememberEncounterTitle(cached);
-			}
-			if (recording.preparedEncounterTitle() != null)
-			{
-				currentTitles.put(payload, recording.preparedEncounterTitle());
-			}
-			preparationNeeded |= com.tickreplaylogger.capture.RecordingEncounterLabels.needsPreparation(recording,
-				damageMap);
-		}
-		encounterTitles.clear();
-		encounterTitles.putAll(currentTitles);
-		if (!preparationNeeded)
-		{
-			renderRecordingsList(deaths, saved);
-			return;
-		}
-		encounterLabelsWorker = new SwingWorker<Void, Void>()
-		{
-			@Override
-			protected Void doInBackground()
-			{
-				for (TickRecording recording : all)
-				{
-					if (isCancelled())
-					{
-						break;
-					}
-					com.tickreplaylogger.capture.RecordingEncounterLabels.prepareTitle(recording, damageMap, gson);
-				}
-				return null;
-			}
-
-			@Override
-			protected void done()
-			{
-				if (disposed || isCancelled() || generation != encounterLabelsGeneration)
-				{
-					return;
-				}
-				try
-				{
-					get();
-				}
-				catch (Exception unavailable)
-				{
-					/* Title failure uses the original recorded name. */ }
-				encounterLabelsWorker = null;
-				encounterTitles.clear();
-				for (TickRecording recording : all)
-				{
-					if (recording.getRichExportJson() != null && recording.preparedEncounterTitle() != null)
-					{
-						encounterTitles.put(recording.getRichExportJson(), recording.preparedEncounterTitle());
-					}
-				}
-				renderRecordingsList(deaths, saved);
-			}
-		};
-		encounterLabelsWorker.execute();
+		renderRecordingsList(recordingStorage.getDeaths(), recordingStorage.getSavedRecordings());
 	}
 
 	private void renderRecordingsList(List<TickRecording> deaths, List<TickRecording> saved)
@@ -651,7 +568,8 @@ public class TickReplayLoggerPanel extends PluginPanel
 
 		liveTimelineContainer.removeAll();
 
-		List<TickData> chronological = tickRecorder.getTickHistory();
+		List<TickData> chronological = liveRecording ? tickRecorder.getTickHistory()
+			: pausedCapture == null ? Collections.emptyList() : pausedCapture.getTicks();
 
 		GridBagConstraints gbc = new GridBagConstraints();
 		gbc.gridx = 0;
@@ -672,8 +590,8 @@ public class TickReplayLoggerPanel extends PluginPanel
 		else
 		{
 			// Update status with tick count
-			int tickCount = tickRecorder.getTickCount();
-			int currentTick = tickRecorder.getCurrentTickNumber();
+			int tickCount = chronological.size();
+			int currentTick = chronological.get(tickCount - 1).getTickNumber();
 			String statusText = liveRecording ? "Recording: Active" : "Recording: Paused";
 			statusText += " (" + tickCount + " ticks, #" + currentTick + ")";
 			liveStatusLabel.setText(statusText);
@@ -714,9 +632,9 @@ public class TickReplayLoggerPanel extends PluginPanel
 			return;
 		}
 
-		boolean hasPausedSnapshot = pausedSnapshot != null && !pausedSnapshot.isEmpty();
-		boolean hasLiveTicks = tickRecorder != null && tickRecorder.getTickCount() > 0;
-		liveSaveBtn.setEnabled(hasPausedSnapshot || hasLiveTicks);
+		boolean hasPausedSnapshot = !liveRecording && pausedCapture != null && !pausedCapture.getTicks().isEmpty();
+		boolean hasLiveTicks = liveRecording && tickRecorder != null && tickRecorder.getTickCount() > 0;
+		liveSaveBtn.setEnabled(!liveSavePending && (hasPausedSnapshot || hasLiveTicks));
 		liveSaveBtn.setText(LIVE_SAVE_DEFAULT_TEXT);
 	}
 
@@ -731,7 +649,7 @@ public class TickReplayLoggerPanel extends PluginPanel
 		{
 			return;
 		}
-		boolean rich = recording.getRichExportJson() != null && !recording.getRichExportJson().isEmpty();
+		boolean rich = recording.hasRichExport();
 		setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 		clipboardExport = new SwingWorker<String, Void>()
 		{
@@ -839,17 +757,29 @@ public class TickReplayLoggerPanel extends PluginPanel
 	 */
 	private void exportLiveBuffer()
 	{
-		if (tickRecorder == null || tickRecorder.getTickCount() == 0)
+		if (!liveRecording)
 		{
-			JOptionPane.showMessageDialog(this, "No ticks to export!", "Export", JOptionPane.WARNING_MESSAGE);
+			if (pausedCapture != null)
+			{
+				copyLiveCapture(pausedCapture);
+			}
+		}
+		else
+		{
+			requestCapture(this::copyLiveCapture);
+		}
+	}
+
+	private void copyLiveCapture(TickRecording.CapturedWindow capture)
+	{
+		if (disposed || capture == null || capture.getTicks().isEmpty())
+		{
 			return;
 		}
-
-		List<TickData> ticks = tickRecorder.getTickHistory();
-		String json = gson.toJson(ticks);
-		copyToClipboard(json);
-		JOptionPane.showMessageDialog(this, "Live buffer (" + ticks.size() + " ticks) exported to clipboard!",
-			"Export Successful", JOptionPane.INFORMATION_MESSAGE);
+		copyToClipboard(gson.toJson(capture.getTicks()));
+		JOptionPane.showMessageDialog(this,
+			"Live buffer (" + capture.getTicks().size() + " ticks) exported to clipboard!", "Export Successful",
+			JOptionPane.INFORMATION_MESSAGE);
 	}
 
 	/**
@@ -857,58 +787,50 @@ public class TickReplayLoggerPanel extends PluginPanel
 	 */
 	private void saveLiveBuffer()
 	{
-		List<TickData> sourceTicks;
-		if (pausedSnapshot != null)
+		if (liveSavePending)
 		{
-			sourceTicks = new ArrayList<>(pausedSnapshot);
-		}
-		else if (tickRecorder != null && tickRecorder.getTickCount() > 0)
-		{
-			sourceTicks = new ArrayList<>(tickRecorder.getTickHistory());
-		}
-		else
-		{
-			JOptionPane.showMessageDialog(this, "No ticks recorded yet. Play for a bit before saving.", "Save",
-				JOptionPane.WARNING_MESSAGE);
 			return;
 		}
+		if (!liveRecording)
+		{
+			if (pausedCapture != null && !pausedCapture.getTicks().isEmpty())
+			{
+				saveCapture(pausedCapture);
+			}
+			return;
+		}
+		liveSavePending = true;
+		updateLiveSaveButtonState();
+		requestCapture(capture ->
+		{
+			if (capture == null || capture.getTicks().isEmpty())
+			{
+				liveSavePending = false;
+				if (!disposed)
+				{
+					updateLiveSaveButtonState();
+				}
+				return;
+			}
+			saveCapture(capture);
+		});
+	}
 
+	private void saveCapture(TickRecording.CapturedWindow capture)
+	{
 		String name = "Live Snapshot - " + LocalDateTime.now().format(SNAPSHOT_FORMAT);
-
-		int totalDamage = TickRecording.calculateTotalDamage(sourceTicks);
-
-		java.util.function.Supplier<String> richExport = pausedSnapshot != null ? pausedRichExport
-			: prepareLiveExport(sourceTicks);
-		TickRecording recording = TickRecording.builder().timestamp(System.currentTimeMillis()).killerName(name.trim())
-			.location("Live Snapshot").ticks(sourceTicks).eventsBeforeSnapshot(true)
-			.finalHp(sourceTicks.isEmpty() ? 0 : sourceTicks.get(sourceTicks.size() - 1).getCurrentHp())
-			.finalHpKnown(!sourceTicks.isEmpty() && sourceTicks.get(sourceTicks.size() - 1).isStateKnown("currentHp"))
-			.totalDamageReceived(totalDamage).build();
-
-		liveSaveBtn.setEnabled(false);
+		long timestamp = System.currentTimeMillis();
+		liveSavePending = true;
+		updateLiveSaveButtonState();
 		recordingStorage.addSavedRecording(() ->
 		{
-			String completed = richExport == null ? null : richExport.get();
-			recording.setRichExportJson(completed);
-			if (completed != null)
-			{
-				// The storage worker parses only the detached journal projection; this small model
-				// skips the rich scene data and keeps saved replay labels in sync with the export.
-				try
-				{
-					ResolvedExportJournal resolved = gson.fromJson(completed, ResolvedExportJournal.class);
-					if (resolved != null && resolved.journalTicks != null)
-					{
-						return recording.toBuilder().ticks(resolved.journalTicks).build();
-					}
-				}
-				catch (RuntimeException legacyExport)
-				{
-					/* The original journal is still valid. */ }
-			}
-			return recording;
+			TickRecording prepared = TickRecording.fromPrepared(capture.getCompletion().get(), timestamp,
+				"Live Snapshot", false);
+			prepared.setKillerName(name);
+			return prepared;
 		}).whenComplete((ignored, error) -> SwingUtilities.invokeLater(() ->
 		{
+			liveSavePending = false;
 			if (disposed)
 			{
 				return;
@@ -925,25 +847,30 @@ public class TickReplayLoggerPanel extends PluginPanel
 		}));
 	}
 
-	private static final class ResolvedExportJournal
+	public void setLiveCaptureRequester(
+		java.util.function.Consumer<java.util.function.Consumer<TickRecording.CapturedWindow>> requester)
 	{
-		List<TickData> journalTicks;
+		liveCaptureRequester = requester;
 	}
 
-	public void setLiveSnapshotExporter(java.util.function.Function<List<TickData>, String> exporter)
+	private void requestCapture(java.util.function.Consumer<TickRecording.CapturedWindow> ready)
 	{
-		setLiveSnapshotPreparer(ticks -> () -> exporter.apply(ticks));
-	}
-
-	public void setLiveSnapshotPreparer(
-		java.util.function.Function<List<TickData>, java.util.function.Supplier<String>> preparer)
-	{
-		this.liveSnapshotPreparer = preparer;
-	}
-
-	private java.util.function.Supplier<String> prepareLiveExport(List<TickData> ticks)
-	{
-		return liveSnapshotPreparer == null ? () -> null : liveSnapshotPreparer.apply(ticks);
+		if (liveCaptureRequester == null)
+		{
+			ready.accept(null);
+			return;
+		}
+		liveCaptureRequester.accept(capture ->
+		{
+			if (SwingUtilities.isEventDispatchThread())
+			{
+				ready.accept(capture);
+			}
+			else
+			{
+				SwingUtilities.invokeLater(() -> ready.accept(capture));
+			}
+		});
 	}
 
 	/**

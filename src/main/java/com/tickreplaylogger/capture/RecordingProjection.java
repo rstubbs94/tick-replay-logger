@@ -48,8 +48,15 @@ final class RecordingProjection
 					&& Objects.equals(projected.getObservedCycle(), event.getGameCycle()))
 				{
 					Map<String, Object> fields = new LinkedHashMap<>(event.getData());
-					fields.put("attributionContext", projected.toBuilder().sourceResolution(null)
-						.attributionCandidates(null).observedHazardContacts(null).build());
+					DamageRecord original = event.getData().get("attributionContext") instanceof DamageRecord
+						? (DamageRecord) event.getData().get("attributionContext")
+						: null;
+					if (original == null || !original.sameNativeCallback(projected))
+					{
+						continue;
+					}
+					fields.put("attributionContext",
+						applyAnnotations(original, projected).toBuilder().sourceResolution(null).build());
 					fields.put("sourceResolution", projected.getSourceResolution());
 					if (!fields.equals(event.getData()))
 					{
@@ -66,56 +73,159 @@ final class RecordingProjection
 				}
 			}
 		}
-		DeathRecordingV2.Summary summary = recording.getSummary();
-		if (summary != null)
-		{
-			List<DamageRecord> alternatives = null;
-			List<SourceResolution.Candidate> possible = new ArrayList<>(), excluded = new ArrayList<>();
-			if (summary.getFatalHitCandidates() != null)
-			{
-				alternatives = new ArrayList<>();
-				for (DamageRecord candidate : summary.getFatalHitCandidates())
-				{
-					DamageRecord projected = annotations(candidate, records);
-					alternatives.add(projected);
-					append(projected == null ? null : projected.getSourceResolution(), possible, excluded);
-				}
-			}
-			DamageRecord fatal = summary.getFatalHit(), projected = annotations(fatal, records);
-			if (fatal != null && projected != fatal)
-			{
-				if (alternatives == null || alternatives.isEmpty())
-				{
-					append(projected.getSourceResolution(), possible, excluded);
-				}
-				boolean missing = alternatives != null && alternatives.size() > 1
-					&& alternatives.stream()
-						.anyMatch(hit -> hit == null || hit.getSourceResolution() == null
-							|| hit.getSourceResolution().getCandidates() == null
-							|| hit.getSourceResolution().getCandidates().isEmpty());
-				if (missing || "MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS".equals(summary.getKillerBasis()))
-				{
-					projected = projected.toBuilder().attackerName("Unknown").attribution("UNKNOWN")
-						.attributionEvidence("MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS").build();
-				}
-				summary = summary.toBuilder().fatalHit(projected).fatalHitCandidates(alternatives)
-					.sourceResolution(SourceEvidenceResolver.project(possible, excluded, true, catalogId,
-						"RECORDED_RESOLVER_V1_FATAL_ALTERNATIVES"))
-					.build();
-			}
-		}
+		DeathRecordingV2.Summary summary = deathSummary(recording, hits, catalogId);
+		int dealt = hits == null ? 0
+			: hits.stream().filter(hit -> hit != null && "DEALT".equals(hit.getDirection()))
+				.mapToInt(DamageRecord::getAmount).sum();
+		summary = (summary == null ? DeathRecordingV2.Summary.builder() : summary.toBuilder())
+			.totalDamageDealtInBuffer(dealt).build();
+
 		DeathRecordingV2 resolved = recording.toBuilder().summary(summary)
 			.events(DeathRecordingV2.Events.builder().damageEvents(hits).effectEvents(before.getEffectEvents())
 				.playerActions(before.getPlayerActions()).deaths(before.getDeaths()).observations(observations)
 				.observationLinks(before.getObservationLinks()).captureGaps(before.getCaptureGaps()).build())
 			.build();
-		return resolved.toBuilder().journalTicks(projectJournalTicks(recording.getJournalTicks(), resolved)).build();
+		return resolved.toBuilder().journalTicks(journal(recording.getJournalTicks(), resolved.getEvents())).build();
+	}
+
+	/** Callback order selects an inspection record, never a hidden lethal server roll. */
+	private static DeathRecordingV2.Summary deathSummary(DeathRecordingV2 recording, List<DamageRecord> hits,
+		String catalogId)
+	{
+		DeathRecordingV2.Summary original = recording.getSummary();
+		if (recording.getMeta() == null || recording.getMeta().getDeathTick() == null)
+		{
+			return original;
+		}
+		int tick = recording.getMeta().getDeathTick();
+		List<DamageRecord> alternatives = new ArrayList<>();
+		List<SourceResolution.Candidate> possible = new ArrayList<>(), excluded = new ArrayList<>();
+		Set<String> sources = new LinkedHashSet<>();
+		boolean unlinked = false;
+		if (hits != null)
+		{
+			for (DamageRecord hit : hits)
+			{
+				if (hit == null || hit.getImpactTick() != tick || hit.getAmount() <= 0
+					|| !"player".equals(hit.getDefenderRef()) || !"RECEIVED".equals(hit.getDirection()))
+				{
+					continue;
+				}
+				alternatives.add(hit);
+				append(hit.getSourceResolution(), possible, excluded);
+				if (hit.getAttackerRef() != null && !hit.getAttackerRef().trim().isEmpty())
+				{
+					sources.add("actor:" + hit.getAttackerRef());
+				}
+				else if ("STATUS_HITSPLAT".equals(hit.getAttributionEvidence()))
+				{
+					sources.add("status:" + hit.getDamageType() + ":" + hit.getAttackerName());
+				}
+				else
+				{
+					unlinked = true;
+				}
+			}
+		}
+		DamageRecord last = alternatives.isEmpty() ? null : alternatives.get(alternatives.size() - 1);
+		boolean unresolved = original != null && original.getUnresolvedImpactObservationCount() > 0
+			|| unresolvedAfter(recording.getEvents(), tick, last);
+		boolean mixed = alternatives.size() > 1 && (unlinked || sources.size() > 1);
+		DamageRecord fatal = unresolved || alternatives.isEmpty() ? null : alternatives.get(alternatives.size() - 1);
+		String basis = unresolved ? "UNRESOLVED_IMPACT_IN_DEATH_TICK"
+			: fatal == null ? "NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK"
+				: mixed ? "MULTIPLE_DISTINCT_OR_UNLINKED_IMPACTS" : "SELECTED_RECORD_SOURCE_ONLY";
+		return (original == null ? DeathRecordingV2.Summary.builder() : original.toBuilder())
+			.killerName(fatal == null || mixed || fatal.getAttackerName() == null ? "Unknown" : fatal.getAttackerName())
+			.killerRef(fatal == null || mixed ? null : fatal.getAttackerRef())
+			.killerConfidence(
+				fatal == null || mixed || fatal.getAttribution() == null ? "UNKNOWN" : fatal.getAttribution())
+			.killerBasis(basis).fatalHit(fatal).fatalHitCandidates(alternatives)
+			.fatalHitBasis(unresolved || fatal == null ? basis
+				: alternatives.size() > 1 ? "LAST_POSITIVE_RECEIVED_CALLBACK_IN_DEATH_TICK"
+					: "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK")
+			.sourceResolution(SourceEvidenceResolver.project(possible, excluded, true, catalogId,
+				"RECORDED_RESOLVER_V1_FATAL_ALTERNATIVES"))
+			.reactable(fatal == null || alternatives.size() > 1 ? null
+				: "IMPACT".equals(fatal.getDetermination()) ? Boolean.TRUE
+					: "LAUNCH".equals(fatal.getDetermination()) ? Boolean.FALSE : null)
+			.build();
+	}
+
+	/** A truncated journal or later unfinalized HP-capable callback cannot identify an earlier killer. */
+	private static boolean unresolvedAfter(DeathRecordingV2.Events events, int tick, DamageRecord last)
+	{
+		if (events.getCaptureGaps() != null)
+		{
+			for (DeathRecordingV2.Events.CaptureGap gap : events.getCaptureGaps())
+			{
+				if (gap != null && gap.getTick() == tick && gap.getOmittedObservations() > 0
+					&& ("rawCallbacks".equals(gap.getChannel()) || "observationLinks".equals(gap.getChannel())))
+				{
+					return true;
+				}
+			}
+		}
+		if (events.getObservations() == null)
+		{
+			return false;
+		}
+		for (ObservedEvent event : events.getObservations())
+		{
+			if (event == null || event.getTick() != tick || !"HITSPLAT".equals(event.getType())
+				|| event.getData() == null || !localRecipient(event, events.getObservationLinks()))
+			{
+				continue;
+			}
+			Object amount = event.getData().get("amount"), surface = event.getData().get("resourceSurface");
+			if (!(amount instanceof Number) || ((Number) amount).intValue() <= 0 || !Arrays.asList("HP", "SKILL_OR_HP",
+				"HP_OR_COMBAT_RESOURCE", "UNCLASSIFIED", "SANITY", "STACKS", "CONTEXTUAL_RESOURCE").contains(surface))
+			{
+				continue;
+			}
+			if (last == null || last.getObservationSequence() == null
+				|| event.getSequence() > last.getObservationSequence())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean localRecipient(ObservedEvent event, List<ObservedEventLink> links)
+	{
+		if (event.getActorRef() != null)
+		{
+			return "player".equals(event.getActorRef());
+		}
+		boolean linked = false;
+		if (links != null)
+		{
+			for (ObservedEventLink link : links)
+			{
+				if (link == null || link.getObservationSequence() != event.getSequence()
+					|| link.getTick() != event.getTick() || link.getResolvedTick() != event.getTick()
+					|| !"HITSPLAT".equals(link.getObservationType())
+					|| !"SETTLED_LOCAL_REFERENCE_MATCH".equals(link.getEvidence()))
+				{
+					continue;
+				}
+				if (!"player".equals(link.getActorRef()))
+				{
+					return false;
+				}
+				linked = true;
+			}
+		}
+		Object actor = event.getData().get("actorState");
+		return linked || "PLAYER".equals(event.getData().get("receiverKind")) && actor instanceof Map
+			&& "LOCAL_PLAYER".equals(((Map<?, ?>) actor).get("actorKind"));
 	}
 
 	private static DamageRecord annotations(DamageRecord original, Map<Long, DamageRecord> records)
 	{
 		DamageRecord projected = original == null ? null : records.get(original.getObservationSequence());
-		if (projected == null || !original.sameOriginalCallback(projected))
+		if (projected == null || !original.sameNativeCallback(projected))
 		{
 			return original;
 		}
@@ -163,169 +273,131 @@ final class RecordingProjection
 			.launchY(projected.getLaunchY()).build();
 	}
 
-	/** Journal and rich recording present the same annotations; neither rewrites the received amount. */
-	public static DamageEvent projectJournalDamage(DamageEvent original, DamageRecord projected)
+	/** The same renderer supplies raw Live rows and completed capture rows from structured events. */
+	static List<TickData> journal(List<TickData> states, DeathRecordingV2.Events events)
 	{
-		if (original == null || projected == null || original.getDirection() != DamageEvent.DamageDirection.RECEIVED)
+		if (states == null || events == null)
 		{
-			return original;
+			return states;
 		}
-		String label = SourceResolutionLabels.label(projected.getSourceResolution());
-		DamageEvent.DamageType type = DamageEvent.DamageType.fromReference(projected.getDamageType());
-		return original.toBuilder().sourceResolution(projected.getSourceResolution())
-			.source(label == null ? projected.getAttackerName() : label)
-			.damageType(type == DamageEvent.DamageType.UNKNOWN ? original.getDamageType() : type)
-			.confidence(projected.getAttribution()).determination(projected.getDetermination()).build();
-	}
-
-	public static String projectResourceNote(String original, DamageRecord projected)
-	{
-		if (original == null || projected == null || !original.startsWith("Impact " + projected.getAmount() + " ("))
+		Map<Integer, JournalRow> rows = new LinkedHashMap<>();
+		for (TickData state : states)
 		{
-			return original;
-		}
-		int end = original.indexOf(") from ");
-		if (end < 0)
-		{
-			return original;
-		}
-		String source = SourceResolutionLabels.label(projected.getSourceResolution());
-		if (source == null)
-		{
-			source = SourceResolutionLabels.usableName(projected.getAttackerName());
-		}
-		return source == null ? original : original.substring(0, end + ") from ".length()) + source;
-	}
-
-	/** Apply already resolved annotations to a frozen journal; this does not run inference again. */
-	public static List<TickData> projectJournalTicks(List<TickData> ticks, DeathRecordingV2 resolved)
-	{
-		if (ticks == null || resolved == null || resolved.getEvents() == null)
-		{
-			return ticks;
-		}
-		Map<Long, DamageRecord> records = new LinkedHashMap<>();
-		Set<Long> ambiguous = new HashSet<>();
-		if (resolved.getEvents().getDamageEvents() != null)
-		{
-			for (DamageRecord hit : resolved.getEvents().getDamageEvents())
+			if (state != null)
 			{
-				if (hit != null && "player".equals(hit.getDefenderRef())
-					&& !Arrays.asList("DEALT", "NPC_RECEIVED").contains(hit.getDirection())
-					&& hit.getObservationSequence() != null)
-				{
-					if (records.putIfAbsent(hit.getObservationSequence(), hit) != null)
-					{
-						ambiguous.add(hit.getObservationSequence());
-					}
-				}
+				rows.put(state.getTickNumber(), new JournalRow(state));
 			}
 		}
-		if (resolved.getEvents().getObservations() != null)
+		for (DamageRecord hit : values(events.getDamageEvents()))
 		{
-			for (ObservedEvent event : resolved.getEvents().getObservations())
+			JournalRow row = hit == null ? null : rows.get(hit.getImpactTick());
+			if (row == null)
 			{
-				if (event != null && event.getData() != null
-					&& event.getData().get("attributionContext") instanceof DamageRecord)
-				{
-					DamageRecord context = (DamageRecord) event.getData().get("attributionContext");
-					if (event.getData().get("sourceResolution") instanceof SourceResolution)
-					{
-						context = context.toBuilder()
-							.sourceResolution((SourceResolution) event.getData().get("sourceResolution")).build();
-					}
-					if (context.getObservationSequence() != null
-						&& records.putIfAbsent(context.getObservationSequence(), context) != null)
-					{
-						ambiguous.add(context.getObservationSequence());
-					}
-				}
+				continue;
+			}
+			DamageEvent.DamageType type = DamageEvent.DamageType.fromReference(hit.getDamageType());
+			DamageEvent event;
+			if ("DEALT".equals(hit.getDirection()))
+			{
+				event = DamageEvent.dealt(hit.getAmount(), type, hit.getDefenderName());
+			}
+			else if (hit.getDirection() == null || "RECEIVED".equals(hit.getDirection()))
+			{
+				event = DamageEvent.received(hit.getAmount(), type, label(hit, hit.getSourceResolution()),
+					hit.getAttribution(), hit.getDetermination()).toBuilder()
+					.sourceResolution(hit.getSourceResolution()).build();
+			}
+			else
+			{
+				continue;
+			}
+			row.hits.add(event.toBuilder().observationSequence(hit.getObservationSequence()).build());
+		}
+		for (DeathRecordingV2.Events.PlayerActionRecord action : values(events.getPlayerActions()))
+		{
+			JournalRow row = action == null ? null : rows.get(action.getTick());
+			if (row == null || action.getType() == null)
+			{
+				continue;
+			}
+			try
+			{
+				row.actions.add(PlayerAction.builder().type(PlayerAction.ActionType.valueOf(action.getType()))
+					.description(action.getDetail()).target(action.getTarget()).itemName(action.getItemName()).build());
+			}
+			catch (IllegalArgumentException unrecognized)
+			{
+				// The complete original action remains in the recording's event channel.
 			}
 		}
-		for (Long key : ambiguous)
+		for (EffectEvent effect : values(events.getEffectEvents()))
 		{
-			records.remove(key);
-		}
-		List<TickData> journal = ticks;
-		for (int index = 0; index < ticks.size(); index++)
-		{
-			TickData original = ticks.get(index), projected = projectJournalTick(original, records);
-			if (projected != original)
+			JournalRow row = effect == null ? null : rows.get(effect.getStartTick());
+			if (row != null && effect.getJournalNote() != null)
 			{
-				if (journal == ticks)
-				{
-					journal = new ArrayList<>(ticks);
-				}
-				journal.set(index, projected);
+				row.notes.add(effect.getJournalNote());
 			}
 		}
-		return journal;
+		for (ObservedEvent event : values(events.getObservations()))
+		{
+			JournalRow row = event == null ? null : rows.get(event.getTick());
+			if (row == null || event.getData() == null
+				|| !(event.getData().get("attributionContext") instanceof DamageRecord))
+			{
+				continue;
+			}
+			DamageRecord impact = (DamageRecord) event.getData().get("attributionContext");
+			if (!"RESOURCE_IMPACT".equals(impact.getDirection()) || impact.getImpactTick() != event.getTick()
+				|| !Objects.equals(impact.getObservationSequence(), event.getSequence())
+				|| !Objects.equals(impact.getObservedCycle(), event.getGameCycle()))
+			{
+				continue;
+			}
+			Object rawSurfaces = event.getData().get("possibleOutcomeSurfaces");
+			Collection<?> surfaces = rawSurfaces instanceof Collection ? (Collection<?>) rawSurfaces
+				: Collections.emptyList();
+			String outcome = surfaces.contains("PRAYER") ? "HP/prayer"
+				: surfaces.contains("SKILL") ? "HP/stat"
+					: surfaces.contains("COMBAT_RESOURCE") ? "HP/resource" : "HP/unknown";
+			SourceResolution resolution = event.getData().get("sourceResolution") instanceof SourceResolution
+				? (SourceResolution) event.getData().get("sourceResolution")
+				: impact.getSourceResolution();
+			row.links.put(row.notes.size(), event.getSequence());
+			row.notes.add("Impact " + impact.getAmount() + " (" + outcome + ") from " + label(impact, resolution));
+		}
+		List<TickData> result = new ArrayList<>();
+		for (TickData state : states)
+		{
+			JournalRow row = state == null ? null : rows.get(state.getTickNumber());
+			result.add(row == null ? state
+				: row.state.toBuilder().damageEvents(row.hits).playerActions(row.actions).effectNotes(row.notes)
+					.effectNoteSourceSequences(Collections.unmodifiableMap(row.links)).build());
+		}
+		return result;
 	}
 
-	/** The live and frozen journals share the same exact callback and resource-note guards. */
-	static TickData projectJournalTick(TickData tick, Map<Long, DamageRecord> records)
+	private static String label(DamageRecord hit, SourceResolution resolution)
 	{
-		if (tick == null || records == null || records.isEmpty())
+		String label = SourceResolutionLabels.label(resolution);
+		if (label == null)
 		{
-			return tick;
+			label = SourceResolutionLabels.usableName(hit.getAttackerName());
 		}
-		List<DamageEvent> events = tick.getDamageEvents();
-		if (events != null)
-		{
-			for (int index = 0; index < tick.getDamageEvents().size(); index++)
-			{
-				DamageEvent original = tick.getDamageEvents().get(index);
-				DamageRecord hit = original == null ? null
-					: journalRecord(tick, original.getObservationSequence(), records);
-				if (hit == null || hit.getSourceResolution() == null || "RESOURCE_IMPACT".equals(hit.getDirection())
-					|| original.getDirection() != DamageEvent.DamageDirection.RECEIVED
-					|| original.getAmount() != hit.getAmount())
-				{
-					continue;
-				}
-				DamageEvent projected = projectJournalDamage(original, hit);
-				if (!projected.equals(original))
-				{
-					if (events == tick.getDamageEvents())
-					{
-						events = new ArrayList<>(events);
-					}
-					events.set(index, projected);
-				}
-			}
-		}
-		List<String> notes = tick.getEffectNotes();
-		if (notes != null && tick.getEffectNoteSourceSequences() != null)
-		{
-			for (Map.Entry<Integer, Long> link : tick.getEffectNoteSourceSequences().entrySet())
-			{
-				DamageRecord hit = journalRecord(tick, link.getValue(), records);
-				int index = link.getKey();
-				if (hit == null || index < 0 || index >= notes.size())
-				{
-					continue;
-				}
-				String before = notes.get(index), after = projectResourceNote(before, hit);
-				if (!Objects.equals(before, after))
-				{
-					if (notes == tick.getEffectNotes())
-					{
-						notes = new ArrayList<>(notes);
-					}
-					notes.set(index, after);
-				}
-			}
-		}
-		return events == tick.getDamageEvents() && notes == tick.getEffectNotes() ? tick
-			: tick.toBuilder().damageEvents(events).effectNotes(notes).build();
+		return label == null ? "Unknown" : label;
 	}
 
-	private static DamageRecord journalRecord(TickData tick, Long sequence, Map<Long, DamageRecord> records)
+	private static <T> List<T> values(List<T> values)
 	{
-		DamageRecord hit = sequence == null ? null : records.get(sequence);
-		return hit != null && Objects.equals(sequence, hit.getObservationSequence())
-			&& hit.getImpactTick() == tick.getTickNumber() && (hit.getDirection() == null
-				|| "RECEIVED".equals(hit.getDirection()) || "RESOURCE_IMPACT".equals(hit.getDirection())) ? hit : null;
+		return values == null ? Collections.emptyList() : values;
 	}
 
+	@lombok.RequiredArgsConstructor
+	private static final class JournalRow
+	{
+		final TickData state;
+		final List<DamageEvent> hits = new ArrayList<>();
+		final List<PlayerAction> actions = new ArrayList<>();
+		final List<String> notes = new ArrayList<>();
+		final Map<Integer, Long> links = new LinkedHashMap<>();
+	}
 }

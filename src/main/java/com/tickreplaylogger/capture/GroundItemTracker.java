@@ -134,52 +134,32 @@ public final class GroundItemTracker
 		{
 			failures++;
 		}
-		List<Tile> matching = traversal.tiles(plane);
-		failures += traversal.tileFailures();
+		List<SceneCaptureTraversal.ItemRow> matching = traversal.items(plane);
+		tilesRead = traversal.tiles(plane).size();
+		failures += traversal.tileFailures() + traversal.itemFailures(plane);
 		Set<TileItem> found = Collections.newSetFromMap(new IdentityHashMap<>());
 		List<GroundItemState> out = new ArrayList<>();
-		for (Tile tile : matching)
+		for (SceneCaptureTraversal.ItemRow row : matching)
 		{
+			if (!found.add(row.item))
+			{
+				continue;
+			}
+			available = true;
+			if (out.size() >= MAX_ITEMS)
+			{
+				dropped++;
+				continue;
+			}
 			try
 			{
-				tilesRead++;
-				available = true;
-				List<TileItem> items = tile.getGroundItems();
-				if (items == null)
+				GroundItemState state = observation(row.tile, row.item, view == null ? null : view.getId());
+				if (state != null)
 				{
-					if (tile.getItemLayer() != null)
-					{
-						failures++;
-					}
-					continue;
-				} // No exposed item layer is an absence witness; a populated unreadable layer is not empty.
-				for (TileItem item : items)
-				{
-					if (item == null || found.contains(item))
-					{
-						continue;
-					}
-					if (found.size() >= MAX_ITEMS)
-					{
-						dropped++;
-						continue;
-					}
-					found.add(item);
-					try
-					{
-						GroundItemState state = observation(tile, item, view == null ? null : view.getId());
-						if (state != null)
-						{
-							out.add(state);
-						}
-					}
-					catch (RuntimeException error)
-					{
-						failures++;
-					}
+					out.add(state);
 				}
 			}
-			catch (RuntimeException error)
+			catch (RuntimeException unavailable)
 			{
 				failures++;
 			}
@@ -212,6 +192,7 @@ public final class GroundItemTracker
 	{
 		Map<String, Object> out = new LinkedHashMap<>();
 		out.put("scope", "EXPOSED_NATIVE_TILE_REPORTED_PLANE");
+		out.put("membershipEvidence", "SCENE_SEED_AND_LIFECYCLE_EVENTS");
 		out.put("membershipStatus", !available ? "UNAVAILABLE"
 			: failures == 0 && dropped == 0 ? "COMPLETE_EXPOSED_SCENE_SCAN" : "PARTIAL_EXPOSED_SCENE_SCAN");
 		out.put("complete", available && failures == 0 && dropped == 0);

@@ -1,7 +1,8 @@
 """Project the frozen production references into one inspectable runtime package.
 
 Authoring tool only. No game/network access and no code generation into Java.
-The original sections remain intact until their last runtime consumer migrates.
+Frozen authoring/test inputs retain historical sections; the runtime package contains
+only the factual sections consumed by capture and the current resolver.
 """
 import argparse
 from copy import deepcopy
@@ -14,6 +15,17 @@ from lower_inventory_capture import lower_inventory_capture
 
 BASELINE = '1505ed1653c8b7996a3880fb3aada99a41bb73b8'
 BASE = 'src/main/resources/com/tickreplaylogger/'
+
+# CombatCatalog's factual lookups and catalog lineage. Historical constraint and
+# mechanism tables have already been lowered into resolver.resolutionRules.
+RUNTIME_REFERENCE_KEYS = {
+    'schemaVersion', 'catalogId', 'runtimeProjection', 'npcIdentities',
+    'npcDefinitionStates', 'reviewedBindings', 'entityRoleReferences',
+    'contextBindings', 'inventorySourceCapture', 'selfDamageInputs',
+    'conditionalNpcIdentities', 'modeSensitiveNpcIds', 'hitsplatRules', 'symbols',
+    'observationReferences', 'attackReferencesByNpcId', 'attackReferencesByPage',
+}
+RUNTIME_CAPTURE_KEYS = {'version', 'npcAttackSpeeds', 'hazardNamesByKind', 'objectHazardRules'}
 
 def read_baseline(repo, name, input_dir=None):
     # Committed frozen authoring inputs: no git history, game client or network is required.
@@ -424,14 +436,16 @@ def build(repo, input_dir=None):
     result = {'schemaVersion': 1, 'purpose': 'retrospective_combat_mechanics',
         'sourceSnapshots': {'baseline': BASELINE, 'combatCatalogSha256': reference_hash,
             'captureBindingsSha256': capture_hash, 'resolverSha256': resolver_hash},
-        'capture': capture, 'references': references, 'resolver': resolver}
+        'capture': {key: value for key, value in capture.items() if key in RUNTIME_CAPTURE_KEYS},
+        'references': {key: value for key, value in references.items() if key in RUNTIME_REFERENCE_KEYS},
+        'resolver': resolver}
     signature = json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf8')
     result['catalogId'] = 'mechanics:sha256:' + hashlib.sha256(signature).hexdigest()
     return result
 
 def serialize(document):
     # Retain the existing readable resolver formatting and single-line reference-table style.
-    # No content is discarded or made opaque by packaging the pre-existing table sections.
+    # Runtime facts remain inspectable; historical authoring inputs stay under tests.
     header = {key: value for key, value in document.items() if key not in ('capture', 'references', 'resolver')}
     text = json.dumps(header, ensure_ascii=False, indent=2)[:-2]
     return (text + ',\n  "capture": ' + json.dumps(document['capture'], ensure_ascii=False, separators=(',', ':'))

@@ -84,7 +84,7 @@ public final class LegacyCombatCatalog
 			{
 				result = mechanismRuleIndex;
 				if (result == null)
-					mechanismRuleIndex = result = MechanismRules.load(root.get("mechanismRules"));
+					mechanismRuleIndex = result = MechanismRules.load(element("mechanismRules"));
 			}
 		}
 		return result;
@@ -92,7 +92,18 @@ public final class LegacyCombatCatalog
 
 	private JsonObject section(String key)
 	{
-		return object(root.get(key));
+		return object(element(key));
+	}
+
+	/** The former engine reads historical declarations from test authoring inputs, not the shipped package. */
+	private JsonElement element(String key)
+	{
+		return root.has(key) || !root.has("inventorySourceCapture") ? root.get(key) : FrozenAuthoring.ROOT.get(key);
+	}
+
+	private static final class FrozenAuthoring
+	{
+		private static final JsonObject ROOT = LegacyCombatCatalog.load(new Gson()).root;
 	}
 
 	private static JsonObject object(JsonElement value)
@@ -1195,7 +1206,7 @@ public final class LegacyCombatCatalog
 		if (name == null)
 			return false;
 		String normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
-		JsonElement names = root.get("conditionalSourceNames");
+		JsonElement names = element("conditionalSourceNames");
 		if (names != null && names.isJsonArray())
 			for (JsonElement value : names.getAsJsonArray())
 				if (normalized.equals(value.getAsString()))
@@ -1352,7 +1363,11 @@ public final class LegacyCombatCatalog
 		try
 		{
 			java.lang.reflect.Field field=CombatCatalog.class.getDeclaredField("root"); field.setAccessible(true);
-			field.set(map.catalog(),((JsonObject)field.get(map.catalog())).deepCopy()); fixtureViews.remove(map.catalog()); return map;
+			JsonObject isolated=((JsonObject)field.get(map.catalog())).deepCopy();
+			if (isolated.has("inventorySourceCapture"))
+				for (Map.Entry<String,JsonElement> entry:FrozenAuthoring.ROOT.entrySet())
+					if (!isolated.has(entry.getKey())) isolated.add(entry.getKey(),entry.getValue().deepCopy());
+			field.set(map.catalog(),isolated); fixtureViews.remove(map.catalog()); return map;
 		}
 		catch (ReflectiveOperationException failure) { throw new AssertionError("Cannot isolate fixture data",failure); }
 	}

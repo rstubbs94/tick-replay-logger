@@ -26,36 +26,34 @@ package com.tickreplaylogger.util;
 
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.*;
-import com.tickreplaylogger.capture.ResolverV1Recording;
 import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 
 /**
- * Circular buffer that records tick data.
- * Maintains only the last N ticks (default 50) to bound memory usage.
- * When the buffer is full, oldest ticks are overwritten.
+ * Owns the one bounded frame window and the current minimal tick state.
+ * Journal events are views over the shared original event store in WorldSnapshotRecorder.
  */
 @Slf4j
 public class TickRecorder
 {
-	private TickData[] buffer;
+	/** The sole bounded frame window; minimal state and optional world samples share tick membership. */
+	protected static final class CapturedFrame
+	{
+		TickData state;
+		final List<WorldSnapshot> worlds = new ArrayList<>();
+	}
+
+	private final NavigableMap<Integer, CapturedFrame> frames = new TreeMap<>();
 	private int capacity;
-	private int head = 0; // Next write position
-	private int count = 0; // Number of ticks stored
-	private int currentTickNumber = 0;
+	private Integer newestTick;
+	private int currentTickNumber;
 
 	// Current tick being built (actions accumulate here until tick ends)
 	private TickData currentTick;
-	// Packet/input callbacks arrive before GameTick. Keep them off finalized history.
-	private final List<PlayerAction> pendingActions = new ArrayList<>();
-	private final List<DamageEvent> pendingDamage = new ArrayList<>();
-	private final List<String> pendingEffects = new ArrayList<>();
-	private final Map<Integer, Long> pendingEffectSourceSequences = new LinkedHashMap<>();
 
 	public TickRecorder(int capacity)
 	{
 		this.capacity = RecordingLimits.ticks(capacity);
-		this.buffer = new TickData[this.capacity];
 		log.debug("TickRecorder initialized with capacity: {}", capacity);
 	}
 
@@ -64,31 +62,59 @@ public class TickRecorder
 	 */
 	public synchronized void resize(int newCapacity)
 	{
-		newCapacity = RecordingLimits.ticks(newCapacity);
-		if (newCapacity == capacity)
+		capacity = RecordingLimits.ticks(newCapacity);
+		trimFrames();
+	}
+
+	protected final synchronized void addWorldSnapshot(WorldSnapshot snapshot)
+	{
+		frames.computeIfAbsent(snapshot.getTick(), key -> new CapturedFrame()).worlds.add(snapshot);
+		advanceTick(snapshot.getTick());
+	}
+
+	protected final synchronized List<WorldSnapshot> worldSnapshots()
+	{
+		List<WorldSnapshot> worlds = new ArrayList<>();
+		for (CapturedFrame frame : frames.values())
 		{
-			return;
+			worlds.addAll(frame.worlds);
 		}
+		return worlds;
+	}
 
-		// Get current history in order
-		List<TickData> history = getTickHistory();
+	public final synchronized void advanceTick(int tick)
+	{
+		newestTick = newestTick == null ? tick : Math.max(newestTick, tick);
+		trimFrames();
+	}
 
-		// Create new buffer
-		capacity = newCapacity;
-		buffer = new TickData[newCapacity];
-		head = 0;
-		count = 0;
+	protected final int firstRetainedTick()
+	{
+		return newestTick == null ? 0 : (int) Math.max(Integer.MIN_VALUE, (long) newestTick - capacity + 1);
+	}
 
-		// Copy over as many ticks as will fit (most recent ones)
-		int startIndex = Math.max(0, history.size() - newCapacity);
-		for (int i = startIndex; i < history.size(); i++)
+	/** A frame may contain basic state, a world sample, or both; all are the same bounded tick membership. */
+	protected final synchronized int frameCount(int first, int last)
+	{
+		return frames.subMap(first, true, last, true).size();
+	}
+
+	protected final int lastRetainedTick()
+	{
+		return newestTick == null ? 0 : newestTick;
+	}
+
+	private void trimFrames()
+	{
+		if (newestTick != null)
 		{
-			buffer[head] = history.get(i);
-			head = (head + 1) % capacity;
-			count++;
+			frames.headMap(firstRetainedTick(), false).clear();
+			trimEvents(firstRetainedTick());
 		}
+	}
 
-		log.debug("TickRecorder resized to capacity: {} ({} ticks preserved)", newCapacity, count);
+	protected void trimEvents(int firstTick)
+	{
 	}
 
 	/**
@@ -97,17 +123,11 @@ public class TickRecorder
 	public void startNewTick()
 	{
 		currentTickNumber++;
+		advanceTick(currentTickNumber);
 		currentTick = TickData.builder().tickNumber(currentTickNumber).timestamp(System.currentTimeMillis())
-			.playerActions(new ArrayList<>(pendingActions)).damageEvents(new ArrayList<>(pendingDamage))
-			.effectNotes(new ArrayList<>(pendingEffects))
-			.effectNoteSourceSequences(new LinkedHashMap<>(pendingEffectSourceSequences))
 			.activePrayers(new ArrayList<>()).prayerStateKnown(false).unavailableStateFields(new ArrayList<>(Arrays
 				.asList("currentHp", "maxHp", "currentPrayer", "maxPrayer", "gameState", "apiTickCount", "gameCycle")))
 			.build();
-		pendingActions.clear();
-		pendingDamage.clear();
-		pendingEffects.clear();
-		pendingEffectSourceSequences.clear();
 	}
 
 	/**
@@ -122,16 +142,8 @@ public class TickRecorder
 			return;
 		}
 
-		// Add to circular buffer
-		currentTick.setEffectNoteSourceSequences(Collections.unmodifiableMap(
-			new LinkedHashMap<>(currentTick.getEffectNoteSourceSequences() == null ? Collections.emptyMap()
-				: currentTick.getEffectNoteSourceSequences())));
-		buffer[head] = currentTick;
-		head = (head + 1) % capacity;
-		if (count < capacity)
-		{
-			count++;
-		}
+		frames.computeIfAbsent(currentTick.getTickNumber(), key -> new CapturedFrame()).state = currentTick;
+		trimFrames();
 
 		log.debug("Tick {} recorded. HP: {}/{}, Prayer: {}/{}", currentTick.getTickNumber(), currentTick.getCurrentHp(),
 			currentTick.getMaxHp(), currentTick.getCurrentPrayer(), currentTick.getMaxPrayer());
@@ -223,60 +235,6 @@ public class TickRecorder
 	}
 
 	/**
-	 * Add a player action to the current tick.
-	 */
-	public void addPlayerAction(PlayerAction action)
-	{
-		if (currentTick == null)
-		{
-			pendingActions.add(action);
-			return;
-		}
-		currentTick.addPlayerAction(action);
-		log.debug("Player action added: {}", action.getDescription());
-	}
-
-	/**
-	 * Add a damage event to the current tick.
-	 */
-	public void addDamageEvent(DamageEvent event)
-	{
-		if (currentTick == null)
-		{
-			pendingDamage.add(event);
-			return;
-		}
-		currentTick.addDamageEvent(event);
-		log.debug("Damage event added: {}", event.getDescription());
-	}
-
-	public void addEffectNote(String note)
-	{
-		if (currentTick == null)
-		{
-			pendingEffects.add(note);
-			return;
-		}
-		currentTick.addEffectNote(note);
-	}
-
-	public void addEffectNote(String note, Long observationSequence)
-	{
-		if (currentTick == null)
-		{
-			int index = pendingEffects.size();
-			pendingEffects.add(note);
-			if (observationSequence != null && observationSequence > 0 && index <= 4095
-				&& pendingEffectSourceSequences.size() < 256)
-			{
-				pendingEffectSourceSequences.put(index, observationSequence);
-			}
-			return;
-		}
-		currentTick.addEffectNote(note, observationSequence);
-	}
-
-	/**
 	 * Set tick duration telemetry for the current tick.
 	 */
 	public void setTickDuration(long durationMs)
@@ -334,68 +292,27 @@ public class TickRecorder
 	 */
 	public synchronized List<TickData> getTickHistory()
 	{
-		List<TickData> history = new ArrayList<>(count);
+		return journalViews(rawTickHistory());
+	}
 
-		if (count == 0)
+	/** Frozen processing receives these raw states, without constructing or retaining a second journal. */
+	protected synchronized List<TickData> rawTickHistory()
+	{
+		List<TickData> history = new ArrayList<>();
+		for (CapturedFrame frame : frames.values())
 		{
-			return history;
-		}
-
-		// Calculate starting position (oldest tick)
-		int start = (count < capacity) ? 0 : head;
-
-		for (int i = 0; i < count; i++)
-		{
-			int index = (start + i) % capacity;
-			if (buffer[index] != null)
+			if (frame.state != null)
 			{
-				history.add(buffer[index]);
+				history.add(frame.state);
 			}
 		}
-
 		return history;
 	}
 
-	/** Attach completed annotations only to exact callbacks in the selected original tick. */
-	public synchronized void applyResolvedDamageRecords(int tick, Map<Long, DamageRecord> records)
+	/** Raw journal rows are views of captured events, never a second mutable result store. */
+	protected List<TickData> journalViews(List<TickData> states)
 	{
-		if (records == null || records.isEmpty())
-		{
-			return;
-		}
-		TickData selected = currentTick != null && currentTick.getTickNumber() == tick ? currentTick : null;
-		int selectedIndex = -1;
-		for (int offset = 1; selected == null && offset <= count; offset++)
-		{
-			int index = (head - offset + capacity) % capacity;
-			TickData candidate = buffer[index];
-			if (candidate != null && candidate.getTickNumber() == tick)
-			{
-				selected = candidate;
-				selectedIndex = index;
-			}
-		}
-		if (selected == null)
-		{
-			return;
-		}
-		TickData replacement = ResolverV1Recording.projectJournalTick(selected, records);
-		if (replacement == selected)
-		{
-			return;
-		}
-		Map<Integer, Long> links = selected.getEffectNoteSourceSequences();
-		replacement = replacement.toBuilder().effectNoteSourceSequences(links == null ? null
-			: selectedIndex >= 0 ? Collections.unmodifiableMap(new LinkedHashMap<>(links)) : new LinkedHashMap<>(links))
-			.build();
-		if (selectedIndex >= 0)
-		{
-			buffer[selectedIndex] = replacement;
-		}
-		else
-		{
-			currentTick = replacement;
-		}
+		return states;
 	}
 
 	/**
@@ -403,7 +320,7 @@ public class TickRecorder
 	 */
 	public synchronized int getTickCount()
 	{
-		return count;
+		return (int) frames.values().stream().filter(frame -> frame.state != null).count();
 	}
 
 	/**
@@ -419,17 +336,9 @@ public class TickRecorder
 	 */
 	public synchronized void clear()
 	{
-		for (int i = 0; i < capacity; i++)
-		{
-			buffer[i] = null;
-		}
-		head = 0;
-		count = 0;
+		frames.clear();
+		newestTick = null;
 		currentTick = null;
-		pendingActions.clear();
-		pendingDamage.clear();
-		pendingEffects.clear();
-		pendingEffectSourceSequences.clear();
 		log.debug("TickRecorder cleared");
 	}
 

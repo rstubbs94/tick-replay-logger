@@ -169,6 +169,7 @@ public class DeathRecordingV2
 		private final String activity;
 		private final String bossName;
 		private final int totalDamageTakenInBuffer;
+		private final int totalDamageDealtInBuffer;
 		private final int ticksCaptured;
 		private final Boolean otherPlayersPresent; // null when the selected window did not capture this channel
 	}

@@ -21,7 +21,7 @@ public final class ResolverV1
 	private final Gson gson;
 	private final String id;
 
-	public ResolverV1(JsonObject document, Gson gson, CombatCatalog references, DamageMap capture)
+	public ResolverV1(JsonObject document, Gson gson, CombatCatalog references)
 	{
 		this.document = document == null ? new JsonObject() : document;
 		this.gson = gson;
@@ -64,8 +64,7 @@ public final class ResolverV1
 				{
 					RuntimeCatalog catalog = RuntimeCatalog.load(gson);
 					CombatCatalog references = CombatCatalog.referenceView(catalog.section("references"));
-					loaded = new ResolverV1(catalog.section("resolver"), gson, references,
-						DamageMap.load(gson, references));
+					loaded = new ResolverV1(catalog.section("resolver"), gson, references);
 					bundled = loaded;
 				}
 			}

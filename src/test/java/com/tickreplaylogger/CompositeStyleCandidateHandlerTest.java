@@ -315,7 +315,7 @@ public class CompositeStyleCandidateHandlerTest
 		JsonObject annotations=new JsonObject();annotations.add("candidateStyles",candidates);
 		JsonObject effects=new JsonObject();effects.add("annotations",annotations);template.add("effects",effects);
 		document.getAsJsonArray("resolutionRules").add(template);
-		return new ResolverV1(document,GSON,map.catalog(),map);
+		return new ResolverV1(document,GSON,map.catalog());
 	}
 
 	private static void normalizeResolverId(JsonElement value,String id)
@@ -383,6 +383,11 @@ public class CompositeStyleCandidateHandlerTest
 		if (value.isJsonObject())
 		{
 			value.getAsJsonObject().remove("wallClockMs");
+			if (value.getAsJsonObject().has("tickNumber"))
+			{
+				value.getAsJsonObject().remove("timestamp");
+				value.getAsJsonObject().remove("tickDurationMs");
+			}
 			for (Map.Entry<String, JsonElement> child : value.getAsJsonObject().entrySet())
 				stripClocks(child.getValue());
 		}

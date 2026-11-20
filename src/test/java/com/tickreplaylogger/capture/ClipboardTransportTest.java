@@ -90,10 +90,14 @@ public class ClipboardTransportTest
 			.damageEvents(Arrays.asList(DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Recorded target"),
 				DamageEvent.dealt(7, DamageEvent.DamageType.UNKNOWN, "Recorded target")))
 			.build();
-		String rich = "{\"schemaVersion\":\"1.3\",\"ticks\":[{\"tick\":1}],\"recordedText\":\""
-			+ "synthetic observation; ".repeat(60000) + "\"}";
-		TickRecording recording = TickRecording.builder().ticks(Collections.singletonList(tick)).richExportJson(rich)
-			.build();
+		com.tickreplaylogger.model.world.DeathRecordingV2.Events.PlayerActionRecord action = com.tickreplaylogger.model.world.DeathRecordingV2.Events.PlayerActionRecord.builder().tick(1).type("EAT").detail("Shark").build();
+		com.tickreplaylogger.model.world.DamageRecord hit = com.tickreplaylogger.model.world.DamageRecord.builder().impactTick(1).amount(7).direction("DEALT").defenderName("Recorded target").build();
+		com.tickreplaylogger.model.world.DeathRecordingV2 payload = com.tickreplaylogger.model.world.DeathRecordingV2.builder()
+			.journalTicks(Collections.singletonList(tick)).events(com.tickreplaylogger.model.world.DeathRecordingV2.Events.builder()
+				.playerActions(Arrays.asList(action, action)).damageEvents(Arrays.asList(hit, hit))
+				.observations(Collections.singletonList(com.tickreplaylogger.model.world.ObservedEvent.builder()
+					.data(Collections.singletonMap("recordedText", "synthetic observation; ".repeat(60000))).build())).build()).build();
+		TickRecording recording = TickRecording.fromPrepared(payload, 1, "Live Snapshot", false);
 		String before = GSON.toJson(recording);
 		String expected = RecordingExport.forViewer(recording, GSON),
 			encoded = RecordingExport.forClipboard(recording, GSON);
@@ -102,7 +106,8 @@ public class ClipboardTransportTest
 		JsonObject restored = GSON.fromJson(decode(envelope), JsonObject.class);
 		assertEquals(2, restored.getAsJsonObject("events").getAsJsonArray("playerActions").size());
 		assertEquals(2, restored.getAsJsonObject("events").getAsJsonArray("damageEvents").size());
-		assertEquals(14, restored.getAsJsonObject("summary").get("totalDamageDealtInBuffer").getAsInt());
+		assertEquals(14, GSON.fromJson(decode(envelope), com.tickreplaylogger.model.world.DeathRecordingV2.class)
+			.getEvents().getDamageEvents().stream().mapToInt(d -> d.getAmount()).sum());
 		assertEquals(before, GSON.toJson(recording));
 	}
 

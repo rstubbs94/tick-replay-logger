@@ -35,6 +35,33 @@ import static org.junit.Assert.*;
 public class TerrainCaptureTest
 {
 	@Test
+	public void lifecycleMembershipStillReadsMutablePaintAndModelValuesEveryTick()
+	{
+		int[] rgb = { 1 }, vertices = { 128, 256 }, bridges = { 0 };
+		SceneTilePaint paint = stub(SceneTilePaint.class, (name, args) -> name.equals("getRBG") ? rgb[0] : null);
+		SceneTileModel model = stub(SceneTileModel.class, (name, args) -> name.equals("getVertexX") ? vertices : null);
+		Tile tile = stub(Tile.class, (name, args) ->
+		{
+			if (name.equals("getBridge")) { bridges[0]++; return null; }
+			return name.equals("getSceneTilePaint") ? paint : name.equals("getSceneTileModel") ? model : null;
+		});
+		Tile[][][] tiles = { { { tile } } };
+		Scene scene = stub(Scene.class, (name, args) -> name.equals("getTiles") ? tiles : null);
+		WorldView view = stub(WorldView.class, (name, args) -> name.equals("getScene") ? scene : null);
+		SceneCaptureTraversal membership = SceneCaptureTraversal.capture(null, view);
+		TerrainCapture capture = new TerrainCapture();
+		List<TileSurface> before = capture.capture(scene, 0, membership);
+		int reads = bridges[0];
+		rgb[0] = 2; vertices[0] = 512;
+		List<TileSurface> after = capture.capture(scene, 0, membership);
+		assertEquals(reads, bridges[0]);
+		assertEquals(Integer.valueOf(2), after.get(0).getPaintRgb());
+		assertEquals(512, after.get(0).getModelVertexX()[0]);
+		assertEquals(Integer.valueOf(1), before.get(0).getPaintRgb());
+		assertEquals(128, before.get(0).getModelVertexX()[0]);
+	}
+
+	@Test
 	public void anUnresolvedExtendedGridCannotSupplyWrongDefinitionIds()
 	{
 		SceneTilePaint paint = stub(SceneTilePaint.class, (n, a) -> n.equals("getRBG") ? 0x123456 : null);

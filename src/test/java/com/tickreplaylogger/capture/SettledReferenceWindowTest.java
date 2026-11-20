@@ -49,7 +49,7 @@ public class SettledReferenceWindowTest
 			DeathRecordingV2 recording = DeathRecordingV2.builder().ticks(Collections.singletonList(frame)).events(DeathRecordingV2.Events.builder()
 				.damageEvents(Collections.singletonList(hit)).observations(observations).build()).build();
 			String original = gson.toJson(recording);
-			DamageRecord result = new ResolverV1Recording(engine, gson, recording).resolveHit(hit);
+			DamageRecord result = new ResolverV1Recording(engine, gson, recording).enrich(recording).getEvents().getDamageEvents().get(0);
 			boolean expected = Arrays.asList("active", "conditional").contains(scenario);
 			SourceResolution.Candidate candidate = result.getSourceResolution().getCandidates().stream()
 				.filter(value -> "Observed surface".equals(value.getName())).findFirst().orElse(null);

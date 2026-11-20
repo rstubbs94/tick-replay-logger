@@ -60,6 +60,8 @@ public class WorldCaptureService
 	}
 
 	private final TerrainCapture terrainCapture = new TerrainCapture();
+	private final IdentityHashMap<WorldView, SceneCaptureTraversal> sceneMembership = new IdentityHashMap<>();
+	private String primarySceneKey;
 	private final ActorIdentity actorIdentity;
 	private final ObjectHazards.ObservationIdentities surfaceObservationIds;
 	private final WorldView fixedView;
@@ -127,6 +129,7 @@ public class WorldCaptureService
 	/** A logical map reload can reuse the same API view/scene arrays. Start fresh auxiliary lifetimes. */
 	public void sceneLoading()
 	{
+		sceneMembership.clear();
 		encounterWaveCues.reset();
 		mechanics.reset();
 		additionalServices.clear();
@@ -140,6 +143,7 @@ public class WorldCaptureService
 		{
 			return;
 		}
+		sceneMembership.remove(nativeView);
 		WorldViews.invalidate(nativeView);
 		actorIdentity.forgetView(nativeView);
 		mechanics.clearView(nativeView);
@@ -150,6 +154,33 @@ public class WorldCaptureService
 			lastCollision = null;
 			resetTiming();
 		}
+	}
+
+	/** Lifecycle callbacks invalidate only their actual tile; unknown ownership discards the census. */
+	public void sceneMembershipChanged(WorldView view, Tile tile)
+	{
+		if (view == null)
+		{
+			sceneMembership.clear();
+			return;
+		}
+		SceneCaptureTraversal membership = sceneMembership.get(view);
+		if (membership != null && (tile == null || !membership.changed(tile)))
+		{
+			sceneMembership.remove(view);
+		}
+	}
+
+	private SceneCaptureTraversal traversal(Client client, WorldView view)
+	{
+		SceneCaptureTraversal membership = sceneMembership.get(view);
+		if (membership == null || !membership.current(client, view))
+		{
+			membership = SceneCaptureTraversal.capture(client, view);
+			sceneMembership.put(view, membership);
+		}
+		membership.retryFailures();
+		return membership;
 	}
 
 	private WorldView view(Client client)
@@ -340,6 +371,7 @@ public class WorldCaptureService
 	/** Reset per-NPC timing state (on login / scene reload). */
 	public void resetTiming()
 	{
+		sceneMembership.clear();
 		// A plane/primary-cache change invalidates timing, not an actor's earlier phase cue.
 		clearActorTiming();
 		objectTracker.reset();
@@ -446,9 +478,13 @@ public class WorldCaptureService
 			return captureWithoutNativeContext(client, tick, projectilesThisTick, lastPlayerWorld, includeOtherPlayers,
 				unavailable);
 		}
-		IdentityHashMap<WorldView, SceneCaptureTraversal> traversals = new IdentityHashMap<>();
-		SceneCaptureTraversal primaryTraversal = SceneCaptureTraversal.capture(client, sampledView);
-		traversals.put(sampledView, primaryTraversal);
+		if (!Objects.equals(primarySceneKey, sceneKey))
+		{
+			// A new logical primary scope can reuse the same API scene and tile arrays.
+			sceneMembership.remove(sampledView);
+			primarySceneKey = sceneKey;
+		}
+		SceneCaptureTraversal primaryTraversal = traversal(client, sampledView);
 		WorldSnapshot primary = captureNativeTick(client, tick, sceneKey, projectilesThisTick, lastPlayerWorld,
 			includeOtherPlayers, includeCollision, includeTerrain, true, primaryTraversal);
 		if (primary == null)
@@ -464,8 +500,7 @@ public class WorldCaptureService
 		{
 			try
 			{
-				SceneCaptureTraversal nativeTraversal = traversals.computeIfAbsent(nativeView,
-					value -> SceneCaptureTraversal.capture(client, value));
+				SceneCaptureTraversal nativeTraversal = traversal(client, nativeView);
 				WorldViews.Planes planes = WorldViews.planes(nativeView, includeOtherPlayers, nativeTraversal);
 				for (Integer observed : callbackPlanes.getOrDefault(nativeView, Collections.emptySet()))
 				{
@@ -527,8 +562,7 @@ public class WorldCaptureService
 								}
 							}
 						}
-						SceneCaptureTraversal traversal = traversals.computeIfAbsent(nativeView,
-							value -> SceneCaptureTraversal.capture(client, value));
+						SceneCaptureTraversal traversal = traversal(client, nativeView);
 						WorldSnapshot observed = service.captureNativeTick(client, tick, service.additionalSceneKey,
 							projectiles, null, includeOtherPlayers, includeCollision, includeTerrain, false, traversal);
 						if (observed != null)
@@ -595,6 +629,7 @@ public class WorldCaptureService
 		if (discovered.issues.isEmpty())
 		{
 			additionalServices.keySet().retainAll(discovered.views);
+			sceneMembership.keySet().retainAll(discovered.views);
 		}
 		Map<String, String> coverage = new LinkedHashMap<>(primary.getCaptureCoverage());
 		coverage.put("worldViews",
@@ -789,7 +824,7 @@ public class WorldCaptureService
 		}
 		objectTracker.enterScene(sceneKey);
 		List<HazardState> hazards = captureChannel("graphicsAndMappedHazards", coverage,
-			() -> captureHazards(client, lp), new ArrayList<>());
+			() -> captureHazards(client, lp, traversal), new ArrayList<>());
 		if (!"available".equals(hazardCoverage.get("graphicsStatus"))
 			|| !"available".equals(hazardCoverage.get("mappedObjectsStatus")))
 		{
@@ -867,7 +902,8 @@ public class WorldCaptureService
 			: null;
 		terrainCapture.clearCoverage();
 		List<TileSurface> terrain = includeTerrain
-			? captureChannel("terrain", coverage, () -> terrainCapture.capture(scene(client), plane(client)), null)
+			? captureChannel("terrain", coverage, () -> terrainCapture.capture(scene(client), plane(client), traversal),
+				null)
 			: null;
 		if (!includeTerrain)
 		{
@@ -1568,6 +1604,11 @@ public class WorldCaptureService
 
 	List<HazardState> captureHazards(Client client, Player lp)
 	{
+		return captureHazards(client, lp, traversal(client, view(client)));
+	}
+
+	private List<HazardState> captureHazards(Client client, Player lp, SceneCaptureTraversal traversal)
+	{
 		List<HazardState> out = new ArrayList<>();
 		hazardCoverage = new LinkedHashMap<>();
 		mappedObjectReadFailures = 0;
@@ -1700,7 +1741,7 @@ public class WorldCaptureService
 		{
 			try
 			{
-				captureObjectHazards(client, pl, out);
+				captureObjectHazards(client, pl, out, traversal);
 			}
 			catch (RuntimeException error)
 			{
@@ -1718,108 +1759,64 @@ public class WorldCaptureService
 	 * mapped ids are captured — the scene is full of ordinary scenery, so an unmapped object is never
 	 * a hazard here (observed-over-predicted). Keeps the hazard list small and correct.
 	 */
-	private void captureObjectHazards(Client client, LocalPoint pl, List<HazardState> out)
+	private void captureObjectHazards(Client client, LocalPoint pl, List<HazardState> out,
+		SceneCaptureTraversal traversal)
 	{
-		Scene observedScene = scene(client);
-		if (damageMap == null || observedScene == null)
+		int plane = plane(client);
+		Tile[][] grid = traversal.planeArrayAvailable(plane) ? traversal.arrays[plane] : null;
+		if (damageMap == null || grid == null)
 		{
 			hazardCoverage.put("mappedObjectsUnavailableReason",
-				damageMap == null ? "REFERENCE_MAP_UNAVAILABLE" : "SCENE_UNAVAILABLE");
+				damageMap == null ? "REFERENCE_MAP_UNAVAILABLE" : "PLANE_ARRAY_UNAVAILABLE");
 			return;
 		}
-		int plane = plane(client);
-		Tile[][][] tiles = observedScene.getTiles();
-		hazardCoverage.put("sampledPlane", plane);
-		if (tiles == null || plane < 0 || plane >= tiles.length)
+		int cx = pl == null ? 0 : pl.getSceneX(), cy = pl == null ? 0 : pl.getSceneY();
+		int minX = pl == null ? 0 : Math.max(0, cx - HAZARD_RADIUS_TILES);
+		int maxX = pl == null ? grid.length - 1 : Math.min(grid.length - 1, cx + HAZARD_RADIUS_TILES);
+		int visited = 0, missing = 0, exposed = 0;
+		for (int x = minX; x <= maxX; x++)
 		{
-			hazardCoverage.put("mappedObjectsUnavailableReason", "PLANE_ARRAY_UNAVAILABLE");
-			return;
+			if (grid[x] == null)
+			{
+				missing++;
+			}
+			else
+			{
+				visited += pl == null ? grid[x].length
+					: Math.max(0, Math.min(grid[x].length - 1, cy + HAZARD_RADIUS_TILES)
+						- Math.max(0, cy - HAZARD_RADIUS_TILES) + 1);
+			}
 		}
-		int cx = pl == null ? 0 : pl.getSceneX();
-		int cy = pl == null ? 0 : pl.getSceneY();
-		Tile[][] plane0 = tiles[plane];
-		if (plane0 == null)
-		{
-			hazardCoverage.put("mappedObjectsUnavailableReason", "PLANE_ARRAY_UNAVAILABLE");
-			return;
-		}
-		hazardCoverage.put("tileArrayWidth", plane0.length);
-		hazardCoverage.put("boundsPolicy", "REQUESTED_SCOPE_CLIPPED_TO_EXPOSED_COLUMNS");
-		int visitedSlots = 0, exposedTiles = 0, unavailableColumns = 0;
 		Set<TileObject> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-		for (int sx = pl == null ? 0 : Math.max(0, cx - HAZARD_RADIUS_TILES); sx <= (pl == null ? plane0.length - 1
-			: Math.min(plane0.length - 1, cx + HAZARD_RADIUS_TILES)); sx++)
+		for (SceneCaptureTraversal.TileSlot slot : traversal.slots)
 		{
-			if (sx < 0 || sx >= plane0.length)
+			if (slot.plane != plane || slot.x < minX || slot.x > maxX
+				|| pl != null && Math.abs(slot.y - cy) > HAZARD_RADIUS_TILES)
 			{
 				continue;
 			}
-			if (plane0[sx] == null)
+			exposed++;
+			for (SceneCaptureTraversal.ObjectRow row : traversal.objectRows(slot.tile))
 			{
-				unavailableColumns++;
-				continue;
+				if (seen.add(row.object))
+				{
+					addObjectHazard(client, out, row.kind, row.object, plane);
+				}
 			}
-			for (int sy = pl == null ? 0 : Math.max(0, cy - HAZARD_RADIUS_TILES); sy <= (pl == null
-				? plane0[sx].length - 1
-				: Math.min(plane0[sx].length - 1, cy + HAZARD_RADIUS_TILES)); sy++)
+			for (String error : traversal.objectErrors(slot.tile).values())
 			{
-				if (plane0[sx] == null || sy < 0 || sy >= plane0[sx].length)
-				{
-					continue;
-				}
-				visitedSlots++;
-				Tile tile = plane0[sx][sy];
-				if (tile == null)
-				{
-					continue;
-				}
-				exposedTiles++;
-				captureObjectSlot(client, out, "groundObject", tile::getGroundObject, plane, seen);
-				captureObjectSlot(client, out, "wallObject", tile::getWallObject, plane, seen);
-				captureObjectSlot(client, out, "decorativeObject", tile::getDecorativeObject, plane, seen);
-				GameObject[] gameObjects = null;
-				try
-				{
-					gameObjects = tile.getGameObjects();
-				}
-				catch (RuntimeException error)
-				{
-					objectHazardReadFailed(error);
-				}
-				if (gameObjects != null)
-				{
-					for (GameObject g : gameObjects)
-					{
-						if (g != null && seen.add(g))
-						{
-							addObjectHazard(client, out, "gameObject", g, plane);
-						}
-					}
-				}
+				mappedObjectReadFailures++;
+				captureIssues.add("graphicsAndMappedHazards: object " + error);
 			}
 		}
-		hazardCoverage.put("visitedTileSlots", visitedSlots);
-		hazardCoverage.put("exposedTiles", exposedTiles);
-		hazardCoverage.put("unavailableColumns", unavailableColumns);
+		hazardCoverage.put("sampledPlane", plane);
+		hazardCoverage.put("tileArrayWidth", grid.length);
+		hazardCoverage.put("boundsPolicy", "REQUESTED_SCOPE_CLIPPED_TO_EXPOSED_COLUMNS");
+		hazardCoverage.put("visitedTileSlots", visited);
+		hazardCoverage.put("exposedTiles", exposed);
+		hazardCoverage.put("unavailableColumns", missing);
 		hazardCoverage.put("objectScanCompleted", true);
 		hazardCoverage.put("mappedObjectsStatus", mappedObjectReadFailures == 0 ? "available" : "partial");
-	}
-
-	private void captureObjectSlot(Client client, List<HazardState> out, String kind,
-		Supplier<? extends TileObject> read, int plane, Set<TileObject> seen)
-	{
-		try
-		{
-			TileObject value = read.get();
-			if (value != null && seen.add(value))
-			{
-				addObjectHazard(client, out, kind, value, plane);
-			}
-		}
-		catch (RuntimeException error)
-		{
-			objectHazardReadFailed(error);
-		}
 	}
 
 	private void objectHazardReadFailed(RuntimeException error)

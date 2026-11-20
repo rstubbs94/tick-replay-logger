@@ -9,7 +9,7 @@ the source cannot be identified, the hit shows Unknown.
 - Expanded JSON exports with more NPC, position, animation, projectile, object
   and floor-tile information.
 - Made large JSON copies smaller with lossless compression.
-- Moved recording saves and large copy work into the background to reduce pauses.
+- Damage matching runs when a death or snapshot is captured. Matching, recording saves and large copy work run in the background to reduce pauses.
 - Improved replay icons, source labels and tick-list layout.
 
 The plugin remains a record of events that have already happened. Death replays,

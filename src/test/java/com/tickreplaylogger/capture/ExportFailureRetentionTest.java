@@ -46,7 +46,11 @@ public class ExportFailureRetentionTest
 		assertEquals(1, contextReads.get());
 		assertSame(frozen.getEvents(), retained.getEvents());
 		assertSame(frozen.getTicks(), retained.getTicks());
-		assertSame(frozen.getJournalTicks(), retained.getJournalTicks());
+		assertEquals(1, retained.getJournalTicks().size());
+		assertEquals(frozen.getJournalTicks().get(0).getTickNumber(), retained.getJournalTicks().get(0).getTickNumber());
+		assertEquals("Raw hits remain visible even when attribution fails", 12,
+			retained.getJournalTicks().get(0).getDamageEvents().get(0).getAmount());
+		assertEquals("Unknown", retained.getJournalTicks().get(0).getDamageEvents().get(0).getSource());
 		assertEquals(original, plain.toJson(frozen));
 		assertEquals(2, retained.getMeta().getCaptureIssues().size());
 		assertEquals("Existing capture issue", retained.getMeta().getCaptureIssues().get(0));

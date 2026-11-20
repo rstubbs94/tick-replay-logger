@@ -447,7 +447,7 @@ public class PlaybackPanel extends JPanel
 		prayerBar.reset();
 
 		// Update header
-		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.preparedTitle(recording, damageMap);
+		String displayName = com.tickreplaylogger.capture.RecordingEncounterLabels.title(recording);
 		titleLabel.setText(DisplayFormat.humanize(displayName));
 		titleLabel.setToolTipText(java.util.Objects.equals(displayName, recording.getKillerName()) ? null
 			: "Observed encounter; fatal source: " + DisplayFormat.fatalSourceName(recording));
@@ -828,7 +828,7 @@ public class PlaybackPanel extends JPanel
 		{
 			prefix = "UNIQUE_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK".equals(fatalBasis) ? "Fatal: " : "Last hit: ";
 		}
-		else if (recording.getRichExportJson() != null)
+		else if (recording.hasRichExport())
 		{
 			// No prepared wrapper evidence: keep the raw recording, but do not scan rich data on the EDT.
 			return "Fatal impact not established";

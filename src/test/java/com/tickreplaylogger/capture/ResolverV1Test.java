@@ -735,7 +735,7 @@ public class ResolverV1Test
 		}
 		catalog.add("cuePolicies",RuntimeCatalog.load(gson).section("resolver").get("cuePolicies"));
 		if(currentScope!=null) catalog.add("sourceAssociations",gson.fromJson("[{id:'presence.synthetic',association:'observed_native_presence',authority:'verified',source:{kind:'npc',ids:[900201]},references:[{source:'synthetic',claim:'test'}]}]",com.google.gson.JsonArray.class));
-		return new ResolverV1(ResolverTestCatalog.lower(catalog),gson,CombatCatalog.load(gson),DamageMap.load(gson));
+		return new ResolverV1(ResolverTestCatalog.lower(catalog),gson,CombatCatalog.load(gson));
 	}
 
 	private static DeathRecordingV2 priorExcluded(DeathRecordingV2 recording,String scope)

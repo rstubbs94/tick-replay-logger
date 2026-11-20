@@ -26,218 +26,214 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.tickreplaylogger.model.DamageEvent;
-import com.tickreplaylogger.model.TickData;
-import com.tickreplaylogger.model.world.DamageRecord;
-import com.tickreplaylogger.model.world.SourceResolution;
-import com.tickreplaylogger.model.world.WorldSnapshot;
-import com.tickreplaylogger.util.TickRecorder;
-import java.util.Collections;
-import java.util.List;
+import com.tickreplaylogger.model.*;
+import com.tickreplaylogger.model.world.*;
+import java.util.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+/** Completed outcomes annotate frozen views only; the raw rolling capture has no result-application API. */
 public class SourceResolutionAttachmentTest
 {
-	private static final Gson GSON = new Gson();
+    private static final Gson GSON = new Gson();
 
-	private static SourceResolution resolution()
-	{
-		return SourceResolution.builder().version(1).status("IDENTIFIED").identityLevel("ACTOR")
-			.candidates(Collections.singletonList(SourceResolution.Candidate.builder().key("actor:unfamiliar")
-				.name("Unfamiliar entity").actorRef("npc:unfamiliar:v0:g1").strength("STRONG")
-				.evidence(Collections.singletonList("RECORDED_RELATIONSHIP")).build()))
-			.unidentifiedPossible(false).build();
-	}
+    private static SourceResolution resolution()
+    {
+        return SourceResolution.builder().version(1).status("IDENTIFIED").identityLevel("ACTOR")
+            .candidates(Collections.singletonList(SourceResolution.Candidate.builder().key("actor:unfamiliar")
+                .name("Unfamiliar entity").actorRef("npc:unfamiliar:v0:g1").strength("STRONG")
+                .evidence(Collections.singletonList("RECORDED_RELATIONSHIP")).build()))
+            .unidentifiedPossible(false).build();
+    }
 
-	@Test
-	public void projectedJournalResultsStayWithTheirOriginalTicksAndDoNotInventResourceHpHits()
-	{
-		TickRecorder journal = new TickRecorder(5);
-		journal.startNewTick();
-		journal.addDamageEvent(DamageEvent.received(7, DamageEvent.DamageType.UNKNOWN, "Unknown")
-			.toBuilder().observationSequence(11L).build());
-		journal.addDamageEvent(DamageEvent.dealt(3, DamageEvent.DamageType.MELEE, "Target")
-			.toBuilder().observationSequence(12L).build());
-		journal.addEffectNote("Impact 5 (HP/stat) from Unknown", 21L);
-		journal.finalizeTick();
-		List<TickData> frozen = journal.getTickHistory();
-		journal.startNewTick();
-		journal.addEffectNote("Current tick must remain separate");
-		DamageRecord hp = DamageRecord.builder().impactTick(1).observationSequence(11L).defenderRef("player")
-			.direction("RECEIVED").amount(7).hitsplatType(16).damageType("magic")
-			.attackerName("Unfamiliar entity").attribution("TIMED").determination("IMPACT")
-			.sourceResolution(resolution()).build();
-		DamageRecord resource = hp.toBuilder().observationSequence(21L).amount(5).build();
-		java.util.Map<Long, DamageRecord> results = new java.util.LinkedHashMap<>();
-		results.put(11L, hp);
-		results.put(21L, resource);
-		journal.applyResolvedDamageRecords(1, results);
-		TickData resolved = journal.getTickHistory().get(0);
-		assertEquals(2, resolved.getDamageEvents().size());
-		assertEquals(7, resolved.getDamageEvents().get(0).getAmount());
-		assertEquals(DamageEvent.DamageType.MAGIC, resolved.getDamageEvents().get(0).getDamageType());
-		assertEquals("Unfamiliar entity", resolved.getDamageEvents().get(0).getSource());
-		assertEquals("Target", resolved.getDamageEvents().get(1).getSource());
-		assertEquals("Impact 5 (HP/stat) from Unfamiliar entity", resolved.getEffectNotes().get(0));
-		assertEquals("Unknown", frozen.get(0).getDamageEvents().get(0).getSource());
-		assertEquals("Impact 5 (HP/stat) from Unknown", frozen.get(0).getEffectNotes().get(0));
-	}
+    private static DamageRecord hit(int tick, long sequence, int amount, String direction)
+    {
+        return DamageRecord.builder().impactTick(tick).observationSequence(sequence).observedCycle(tick * 30)
+            .defenderRef("player").direction(direction).amount(amount).hitsplatType(16).hitsplatTypeKnown(true)
+            .damageType("unknown").attackerName("Unknown").attribution("UNKNOWN").determination("UNKNOWN").build();
+    }
 
-	@Test
-	public void resourceOnlyResultUpdatesItsNoteWithoutAddingHpDamage()
-	{
-		TickRecorder journal = new TickRecorder(5);
-		journal.startNewTick();
-		journal.addEffectNote("Impact 5 (HP/stat) from Unknown", 21L);
-		journal.finalizeTick();
-		List<TickData> frozen = journal.getTickHistory();
-		DamageRecord resource = DamageRecord.builder().impactTick(1).observationSequence(21L)
-			.amount(5).direction("RESOURCE_IMPACT").attackerName("Unfamiliar entity")
-			.sourceResolution(resolution()).build();
-		journal.applyResolvedDamageRecords(1, Collections.singletonMap(21L, resource));
-		assertTrue(journal.getTickHistory().get(0).getDamageEvents().isEmpty());
-		assertEquals("Impact 5 (HP/stat) from Unfamiliar entity", journal.getTickHistory().get(0).getEffectNotes().get(0));
-		assertEquals("Impact 5 (HP/stat) from Unknown", frozen.get(0).getEffectNotes().get(0));
-	}
+    private static DamageRecord projected(DamageRecord original)
+    {
+        return original.toBuilder().damageType("magic").attackerName("Unfamiliar entity").attribution("TIMED")
+            .determination("IMPACT").sourceResolution(resolution()).build();
+    }
 
-	@Test
-	public void journalRejectsResultsForAnotherTickDirectionOrAmount()
-	{
-		TickRecorder journal = new TickRecorder(5);
-		journal.startNewTick();
-		journal.addDamageEvent(DamageEvent.received(7, DamageEvent.DamageType.UNKNOWN, "Unknown")
-			.toBuilder().observationSequence(11L).build());
-		journal.addEffectNote("Impact 5 (HP/stat) from Unknown", 21L);
-		journal.finalizeTick();
-		DamageRecord differentTick = DamageRecord.builder().impactTick(2).observationSequence(11L)
-			.amount(7).direction("RECEIVED").sourceResolution(resolution()).build();
-		journal.applyResolvedDamageRecords(1, Collections.singletonMap(11L, differentTick));
-		journal.applyResolvedDamageRecords(1, Collections.singletonMap(11L,
-			differentTick.toBuilder().impactTick(1).amount(8).build()));
-		journal.applyResolvedDamageRecords(1, Collections.singletonMap(11L,
-			differentTick.toBuilder().impactTick(1).direction("DEALT").build()));
-		journal.applyResolvedDamageRecords(1, Collections.singletonMap(21L,
-			differentTick.toBuilder().amount(5).observationSequence(21L).attackerName("Wrong tick").build()));
-		TickData unchanged = journal.getTickHistory().get(0);
-		assertNull(unchanged.getDamageEvents().get(0).getSourceResolution());
-		assertEquals("Unknown", unchanged.getDamageEvents().get(0).getSource());
-		assertEquals("Impact 5 (HP/stat) from Unknown", unchanged.getEffectNotes().get(0));
-	}
+    private static WorldSnapshotRecorder recorder()
+    {
+        return new WorldSnapshotRecorder(5, GSON);
+    }
 
-	@Test
-	public void projectedRecordsCannotReplaceAnotherNativeHitOrMutateFrozenExports()
-	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(5, GSON);
-		recorder.advanceTick(2);
-		DamageRecord original = DamageRecord.builder().impactTick(2).observationSequence(11L).amount(7)
-			.hitsplatType(16).hitsplatTypeKnown(true).direction("RECEIVED").defenderRef("player").observedCycle(60)
-			.impactContextEpoch(3L).finalizationContextEpoch(4L)
-			.impactSceneKey("room-a").impactWorldViewId(0).impactPlane(0).build();
-		recorder.addDamage(original);
-		com.tickreplaylogger.model.world.DeathRecordingV2 frozen = recorder.freezeExport(null, null, 0, 2);
-		DamageRecord projected = original.toBuilder().attackerName("Unfamiliar entity")
-			.sourceResolution(resolution()).build();
-		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L,
-			projected.toBuilder().impactSceneKey("another-room").build()));
-		assertNull(recorder.receivedAtTick(2).get(0).getSourceResolution());
-		for (DamageRecord anotherCallback : java.util.Arrays.asList(
-			projected.toBuilder().impactContextEpoch(4L).build(),
-			projected.toBuilder().finalizationContextEpoch(5L).build(),
-			projected.toBuilder().hitsplatTypeKnown(null).build()))
-		{
-			recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, anotherCallback));
-			assertNull(recorder.receivedAtTick(2).get(0).getSourceResolution());
-		}
-		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, projected));
-		assertNotNull(recorder.receivedAtTick(2).get(0).getSourceResolution());
-		assertEquals(7, recorder.receivedAtTick(2).get(0).getAmount());
-		assertNull(frozen.getEvents().getDamageEvents().get(0).getSourceResolution());
-	}
+    private static void resource(WorldSnapshotRecorder recorder, DamageRecord context)
+    {
+        Map<String, Object> raw = new LinkedHashMap<>();
+        raw.put("amount", context.getAmount()); raw.put("hitsplatType", context.getHitsplatType());
+        raw.put("possibleOutcomeSurfaces", Arrays.asList("HP", "SKILL"));
+        recorder.addObservation(ObservedEvent.builder().tick(context.getImpactTick()).sequence(context.getObservationSequence())
+            .gameCycle(context.getObservedCycle()).type("HITSPLAT").actorRef("player").data(raw).build());
+        recorder.addDamage(context);
+    }
 
-	@Test
-	public void lightweightSourceWindowsExcludeLaterCallbacksAndKeepFrozenMembership()
-	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(5, GSON);
-		recorder.advanceTick(4);
-		com.tickreplaylogger.model.world.ObservedEvent before = com.tickreplaylogger.model.world.ObservedEvent.builder()
-			.tick(3).sequence(11).type("HITSPLAT").actorRef("player").build();
-		com.tickreplaylogger.model.world.ObservedEvent later = com.tickreplaylogger.model.world.ObservedEvent.builder()
-			.tick(4).sequence(12).type("HITSPLAT").actorRef("player").build();
-		recorder.addObservation(before);
-		recorder.addObservation(later);
-		DamageRecord hit = DamageRecord.builder().impactTick(3).observationSequence(11L).amount(5).build();
-		recorder.addDamage(hit);
-		ResolverV1Recording.EvidenceWindow window = recorder.freezeSourceEvidence(4, 11, 1, Collections.emptyList());
-		recorder.addObservation(com.tickreplaylogger.model.world.ObservedEvent.builder()
-			.tick(4).sequence(13).type("HITSPLAT").actorRef("player").build());
-		assertTrue(window.getTicks().isEmpty());
-		assertEquals(1, window.getObservations().size());
-		assertEquals(11, window.getObservations().get(0).getSequence());
-		assertEquals(1, window.getHits().size());
-	}
+    @Test
+    public void projectedJournalResultsStayWithTheirOriginalTicksAndDoNotInventResourceHpHits()
+    {
+        WorldSnapshotRecorder recorder = recorder();
+        recorder.startNewTick();
+        DamageRecord hp = hit(1, 11, 7, "RECEIVED");
+        DamageRecord dealt = hit(1, 12, 3, "DEALT").toBuilder().defenderRef("npc:target").defenderName("Target").build();
+        DamageRecord resource = hit(1, 21, 5, "RESOURCE_IMPACT");
+        recorder.addDamage(hp); recorder.addDamage(dealt); resource(recorder, resource); recorder.finalizeTick();
+        List<TickData> paused = recorder.getTickHistory();
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 1, 1);
+        recorder.startNewTick();
+        recorder.addEffect(EffectEvent.builder().startTick(2).journalNote("Current tick must remain separate").build());
+        Map<Long, DamageRecord> results = new LinkedHashMap<>();
+        results.put(11L, projected(hp)); results.put(21L, projected(resource));
+        DeathRecordingV2 completed = RecordingProjection.apply(frozen, results, "test");
+        TickData resolved = completed.getJournalTicks().get(0);
+        assertEquals(2, resolved.getDamageEvents().size());
+        assertEquals(7, resolved.getDamageEvents().get(0).getAmount());
+        assertEquals(DamageEvent.DamageType.MAGIC, resolved.getDamageEvents().get(0).getDamageType());
+        assertEquals("Unfamiliar entity", resolved.getDamageEvents().get(0).getSource());
+        assertEquals("Target", resolved.getDamageEvents().get(1).getSource());
+        assertEquals("Impact 5 (HP/stat) from Unfamiliar entity", resolved.getEffectNotes().get(0));
+        assertTrue(frozen.getJournalTicks().get(0).getDamageEvents().isEmpty());
+        assertTrue(frozen.getJournalTicks().get(0).getEffectNotes().isEmpty());
+        assertEquals("Unknown", paused.get(0).getDamageEvents().get(0).getSource());
+        assertEquals("Impact 5 (HP/stat) from Unknown", paused.get(0).getEffectNotes().get(0));
+        assertEquals("Unknown", recorder.getTickHistory().get(0).getDamageEvents().get(0).getSource());
+        assertEquals(1, completed.getJournalTicks().size());
+    }
 
-	@Test
-	public void richAttachmentUsesTickDirectionAndSequenceWithoutChangingFrozenOriginals()
-	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(5, GSON);
-		DamageRecord received = DamageRecord.builder().impactTick(2).amount(0).hitsplatType(16).direction("RECEIVED")
-			.observationSequence(11L).attackerName("Unknown").build();
-		DamageRecord dealt = received.toBuilder().direction("DEALT").amount(7).build();
-		DamageRecord previous = received.toBuilder().impactTick(1).amount(9).build();
-		DamageRecord unlinked = received.toBuilder().observationSequence(null).amount(5).build();
-		recorder.addDamage(previous);
-		recorder.addDamage(received);
-		recorder.addDamage(dealt);
-		recorder.addDamage(unlinked);
-		List<DamageRecord> frozen = recorder.receivedAtTick(2);
-		assertEquals(2, frozen.size());
-		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, received.toBuilder().sourceResolution(resolution()).build()));
-		List<DamageRecord> current = recorder.receivedAtTick(2);
-		assertNotNull(current.get(0).getSourceResolution());
-		assertNull(current.get(1).getSourceResolution());
-		assertNull(frozen.get(0).getSourceResolution());
-		assertNull(previous.getSourceResolution());
-		assertNull(dealt.getSourceResolution());
-		JsonObject original = GSON.toJsonTree(received).getAsJsonObject();
-		JsonObject derived = GSON.toJsonTree(current.get(0)).getAsJsonObject();
-		derived.remove("sourceResolution");
-		assertEquals(original, derived);
-		recorder.addSnapshot(WorldSnapshot.builder().tick(2).build());
-		List<WorldSnapshot> snapshots = recorder.freezeSourceEvidence(Integer.MAX_VALUE, Long.MAX_VALUE, 0, Collections.emptyList()).getTicks();
-		recorder.clear();
-		assertEquals(1, snapshots.size());
-		assertEquals(2, snapshots.get(0).getTick());
-	}
+    @Test
+    public void resourceOnlyResultUpdatesItsFrozenNoteWithoutAddingHpDamage()
+    {
+        WorldSnapshotRecorder recorder = recorder(); recorder.startNewTick();
+        DamageRecord resource = hit(1, 21, 5, "RESOURCE_IMPACT");
+        JsonObject originalResourceFacts = GSON.toJsonTree(resource).getAsJsonObject();
+        resource(recorder, resource); recorder.finalizeTick();
+        List<TickData> paused = recorder.getTickHistory();
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 1, 1);
+        DeathRecordingV2 completed = RecordingProjection.apply(frozen, Collections.singletonMap(21L, projected(resource)), "test");
+        assertTrue(completed.getEvents().getDamageEvents().isEmpty());
+        assertTrue(completed.getJournalTicks().get(0).getDamageEvents().isEmpty());
+        assertEquals("Impact 5 (HP/stat) from Unfamiliar entity", completed.getJournalTicks().get(0).getEffectNotes().get(0));
+        assertTrue(frozen.getJournalTicks().get(0).getEffectNotes().isEmpty());
+        assertEquals("Impact 5 (HP/stat) from Unknown", paused.get(0).getEffectNotes().get(0));
+        assertEquals("Impact 5 (HP/stat) from Unknown", recorder.getTickHistory().get(0).getEffectNotes().get(0));
+        DamageRecord raw = (DamageRecord) frozen.getEvents().getObservations().get(0).getData().get("attributionContext");
+        Map<String, Object> wire = frozen.getEvents().getObservations().get(0).getData();
+        assertNull(raw.getAttributionCandidates());
+        assertNull(raw.getObservedHazardContacts());
+        assertEquals(GSON.toJsonTree(resource), GSON.toJsonTree(raw.toBuilder()
+            .attributionCandidates(resource.getAttributionCandidates()).observedHazardContacts(resource.getObservedHazardContacts()).build()));
+        assertEquals(resource.getAttributionCandidates(), wire.get("attributionCandidates"));
+        assertEquals(resource.getObservedHazardContacts(), wire.get("observedHazardContacts"));
+        assertNull(raw.getSourceResolution());
+        assertNull(resource.getSourceResolution());
+        assertEquals(originalResourceFacts, GSON.toJsonTree(resource));
+    }
 
-	@Test
-	public void journalAttachmentDoesNotMutatePausedHistoryOrJoinAnUnrelatedDirection()
-	{
-		TickRecorder recorder = new TickRecorder(5);
-		DamageEvent received = DamageEvent.builder().amount(0).direction(DamageEvent.DamageDirection.RECEIVED)
-			.damageType(DamageEvent.DamageType.UNKNOWN).source("Unknown").observationSequence(11L).build();
-		DamageEvent dealt = received.toBuilder().direction(DamageEvent.DamageDirection.DEALT).amount(7).build();
-		recorder.startNewTick();
-		recorder.addDamageEvent(received);
-		recorder.addDamageEvent(dealt);
-		recorder.finalizeTick();
-		List<TickData> frozen = recorder.getTickHistory();
-		DamageRecord projected=DamageRecord.builder().impactTick(1).observationSequence(11L).amount(0)
-			.direction("RECEIVED").sourceResolution(resolution()).attackerName("Unknown").damageType("unknown")
-			.attribution("UNKNOWN").determination("UNKNOWN").build();
-		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, projected));
-		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
-		recorder.applyResolvedDamageRecords(1,Collections.singletonMap(11L,projected.toBuilder().amount(1).build()));
-		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
-		recorder.applyResolvedDamageRecords(1,Collections.singletonMap(11L,projected.toBuilder().observationSequence(12L).build()));
-		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
-		recorder.applyResolvedDamageRecords(1, Collections.singletonMap(11L, projected));
-		List<DamageEvent> current = recorder.getTickHistory().get(0).getDamageEvents();
-		assertNotNull(current.get(0).getSourceResolution());
-		assertNull(current.get(1).getSourceResolution());
-		assertNull(frozen.get(0).getDamageEvents().get(0).getSourceResolution());
-		assertEquals(0, current.get(0).getAmount());
-		assertEquals("Unfamiliar entity",current.get(0).getSource());
-		assertEquals(7, current.get(1).getAmount());
-	}
+    @Test
+    public void frozenProjectionRejectsAnotherTickDirectionAmountOrSequence()
+    {
+        WorldSnapshotRecorder recorder = recorder(); recorder.startNewTick();
+        DamageRecord hp = hit(1, 11, 7, "RECEIVED"); recorder.addDamage(hp); recorder.finalizeTick();
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 1, 1);
+        for (DamageRecord wrong : Arrays.asList(projected(hp).toBuilder().impactTick(2).build(),
+            projected(hp).toBuilder().direction("DEALT").build(), projected(hp).toBuilder().amount(8).build(),
+            projected(hp).toBuilder().observationSequence(12L).build()))
+        {
+            DeathRecordingV2 completed = RecordingProjection.apply(frozen, Collections.singletonMap(11L, wrong), "test");
+            assertNull(completed.getEvents().getDamageEvents().get(0).getSourceResolution());
+            assertEquals("Unknown", completed.getJournalTicks().get(0).getDamageEvents().get(0).getSource());
+            assertEquals(7, completed.getJournalTicks().get(0).getDamageEvents().get(0).getAmount());
+        }
+    }
+
+    @Test
+    public void projectedRecordsCannotReplaceAnotherNativeHitOrMutateRawExports()
+    {
+        WorldSnapshotRecorder recorder = recorder();
+        DamageRecord original = hit(2, 11, 7, "RECEIVED").toBuilder().impactContextEpoch(3L).finalizationContextEpoch(4L)
+            .impactSceneKey("room-a").impactWorldViewId(0).impactPlane(0).build();
+        recorder.addDamage(original);
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 0, 2);
+        DamageRecord projected = original.toBuilder().attackerName("Unfamiliar entity").sourceResolution(resolution()).build();
+        for (DamageRecord wrong : Arrays.asList(projected.toBuilder().impactSceneKey("another-room").build(),
+            projected.toBuilder().impactWorldViewId(1).build(), projected.toBuilder().impactPlane(1).build(),
+            projected.toBuilder().impactContextEpoch(4L).build(), projected.toBuilder().finalizationContextEpoch(5L).build(),
+            projected.toBuilder().hitsplatTypeKnown(null).build()))
+        {
+            assertNull(RecordingProjection.apply(frozen, Collections.singletonMap(11L, wrong), "test")
+                .getEvents().getDamageEvents().get(0).getSourceResolution());
+        }
+        DamageRecord completed = RecordingProjection.apply(frozen, Collections.singletonMap(11L, projected), "test")
+            .getEvents().getDamageEvents().get(0);
+        assertNotNull(completed.getSourceResolution()); assertEquals(7, completed.getAmount());
+        assertNull(frozen.getEvents().getDamageEvents().get(0).getSourceResolution());
+        assertNull(recorder.freezeExport(null, null, 0, 2).getEvents().getDamageEvents().get(0).getSourceResolution());
+        JsonObject raw = GSON.toJsonTree(original).getAsJsonObject(), annotated = GSON.toJsonTree(completed).getAsJsonObject();
+        annotated.remove("sourceResolution"); annotated.add("attackerName", raw.get("attackerName"));
+        assertEquals(raw, annotated);
+    }
+
+    @Test
+    public void frozenMembershipExcludesLaterCallbacksAndSurvivesClear()
+    {
+        WorldSnapshotRecorder recorder = recorder(); recorder.advanceTick(4);
+        ObservedEvent before = ObservedEvent.builder().tick(3).sequence(11).type("HITSPLAT").actorRef("player").build();
+        recorder.addObservation(before);
+        recorder.addObservation(ObservedEvent.builder().tick(4).sequence(12).type("HITSPLAT").actorRef("player").build());
+        recorder.addDamage(hit(3, 11, 5, "RECEIVED"));
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 3, 3);
+        recorder.addObservation(ObservedEvent.builder().tick(3).sequence(13).type("HITSPLAT").actorRef("player").build());
+        recorder.clear();
+        assertTrue(frozen.getTicks().isEmpty());
+        assertEquals(1, frozen.getEvents().getObservations().size());
+        assertSame(before, frozen.getEvents().getObservations().get(0));
+        assertEquals(1, frozen.getEvents().getDamageEvents().size());
+        assertEquals(Long.valueOf(11), frozen.getEvents().getDamageEvents().get(0).getObservationSequence());
+    }
+
+    @Test
+    public void frozenResultsOnlyAnnotateTheMatchingLinkedReceivedRecord()
+    {
+        WorldSnapshotRecorder recorder = recorder();
+        DamageRecord previous = hit(1, 10, 9, "RECEIVED"), received = hit(2, 11, 0, "RECEIVED");
+        DamageRecord dealt = hit(2, 12, 7, "DEALT").toBuilder().defenderRef("npc:target").build();
+        DamageRecord unlinked = hit(2, 13, 5, "RECEIVED").toBuilder().observationSequence(null).build();
+        for (DamageRecord raw : Arrays.asList(previous, received, dealt, unlinked)) recorder.addDamage(raw);
+        recorder.addSnapshot(WorldSnapshot.builder().tick(2).build());
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 1, 2);
+        DeathRecordingV2 completed = RecordingProjection.apply(frozen, Collections.singletonMap(11L, projected(received)), "test");
+        List<DamageRecord> results = completed.getEvents().getDamageEvents();
+        assertNull(results.get(0).getSourceResolution()); assertNotNull(results.get(1).getSourceResolution());
+        assertNull(results.get(2).getSourceResolution()); assertNull(results.get(3).getSourceResolution());
+        assertEquals(0, results.get(1).getAmount()); assertEquals(7, results.get(2).getAmount());
+        assertTrue(frozen.getEvents().getDamageEvents().stream().allMatch(raw -> raw.getSourceResolution() == null));
+        recorder.clear(); assertEquals(1, frozen.getTicks().size()); assertEquals(2, frozen.getTicks().get(0).getTick());
+    }
+
+    @Test
+    public void pausedJournalCannotBeMutatedOrJoinedToAnOutgoingEvent()
+    {
+        WorldSnapshotRecorder recorder = recorder(); recorder.startNewTick();
+        DamageRecord received = hit(1, 11, 0, "RECEIVED"), dealt = hit(1, 12, 7, "DEALT");
+        recorder.addDamage(received); recorder.addDamage(dealt); recorder.finalizeTick();
+        List<TickData> paused = recorder.getTickHistory();
+        DeathRecordingV2 frozen = recorder.freezeExport(null, null, 1, 1);
+        for (DamageRecord wrong : Arrays.asList(projected(received).toBuilder().impactTick(2).build(),
+            projected(received).toBuilder().amount(1).build(), projected(received).toBuilder().observationSequence(12L).build()))
+        {
+            assertNull(RecordingProjection.apply(frozen, Collections.singletonMap(11L, wrong), "test")
+                .getJournalTicks().get(0).getDamageEvents().get(0).getSourceResolution());
+        }
+        List<DamageEvent> complete = RecordingProjection.apply(frozen, Collections.singletonMap(11L, projected(received)), "test")
+            .getJournalTicks().get(0).getDamageEvents();
+        assertNotNull(complete.get(0).getSourceResolution()); assertNull(complete.get(1).getSourceResolution());
+        assertEquals("Unfamiliar entity", complete.get(0).getSource());
+        assertNull(paused.get(0).getDamageEvents().get(0).getSourceResolution());
+        assertEquals(0, complete.get(0).getAmount()); assertEquals(7, complete.get(1).getAmount());
+    }
 }

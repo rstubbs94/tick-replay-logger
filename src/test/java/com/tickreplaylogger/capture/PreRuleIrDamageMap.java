@@ -124,9 +124,9 @@ public class PreRuleIrDamageMap
 	{
 		PreRuleIrDamageMap map = new PreRuleIrDamageMap();
 		map.catalog = references;
-		try
+		try (InputStream input = PreRuleIrDamageMap.class.getResourceAsStream("/com/tickreplaylogger/damage_map.json"))
 		{
-			Model m = gson.fromJson(RuntimeCatalog.load(gson).section("capture"), Model.class);
+			Model m = gson.fromJson(new InputStreamReader(input, StandardCharsets.UTF_8), Model.class);
 			if (m != null)
 			{
 				if (m.version != null)

@@ -364,7 +364,7 @@ public class RecordingStorage implements AutoCloseable
 		{
 			TickRecording record = records.get(i);
 			if (record.getTimestamp() == sought.getTimestamp()
-				&& Objects.equals(record.getRichExportJson(), sought.getRichExportJson())
+				&& Objects.equals(record.exportIdentity(), sought.exportIdentity())
 				&& Objects.equals(record.getTicks(), sought.getTicks()))
 			{
 				return i;

@@ -49,15 +49,6 @@ public class MovementData
 	}
 
 	/**
-	 * Create movement data for cancelled movement
-	 */
-	public static MovementData cancelled(int tilesIntended, int tilesCompleted)
-	{
-		return MovementData.builder().tilesIntended(tilesIntended).tilesCompleted(tilesCompleted).wasCancelled(true)
-			.build();
-	}
-
-	/**
 	 * Get a human-readable description
 	 */
 	public String getDescription()

@@ -75,23 +75,6 @@ public class DamageEvent
 	}
 
 	/**
-	 * Create a damage received event
-	 */
-	public static DamageEvent received(int amount, DamageType type, String source)
-	{
-		return received(amount, type, source, null, null);
-	}
-
-	/**
-	 * Create a damage received event with an attribution confidence
-	 * (CONFIRMED/TIMED/PROXIMITY/ENVIRONMENTAL/UNKNOWN).
-	 */
-	public static DamageEvent received(int amount, DamageType type, String source, String confidence)
-	{
-		return received(amount, type, source, confidence, null);
-	}
-
-	/**
 	 * Create a damage received event with an attribution confidence and a reactability determination
 	 * (LAUNCH = prayer had to be up before it fired; IMPACT = reactable mid-flight; UNKNOWN).
 	 */
@@ -112,33 +95,4 @@ public class DamageEvent
 			.source(target != null ? target : "Unknown target").build();
 	}
 
-	/**
-	 * Get a human-readable description
-	 */
-	public String getDescription()
-	{
-		// Only show damage type if it's something specific (poison, venom)
-		// Otherwise just show the amount and source
-		if (direction == DamageDirection.RECEIVED)
-		{
-			if (damageType == DamageType.POISON || damageType == DamageType.VENOM)
-			{
-				return "Received " + amount + " " + damageType.name().toLowerCase() + " damage";
-			}
-			String suffix = "";
-			if ("IMPACT".equals(determination))
-			{
-				suffix = " [Hit tick]";
-			}
-			else if ("LAUNCH".equals(determination))
-			{
-				suffix = " [Attack tick]";
-			}
-			return "Received " + amount + " damage from " + source + suffix;
-		}
-		else
-		{
-			return "Dealt " + amount + " damage to " + source;
-		}
-	}
 }

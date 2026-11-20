@@ -68,11 +68,11 @@ public class CaptureTest
 		DeathRecordingV2 full = recorder.buildExport(null, null);
 		assertEquals(WorldSnapshotRecorder.MAX_OBSERVATIONS, full.getEvents().getObservations().size());
 		assertEquals(2L, full.getEvents().getCaptureGaps().get(0).getOmittedObservations());
-		assertTrue(recorder.hasUnresolvedPlayerImpact(1, null));
+		assertEquals("UNRESOLVED_IMPACT_IN_DEATH_TICK", deathSummary(recorder, 1).getKillerBasis());
 		recorder.addSnapshot(com.tickreplaylogger.model.world.WorldSnapshot.builder().tick(2).sceneKey("s").build());
 		assertTrue(recorder.buildExport(null, null, 2, 2).getEvents().getCaptureGaps().isEmpty());
 		recorder.clear();
-		assertFalse(recorder.hasUnresolvedPlayerImpact(1, null));
+		assertEquals("NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK", deathSummary(recorder, 1).getKillerBasis());
 	}
 	// --- bundled damage map ---
 
@@ -378,12 +378,27 @@ public class CaptureTest
 	public void onlyReceivedPlayerDamageCanBeSelectedAsTheKillingBlow()
 	{
 		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(10, new com.google.gson.Gson());
-		DamageRecord received = DamageRecord.builder().direction("RECEIVED").amount(5).impactTick(1).build();
+		DamageRecord received = DamageRecord.builder().direction("RECEIVED").defenderRef("player").amount(5)
+			.impactTick(1).build();
 		recorder.addDamage(received);
 		recorder.addDamage(DamageRecord.builder().direction("DEALT").amount(50).impactTick(1).build());
 		recorder.addDamage(DamageRecord.builder().direction("NPC_RECEIVED").amount(99).impactTick(2).build());
-		recorder.addDamage(DamageRecord.builder().direction("RECEIVED").amount(0).impactTick(2).build());
-		assertEquals(received, recorder.lastDamagingHit());
+		recorder.addDamage(DamageRecord.builder().direction("RECEIVED").defenderRef("player").amount(0)
+			.impactTick(2).build());
+		recorder.addDamage(DamageRecord.builder().direction("RECEIVED").defenderRef("other-player").amount(99)
+			.impactTick(1).build());
+		DeathRecordingV2.Summary first = deathSummary(recorder, 1);
+		assertEquals(received, first.getFatalHit());
+		assertEquals(java.util.Collections.singletonList(received), first.getFatalHitCandidates());
+		assertNull(deathSummary(recorder, 2).getFatalHit());
+		assertTrue(deathSummary(recorder, 2).getFatalHitCandidates().isEmpty());
+	}
+
+	private DeathRecordingV2.Summary deathSummary(WorldSnapshotRecorder recorder, int tick)
+	{
+		DeathRecordingV2 frozen = recorder.freezeExport(DeathRecordingV2.Meta.builder().deathTick(tick).build(),
+			DeathRecordingV2.Summary.builder().build(), tick, tick);
+		return RecordingProjection.apply(frozen, java.util.Collections.emptyMap(), "catalog").getSummary();
 	}
 
 	private WorldSnapshot snap(int tick, String sceneKey)

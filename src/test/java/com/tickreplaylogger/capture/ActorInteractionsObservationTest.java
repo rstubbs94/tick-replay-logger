@@ -93,7 +93,7 @@ public class ActorInteractionsObservationTest
 				return null;
 			}
 		});
-		return ActorInteractions.capture(source, null, true, actor ->
+		return ActorCaptureFixture.interaction(source, null, true, actor ->
 		{
 			if (failReference)
 				throw new IllegalStateException("Reference unavailable");

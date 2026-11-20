@@ -271,11 +271,6 @@ public class WorldCaptureService
 		mechanics.clear(npc);
 	}
 
-	private WorldCaptureService serviceFor(Client client, WorldView nativeView)
-	{
-		return serviceFor(client, nativeView, nativeView == null ? client.getPlane() : nativeView.getPlane());
-	}
-
 	private WorldCaptureService serviceFor(Client client, WorldView nativeView, int plane)
 	{
 		if (nativeView == null || nativeView == WorldViews.active(client) && plane == nativeView.getPlane())
@@ -1152,7 +1147,7 @@ public class WorldCaptureService
 		{
 			captureIssues.add("player: actor plane unavailable");
 		}
-		SnapshotPrayerObservation prayer = new SnapshotPrayerObservation(client, sample);
+		PrayerObservation prayer = PrayerObservation.captureSnapshot(client, sample);
 		Map<String, Integer> baseSkills = new LinkedHashMap<>(), boostedSkills = new LinkedHashMap<>();
 		for (Skill skill : Skill.values())
 		{
@@ -1191,10 +1186,11 @@ public class WorldCaptureService
 		return sample.fill(PlayerState.builder()).interaction(interaction)
 			.observationIssues(sample.issues.isEmpty() ? null : new LinkedHashMap<>(sample.issues))
 			.hp(boostedSkills.get("HITPOINTS")).maxHp(baseSkills.get("HITPOINTS")).prayer(boostedSkills.get("PRAYER"))
-			.maxPrayer(baseSkills.get("PRAYER")).activePrayers(prayer.active).reportedActivePrayers(prayer.reported)
-			.prayerFlagValues(prayer.flags).prayerStateKnown(prayer.complete && prayer.resolved)
-			.overheadPrayer(prayer.overhead).overheadPrayerEvidence(prayer.evidence)
-			.prayerStateConflict(prayer.conflict).overheadIcon(sample.icon == null ? null : sample.icon.name())
+			.maxPrayer(baseSkills.get("PRAYER")).activePrayers(prayer.getActive())
+			.reportedActivePrayers(prayer.getReported()).prayerFlagValues(prayer.getFlags())
+			.prayerStateKnown(prayer.isFlagsComplete() && prayer.isOverheadResolved())
+			.overheadPrayer(prayer.getOverhead()).overheadPrayerEvidence(prayer.getEvidence())
+			.prayerStateConflict(prayer.isConflict()).overheadIcon(sample.icon == null ? null : sample.icon.name())
 			.overheadIconKnown(!sample.issues.containsKey("overheadIcon")).boostedAttack(boostedSkills.get("ATTACK"))
 			.boostedStrength(boostedSkills.get("STRENGTH")).boostedDefence(boostedSkills.get("DEFENCE"))
 			.boostedRanged(boostedSkills.get("RANGED")).boostedMagic(boostedSkills.get("MAGIC"))

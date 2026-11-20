@@ -299,39 +299,6 @@ public class WorldSnapshotRecorder extends TickRecorder
 		observationLinks.addLast(link);
 	}
 
-	/** Later context-dependent hits may be HP damage; do not falsely blame an older known hit. */
-	public synchronized boolean hasUnresolvedPlayerImpact(int tick, DamageRecord known)
-	{
-		if (omittedObservations.containsKey(tick))
-		{
-			return true;
-		}
-		for (ObservedEvent event : observations(tick, tick))
-		{
-			if (event.getTick() != tick || !"HITSPLAT".equals(event.getType()) || !"player".equals(event.getActorRef())
-				|| event.getData() == null)
-			{
-				continue;
-			}
-			Object surface = event.getData().get("resourceSurface"), amount = event.getData().get("amount");
-			if (!(amount instanceof Number) || ((Number) amount).intValue() <= 0)
-			{
-				continue;
-			}
-			if ("HP".equals(surface) || "SKILL_OR_HP".equals(surface) || "HP_OR_COMBAT_RESOURCE".equals(surface)
-				|| "UNCLASSIFIED".equals(surface) || "SANITY".equals(surface) || "STACKS".equals(surface)
-				|| "CONTEXTUAL_RESOURCE".equals(surface))
-			{
-				if (known == null || known.getImpactTick() < tick || known.getObservationSequence() == null
-					|| event.getSequence() > known.getObservationSequence())
-				{
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
 	public synchronized void addDeath(DeathRecordingV2.Events.DeathMark death)
 	{
 		deaths.add(death);
@@ -559,47 +526,4 @@ public class WorldSnapshotRecorder extends TickRecorder
 		return worldSnapshots().size();
 	}
 
-	/** Only positive damage received by the local player can be the killing blow. */
-	public synchronized List<DamageRecord> positiveReceivedAtTick(int tick)
-	{
-		List<DamageRecord> out = new ArrayList<>();
-		for (DamageRecord record : impacts(tick, tick))
-		{
-			if (record.getImpactTick() == tick && record.getAmount() > 0
-				&& (record.getDirection() == null || "RECEIVED".equals(record.getDirection())))
-			{
-				out.add(record);
-			}
-		}
-		return Collections.unmodifiableList(out);
-	}
-
-	/** Original received observations, including zeroes, for one completed tick. */
-	public synchronized List<DamageRecord> receivedAtTick(int tick)
-	{
-		List<DamageRecord> out = new ArrayList<>();
-		for (DamageRecord record : impacts(tick, tick))
-		{
-			if (record.getImpactTick() == tick
-				&& (record.getDirection() == null || "RECEIVED".equals(record.getDirection())))
-			{
-				out.add(record);
-			}
-		}
-		return Collections.unmodifiableList(out);
-	}
-
-	public synchronized DamageRecord lastDamagingHit()
-	{
-		List<DamageRecord> selected = impacts(Integer.MIN_VALUE, Integer.MAX_VALUE);
-		for (int i = selected.size() - 1; i >= 0; i--)
-		{
-			DamageRecord record = selected.get(i);
-			if (record.getAmount() > 0 && (record.getDirection() == null || "RECEIVED".equals(record.getDirection())))
-			{
-				return record;
-			}
-		}
-		return null;
-	}
 }

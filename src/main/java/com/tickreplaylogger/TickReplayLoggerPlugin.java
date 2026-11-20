@@ -3077,19 +3077,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			context.primaryViewId = viewId;
 			String scope = active == null ? client.getBaseX() + ":" + client.getBaseY() + ":" + context.primaryPlane
 				: WorldViews.scope(active, context.primaryPlane, viewId);
-			if (currentSceneKey == null || !Objects.equals(scope, sceneScopeSignature)
-				|| (needSceneCapture && !primarySceneReserved))
-			{
-				int[] regions = active == null ? client.getMapRegions() : active.getMapRegions();
-				boolean instance = active == null ? client.isInInstancedRegion() : active.isInstance();
-				currentSceneKey = Integer.toHexString(Arrays.hashCode(regions) ^ (instance ? 1 : 0)) + ":"
-					+ (sceneLoadSeq++);
-				captureService.resetTiming();
-				lastCaptureWorld = null;
-				sceneScopeSignature = scope;
-				primarySceneReserved = true;
-				needSceneCapture = true;
-			}
+			reservePrimaryCaptureScope(active, scope);
 			context.primarySceneKey = currentSceneKey;
 			context.primaryKnown = true;
 			return true;
@@ -3112,24 +3100,30 @@ public class TickReplayLoggerPlugin extends Plugin
 			WorldView active = WorldViews.active(client);
 			String scope = active == null ? nativeBaseX() + ":" + nativeBaseY() + ":" + nativePlane()
 				: WorldViews.scope(active);
-			if (currentSceneKey == null || !Objects.equals(scope, sceneScopeSignature)
-				|| (needSceneCapture && !primarySceneReserved))
-			{
-				int[] regions = active == null ? client.getMapRegions() : active.getMapRegions();
-				boolean instance = active == null ? client.isInInstancedRegion() : active.isInstance();
-				int regionHash = Arrays.hashCode(regions) ^ (instance ? 1 : 0);
-				currentSceneKey = Integer.toHexString(regionHash) + ":" + (sceneLoadSeq++);
-				captureService.resetTiming();
-				lastCaptureWorld = null;
-				sceneScopeSignature = scope;
-				primarySceneReserved = true;
-				needSceneCapture = true;
-			}
+			reservePrimaryCaptureScope(active, scope);
 			return true;
 		}
 		catch (RuntimeException unavailable)
 		{
 			return false;
+		}
+	}
+
+	/** Reservation is shared; callback and settled scope reads retain their independent clocks. */
+	private void reservePrimaryCaptureScope(WorldView active, String scope)
+	{
+		if (currentSceneKey == null || !Objects.equals(scope, sceneScopeSignature)
+			|| (needSceneCapture && !primarySceneReserved))
+		{
+			int[] regions = active == null ? client.getMapRegions() : active.getMapRegions();
+			boolean instance = active == null ? client.isInInstancedRegion() : active.isInstance();
+			currentSceneKey = Integer.toHexString(Arrays.hashCode(regions) ^ (instance ? 1 : 0)) + ":"
+				+ (sceneLoadSeq++);
+			captureService.resetTiming();
+			lastCaptureWorld = null;
+			sceneScopeSignature = scope;
+			primarySceneReserved = true;
+			needSceneCapture = true;
 		}
 	}
 

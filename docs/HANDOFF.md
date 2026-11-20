@@ -10,14 +10,14 @@ No client launch is part of this refactor.
 PR #20986 still points to public source `bf19b988b53d3ec861d732671da35e1e7cdb76aa`.
 That submission was measured by the maintainer at 302,079 tokens. The calibrated
 local counter measures the same submission at 302,075. The current local source
-measures 212,967 tokens in 107 production Java files, with 24,387 nonblank,
+measures 211,045 tokens in 106 production Java files, with 24,168 nonblank,
 comment-stripped code lines. The verified checkpoint before this refactor was
 222,270 tokens in 108 production files. Tests, resources and documentation are
 excluded from these token counts. A new official count has not run.
 
-The refactor and cleanup removed 9,303 tokens and 1,100 code lines from the
+The refactor and cleanup removed 11,225 tokens and 1,319 code lines from the
 preceding verified checkpoint. Total reduction from the public submission is
-89,108 tokens (29.5%). Those are separate comparisons; neither passes the size gate.
+91,030 tokens (30.1%). Those are separate comparisons; neither passes the size gate.
 
 The latest cleanup uses wildcard imports throughout, retaining explicit types
 only to resolve real name collisions, and shortens qualified type names. The
@@ -25,6 +25,14 @@ import-only pass produced identical executable code/annotations in all 250
 compiled classes (debug line information excluded). Four unused helpers and the
 unused rule-ID lookup map were then removed. The resulting full suite passes
 1,200 checks; the exact standard JAR has zero restricted-API findings.
+
+Further cleanup removed inactive recorder death-query APIs, moved test-only
+actor/model conveniences into fixtures or the actual display path, deleted two
+unused private helpers, and collapsed the duplicated snapshot-prayer projection.
+Callback and settled scene reservation share their mutation block while keeping
+their original scope reads separate. No wire field or active attribution rule
+was removed. The full suite still passes 1,200 checks, and published-capture
+compatibility passes 1,255 assertions against the actual IDE checkout.
 
 ## Recording flow
 
@@ -88,7 +96,7 @@ unclassified HP-capable hits prevent an unsupported killer assignment.
   the non-atomic initial Live selection. Mutable map/object/item values remain
   sampled; structural scene membership is reused and lifecycle-invalidated.
 
-The remaining publication blocker is source size: at least 12,968 locally
+The remaining publication blocker is source size: at least 11,046 locally
 measured tokens must be removed to get strictly below 200,000, with headroom
 preferred. Do not claim this gate is passed. Small getter and extra source-wrapper
 prototypes were measured and rejected because they did not provide useful savings.
@@ -98,3 +106,16 @@ prayer/position advice, automatic upload or player-mistake coaching. Continue to
 use RuneLite's standard build and allowed APIs. Maintainer approval remains a
 separate gate from local validation. Launching a client requires an explicit
 owner instruction, and its process/account must be verified when requested.
+
+## Editor diagnostics
+
+Fresh Java 11 production/test compilation passes. The default Gradle dependency
+also resolves RuneLite 1.13.7. The IDE's separate persisted Buildship classpath
+still referenced 21 missing old JARs, and its JDT log recorded workspace metadata
+corruption and a Java-25/Gradle-8.10 import mismatch. Workspace configuration now
+selects Java 11 for the Gradle importer; the Java language-server JDK was left
+unchanged. Generated verification projects and the backup worktree are excluded
+from Java project import, preserving the extension's default exclusions. Run
+the supported `Java: Clean Java Language Server Workspace`
+command and reload/reimport the projects. Do not patch or delete live Eclipse
+metadata by hand, or describe every red underline as fixed without checking it.

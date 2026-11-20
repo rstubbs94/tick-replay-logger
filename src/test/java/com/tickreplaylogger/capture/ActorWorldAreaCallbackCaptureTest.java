@@ -127,7 +127,7 @@ public class ActorWorldAreaCallbackCaptureTest
 				default: return null;
 			}
 		});
-		return ActorCallbackObservation.capture(actor, null, null, true, ignored -> "actor:review");
+		return ActorCallbackObservation.captureSample(actor, null, null, true, ignored -> "actor:review", null).data();
 	}
 
 	@SuppressWarnings("unchecked")

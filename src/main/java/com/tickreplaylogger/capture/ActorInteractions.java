@@ -36,22 +36,6 @@ public final class ActorInteractions
 	{
 	}
 
-	public static ActorInteractionState capture(Actor actor, Player local, boolean includeOthers,
-		Function<Actor, String> refs)
-	{
-		Map<String, String> issues = new LinkedHashMap<>();
-		Boolean flag = read(issues, "reportedInteracting", actor::isInteracting);
-		Actor target = read(issues, "interactionTarget", actor::getInteracting);
-		ActorInteractionState observed = captureObserved(target, flag, !issues.containsKey("interactionTarget"), local,
-			includeOthers, refs);
-		if (observed.getObservationIssues() != null)
-		{
-			issues.putAll(observed.getObservationIssues());
-		}
-		return issues.isEmpty() ? observed
-			: observed.toBuilder().observationIssues(Collections.unmodifiableMap(issues)).build();
-	}
-
 	public static ActorInteractionState captureEventTarget(Actor target, Player local, boolean includeOthers,
 		Function<Actor, String> refs)
 	{

@@ -57,7 +57,7 @@ public class PlaybackPanelLayoutTest
 		SwingUtilities.invokeAndWait(() ->
 		{
 			TickData tick = TickData.builder().tickNumber(1).currentHp(0).maxHp(99).damageEvents(
-				java.util.Collections.singletonList(DamageEvent.received(5, DamageEvent.DamageType.POISON, "Poison")))
+				java.util.Collections.singletonList(DamageEvent.received(5, DamageEvent.DamageType.POISON, "Poison", null, null)))
 				.build();
 			TickRecording recording = TickRecording.builder().killerName("Unknown").location("Synthetic test")
 				.ticks(java.util.Collections.singletonList(tick)).finalHp(0)
@@ -355,7 +355,7 @@ public class PlaybackPanelLayoutTest
 		assertFalse(impact.contains("Changing prayer"));
 		assertTrue(DisplayFormat.damageLineText(DamageEvent.dealt(0, DamageEvent.DamageType.UNKNOWN, "Hunllef"))
 			.contains("Dealt 0"));
-		assertNotNull(CombatIcons.iconFor(DamageEvent.received(1, DamageEvent.DamageType.UNKNOWN, "Floor")));
+		assertNotNull(CombatIcons.iconFor(DamageEvent.received(1, DamageEvent.DamageType.UNKNOWN, "Floor", null, null)));
 		DamageEvent environmental = DamageEvent.received(18, DamageEvent.DamageType.UNKNOWN, "Environmental",
 			"ENVIRONMENTAL", "UNKNOWN");
 		assertEquals(DamageEvent.DamageType.UNKNOWN, DisplayFormat.displayDamageType(environmental));

@@ -163,11 +163,11 @@ public class TickDisplayTest
 	public void environmentalConfidenceDoesNotInventTypelessDamage()
 	{
 		com.tickreplaylogger.model.DamageEvent unknown = com.tickreplaylogger.model.DamageEvent.received(5,
-			com.tickreplaylogger.model.DamageEvent.DamageType.UNKNOWN, "Environmental", "ENVIRONMENTAL");
+			com.tickreplaylogger.model.DamageEvent.DamageType.UNKNOWN, "Environmental", "ENVIRONMENTAL", null);
 		assertEquals(com.tickreplaylogger.model.DamageEvent.DamageType.UNKNOWN,
 			com.tickreplaylogger.util.DisplayFormat.displayDamageType(unknown));
 		com.tickreplaylogger.model.DamageEvent explicit = com.tickreplaylogger.model.DamageEvent.received(5,
-			com.tickreplaylogger.model.DamageEvent.DamageType.TYPELESS, "Reviewed floor", "ENVIRONMENTAL");
+			com.tickreplaylogger.model.DamageEvent.DamageType.TYPELESS, "Reviewed floor", "ENVIRONMENTAL", null);
 		assertEquals(com.tickreplaylogger.model.DamageEvent.DamageType.TYPELESS,
 			com.tickreplaylogger.util.DisplayFormat.displayDamageType(explicit));
 	}

@@ -472,14 +472,25 @@ public class GenericCaptureTest
 	public void unresolvedResourceImpactPreventsBlamingEarlierKnownDamage()
 	{
 		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(3, new com.google.gson.Gson());
-		DamageRecord earlier = DamageRecord.builder().impactTick(2).observationSequence(4L).amount(1).build();
+		DamageRecord earlier = DamageRecord.builder().impactTick(2).observationSequence(4L).amount(1)
+			.direction("RECEIVED").defenderRef("player").attackerName("Known source").build();
+		recorder.addDamage(earlier);
 		Map<String, Object> data = new HashMap<>();
 		data.put("amount", 10);
 		data.put("resourceSurface", "SKILL_OR_HP");
 		recorder.addObservation(
 			ObservedEvent.builder().tick(2).sequence(5L).type("HITSPLAT").actorRef("player").data(data).build());
-		assertTrue(recorder.hasUnresolvedPlayerImpact(2, earlier));
-		assertFalse(recorder.hasUnresolvedPlayerImpact(3, earlier));
+		DeathRecordingV2 frozen = recorder.freezeExport(DeathRecordingV2.Meta.builder().deathTick(2).build(),
+			DeathRecordingV2.Summary.builder().build(), 2, 3);
+		DeathRecordingV2.Summary death = RecordingProjection.apply(frozen, Collections.emptyMap(), "catalog")
+			.getSummary();
+		assertEquals("UNRESOLVED_IMPACT_IN_DEATH_TICK", death.getKillerBasis());
+		assertEquals("Unknown", death.getKillerName());
+		assertNull(death.getFatalHit());
+		assertEquals(Collections.singletonList(earlier), death.getFatalHitCandidates());
+		DeathRecordingV2 nextTick = frozen.toBuilder().meta(frozen.getMeta().toBuilder().deathTick(3).build()).build();
+		assertEquals("NO_POSITIVE_RECEIVED_RECORD_IN_DEATH_TICK",
+			RecordingProjection.apply(nextTick, Collections.emptyMap(), "catalog").getSummary().getKillerBasis());
 	}
 
 	@Test

@@ -98,13 +98,13 @@ public final class PrayerObservation
 		return sample;
 	}
 
-	/** Shared interpretation of already observed values, without any further API reads. */
-	static PrayerObservation fromReadings(Map<String, Boolean> values, HeadIcon icon, boolean iconKnown)
+	/** Keep snapshot reads at their original sampling point and diagnostics on the actor sample. */
+	static PrayerObservation captureSnapshot(Client client, PlayerSnapshotObservation actor)
 	{
 		PrayerObservation sample = new PrayerObservation();
-		sample.flags.putAll(values);
-		sample.icon = icon == null ? null : icon.name();
-		sample.iconKnown = iconKnown;
+		sample.captureFlags(client, actor.issues);
+		sample.icon = actor.icon == null ? null : actor.icon.name();
+		sample.iconKnown = !actor.issues.containsKey("overheadIcon");
 		sample.iconSource = "SNAPSHOT_ACTOR_STATE";
 		sample.derive();
 		return sample;
@@ -112,9 +112,15 @@ public final class PrayerObservation
 
 	private void captureFlags(Client client)
 	{
+		captureFlags(client, observationIssues);
+	}
+
+	private void captureFlags(Client client, Map<String, String> issues)
+	{
 		for (Prayer prayer : Prayer.values())
 		{
-			Boolean value = read("prayerFlags." + prayer.name(), () -> client.isPrayerActive(prayer));
+			Boolean value = ObservationReads.read(issues, "prayerFlags." + prayer.name(),
+				() -> client.isPrayerActive(prayer));
 			if (value != null)
 			{
 				flags.put(prayer.name(), value);

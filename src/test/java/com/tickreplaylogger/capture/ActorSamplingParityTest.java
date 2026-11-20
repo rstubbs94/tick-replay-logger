@@ -24,7 +24,7 @@ public class ActorSamplingParityTest
             {
                 Sample before = new Sample(kind, unavailable), after = new Sample(kind, unavailable);
                 Map<String, Object> expected = LegacyActorCallbackObservation22.capture(before.actor, null, null, true, actor -> "recorded");
-                Map<String, Object> actual = ActorCallbackObservation.capture(after.actor, null, null, true, actor -> "recorded");
+                Map<String, Object> actual = ActorCallbackObservation.captureSample(after.actor, null, null, true, actor -> "recorded", null).data();
                 String context = kind.getSimpleName() + ":" + unavailable;
                 assertEquals(context, gson.toJsonTree(expected), gson.toJsonTree(actual));
                 assertEquals(context, before.calls, after.calls);
@@ -75,7 +75,7 @@ public class ActorSamplingParityTest
     {
         Sample before = new Sample(Player.class, ""), after = new Sample(Player.class, "");
         assertTrue(LegacyActorCallbackObservation22.capture(before.actor, null, null, false, actor -> "private").isEmpty());
-        assertTrue(ActorCallbackObservation.capture(after.actor, null, null, false, actor -> "private").isEmpty());
+        assertTrue(ActorCallbackObservation.captureSample(after.actor, null, null, false, actor -> "private", null).data().isEmpty());
         assertTrue(before.calls.isEmpty());
         assertTrue(after.calls.isEmpty());
     }

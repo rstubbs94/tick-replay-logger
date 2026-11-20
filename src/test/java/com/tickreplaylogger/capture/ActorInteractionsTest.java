@@ -50,9 +50,9 @@ public class ActorInteractionsTest
 	public void anUnavailableInteractingActorIsNotAReportedClear()
 	{
 		assertEquals("INTERACTING_ACTOR_UNAVAILABLE",
-			ActorInteractions.capture(source(null, true), null, true, a -> "unused").getEvidence());
+			ActorCaptureFixture.interaction(source(null, true), null, true, a -> "unused").getEvidence());
 		assertEquals("NO_INTERACTION_REPORTED",
-			ActorInteractions.capture(source(null, false), null, true, a -> "unused").getEvidence());
+			ActorCaptureFixture.interaction(source(null, false), null, true, a -> "unused").getEvidence());
 	}
 
 	@Test
@@ -60,7 +60,7 @@ public class ActorInteractionsTest
 	{
 		AtomicInteger calls = new AtomicInteger();
 		Player local = teammate();
-		ActorInteractionState result = ActorInteractions.capture(source(teammate(), true), local, false, a ->
+		ActorInteractionState result = ActorCaptureFixture.interaction(source(teammate(), true), local, false, a ->
 		{
 			calls.incrementAndGet();
 			return "private-ref";
@@ -75,14 +75,14 @@ public class ActorInteractionsTest
 	public void baselineReferencesSurviveWithoutAnEarlierChangeCallbackAndKeepFlagConflictsExplicit()
 	{
 		Player target = teammate(), local = teammate();
-		ActorInteractionState result = ActorInteractions.capture(source(target, true), local, true,
+		ActorInteractionState result = ActorCaptureFixture.interaction(source(target, true), local, true,
 			a -> "generated-ref");
 		assertEquals("generated-ref", result.getActorRef());
 		assertEquals("Generated teammate", result.getActorName());
 		assertEquals("OTHER_PLAYER", result.getActorKind());
 		assertEquals("ACTOR_REFERENCE_FLAG_CONFLICT",
-			ActorInteractions.capture(source(target, false), local, true, a -> "generated-ref").getEvidence());
+			ActorCaptureFixture.interaction(source(target, false), local, true, a -> "generated-ref").getEvidence());
 		assertEquals("ACTOR_REFERENCE_PARTIAL",
-			ActorInteractions.capture(source(target, true), local, true, a -> null).getEvidence());
+			ActorCaptureFixture.interaction(source(target, true), local, true, a -> null).getEvidence());
 	}
 }

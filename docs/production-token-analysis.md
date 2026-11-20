@@ -1,9 +1,12 @@
 # Production source token analysis
 
-Later cleanup: the current production total is **212,967**, after wildcard
-imports, shorter qualified type references and four unused-helper removals.
+Later cleanup: the current production total is **211,045 in 106 Java files**,
+after wildcard imports, shorter qualified type references, obsolete recorder
+queries, a redundant prayer wrapper and unused/test-only helper removals.
 The tables below intentionally retain the measured `a640c64` baseline of
 214,137 for comparison. The listed unused helpers were removed after this audit.
+The current strict-under-200k gap is **11,046**. Baseline gap figures below
+describe the original audited tree, not the cleaned source.
 
 Measured 20 November 2026 against commit `a640c644a0d93297f7f674e320dda996872062bd`.
 

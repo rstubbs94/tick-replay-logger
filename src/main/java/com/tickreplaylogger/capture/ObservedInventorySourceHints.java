@@ -311,13 +311,6 @@ public final class ObservedInventorySourceHints
 		return Collections.unmodifiableMap(result);
 	}
 
-	@SuppressWarnings("unchecked")
-
-	private static Set<String> set(String... values)
-	{
-		return new HashSet<>(Arrays.asList(values));
-	}
-
 	private static String text(Object value)
 	{
 		return value instanceof String && !((String) value).trim().isEmpty() ? ((String) value).trim() : null;

@@ -266,13 +266,6 @@ public final class TerrainCapture
 	}
 
 	private void add(Tile tile, int x, int y, int width, int height, boolean bridge, short[][][] underlays,
-		short[][][] overlays, byte[][][] shapes, List<TileSurface> out, Set<String> seen)
-	{
-		add(tile, x, y, width, height, bridge, underlays, overlays, shapes, out, seen, previousPlane, bridge,
-			bridge ? "BRIDGE_UNDERLAY" : "SCENE_ARRAY_TILE");
-	}
-
-	private void add(Tile tile, int x, int y, int width, int height, boolean bridge, short[][][] underlays,
 		short[][][] overlays, byte[][][] shapes, List<TileSurface> out, Set<String> seen, int sourcePlane,
 		boolean viaBridge, String evidence)
 	{

@@ -35,8 +35,8 @@ public class TickDataTest
 	{
 		TickData tick = TickData.builder().tickNumber(1).timestamp(0L).build();
 		assertTrue("effect notes default empty", tick.getEffectNotes().isEmpty());
-		tick.addEffectNote("Frozen");
-		tick.addEffectNote("Knocked back 2 tiles");
+		tick.getEffectNotes().add("Frozen");
+		tick.getEffectNotes().add("Knocked back 2 tiles");
 		assertEquals(2, tick.getEffectNotes().size());
 		assertEquals("Frozen", tick.getEffectNotes().get(0));
 		assertEquals("Knocked back 2 tiles", tick.getEffectNotes().get(1));
@@ -46,8 +46,8 @@ public class TickDataTest
 	public void damageAndEffectsAreIndependentLists()
 	{
 		TickData tick = TickData.builder().tickNumber(2).timestamp(0L).build();
-		tick.addDamageEvent(DamageEvent.received(10, DamageEvent.DamageType.MAGIC, "Zebak", "CONFIRMED", "IMPACT"));
-		tick.addEffectNote("Teleblocked");
+		tick.getDamageEvents().add(DamageEvent.received(10, DamageEvent.DamageType.MAGIC, "Zebak", "CONFIRMED", "IMPACT"));
+		tick.getEffectNotes().add("Teleblocked");
 		assertEquals(1, tick.getDamageEvents().size());
 		assertEquals(1, tick.getEffectNotes().size());
 	}

@@ -80,18 +80,6 @@ public final class ActorCallbackObservation
 		return Collections.unmodifiableMap(result);
 	}
 
-	public static Map<String, Object> capture(Actor actor, Client readyClient, Player local, boolean includeOthers,
-		Function<Actor, String> refs)
-	{
-		return captureSample(actor, readyClient, local, includeOthers, refs).data();
-	}
-
-	public static Sample captureSample(Actor actor, Client readyClient, Player local, boolean includeOthers,
-		Function<Actor, String> refs)
-	{
-		return captureSample(actor, readyClient, local, includeOthers, refs, null);
-	}
-
 	public static Sample captureSample(Actor actor, Client readyClient, Player local, boolean includeOthers,
 		Function<Actor, String> refs, BiFunction<Actor, Map<String, Object>, String> observedRefs)
 	{

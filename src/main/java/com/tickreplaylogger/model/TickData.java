@@ -91,47 +91,4 @@ public class TickData
 	// Telemetry: failed recent ping attempts, 0-100 percent (legacy JSON field name)
 	private int packetLossPercent;
 
-	public void addPlayerAction(PlayerAction action)
-	{
-		if (playerActions == null)
-		{
-			playerActions = new ArrayList<>();
-		}
-		playerActions.add(action);
-	}
-
-	public void addDamageEvent(DamageEvent event)
-	{
-		if (damageEvents == null)
-		{
-			damageEvents = new ArrayList<>();
-		}
-		damageEvents.add(event);
-	}
-
-	public void addEffectNote(String note)
-	{
-		if (effectNotes == null)
-		{
-			effectNotes = new ArrayList<>();
-		}
-		effectNotes.add(note);
-	}
-
-	public void addEffectNote(String note, Long observationSequence)
-	{
-		int index = effectNotes == null ? 0 : effectNotes.size();
-		addEffectNote(note);
-		if (observationSequence == null || observationSequence <= 0 || index > 4095
-			|| effectNoteSourceSequences != null && effectNoteSourceSequences.size() >= 256)
-		{
-			return;
-		}
-		if (!(effectNoteSourceSequences instanceof LinkedHashMap))
-		{
-			effectNoteSourceSequences = new LinkedHashMap<>(
-				effectNoteSourceSequences == null ? Collections.emptyMap() : effectNoteSourceSequences);
-		}
-		effectNoteSourceSequences.put(index, observationSequence);
-	}
 }

@@ -172,7 +172,7 @@ public class WholeActorBoundTest
 	@Test
 	public void compiledActualWholeActorRowsUseTypedMetadataAndClosedWitnesses() throws Exception
 	{
-		DamageMap map = DamageMap.load(new Gson());
+        DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(new Gson()));
 		List<AttributionConstraint> whole = new ArrayList<>();
 		for (int id : Arrays.asList(5779, 11705))
 			for (AttributionConstraint rule : LegacyCombatCatalog.from(map.catalog()).attributionConstraints(id))

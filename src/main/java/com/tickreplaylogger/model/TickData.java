@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 import java.util.*;
 import java.util.List;
 

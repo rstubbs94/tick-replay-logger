@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
-import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
 
 /** Independent client flag/icon observations; never proof of server-side damage mitigation. */
 @Data

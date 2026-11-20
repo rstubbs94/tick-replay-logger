@@ -27,8 +27,7 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.ObservedVarbitLayout;
 import java.util.*;
 import java.util.function.Supplier;
-import net.runelite.api.Client;
-import net.runelite.api.VarbitComposition;
+import net.runelite.api.*;
 
 /** No bundle fallback: a failed composition/field cannot become an observed zero. */
 public final class VarbitLayoutCapture

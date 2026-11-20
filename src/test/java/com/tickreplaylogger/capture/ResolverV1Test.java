@@ -35,11 +35,15 @@ import com.tickreplaylogger.model.world.WorldSnapshot;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.Test;
+import org.junit.runners.model.MultipleFailureException;
 import static org.junit.Assert.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.*;
 
 public class ResolverV1Test
 {
@@ -50,34 +54,43 @@ public class ResolverV1Test
 		JsonObject fixture;
 		try (InputStreamReader reader = new InputStreamReader(getClass().getResourceAsStream("/resolver-v1-conformance.json"),StandardCharsets.UTF_8))
 		{ fixture = gson.fromJson(reader,JsonObject.class); }
+		List<Throwable> failures = new ArrayList<>();
 		for (JsonElement value : fixture.getAsJsonArray("cases"))
 		{
 			JsonObject test = value.getAsJsonObject(), expected = test.getAsJsonObject("expected");
-			JsonObject result = ResolverTestCatalog.resolve(new ResolverV1(ResolverTestCatalog.lower(test.getAsJsonObject("catalog"))),test.getAsJsonObject("input"));
-			String id = test.get("id").getAsString(); JsonObject match = null;
-			for (JsonElement row : result.getAsJsonArray("candidates"))
-				if (expected.has("ruleId") && expected.get("ruleId").equals(row.getAsJsonObject().get("ruleId"))) match = row.getAsJsonObject();
-			if (expected.has("ruleId"))
+			try
 			{
-				assertNotNull(id+": missing declared rule",match);
-				assertEquals(id,expected.get("status"),match.get("status"));
-				if (expected.has("maximum")) assertEquals(id,0,expected.get("maximum").getAsBigDecimal().compareTo(match.get("maximum").getAsBigDecimal()));
-				if (expected.has("maximumAbsent")) assertFalse(id,match.has("maximum"));
-				if (expected.has("exclusionScope"))
+				JsonObject result = ResolverTestCatalog.resolve(ResolverTestCatalog.engine(ResolverTestCatalog.lower(test.getAsJsonObject("catalog"))),test.getAsJsonObject("input"));
+				String id = test.get("id").getAsString(); JsonObject match = null;
+				for (JsonElement row : result.getAsJsonArray("candidates"))
+					if (expected.has("ruleId") && expected.get("ruleId").equals(row.getAsJsonObject().get("ruleId"))) match = row.getAsJsonObject();
+				if (expected.has("ruleId"))
 				{
-					if (expected.get("exclusionScope").isJsonNull()) assertTrue(id,!match.has("exclusionScope") || match.get("exclusionScope").isJsonNull());
-					else assertEquals(id,expected.get("exclusionScope"),match.get("exclusionScope"));
+					assertNotNull(id+": missing declared rule",match);
+					assertEquals(id,expected.get("status"),match.get("status"));
+					if (expected.has("maximum")) assertEquals(id,0,expected.get("maximum").getAsBigDecimal().compareTo(match.get("maximum").getAsBigDecimal()));
+					if (expected.has("maximumAbsent")) assertFalse(id,match.has("maximum"));
+					if (expected.has("exclusionScope"))
+					{
+						if (expected.get("exclusionScope").isJsonNull()) assertTrue(id,!match.has("exclusionScope") || match.get("exclusionScope").isJsonNull());
+						else assertEquals(id,expected.get("exclusionScope"),match.get("exclusionScope"));
+					}
 				}
+				if (expected.has("absentRuleIds")) for (JsonElement absent : expected.getAsJsonArray("absentRuleIds"))
+					for (JsonElement row : result.getAsJsonArray("candidates")) assertNotEquals(id,absent,row.getAsJsonObject().get("ruleId"));
+				assertTrue(id,result.get("unidentifiedPossible").getAsBoolean());
 			}
-			if (expected.has("absentRuleIds")) for (JsonElement absent : expected.getAsJsonArray("absentRuleIds"))
-				for (JsonElement row : result.getAsJsonArray("candidates")) assertNotEquals(id,absent,row.getAsJsonObject().get("ruleId"));
-			assertTrue(id,result.get("unidentifiedPossible").getAsBoolean());
+			catch (AssertionError | RuntimeException failure)
+			{
+				failures.add(new AssertionError(test.get("id").getAsString(), failure));
+			}
 		}
+		MultipleFailureException.assertEmpty(failures);
 	}
 
 	@Test public void realBundledOrdinaryProfileReachesFrozenCallbackAndPreservesRawHp()
 	{
-		ResolverV1 engine = ResolverV1.load(gson); assertTrue(engine.isAvailable()); assertTrue(engine.ordinaryOnly(2045));
+		ResolverV1 engine = ResolverV1.load(gson); assertTrue(engine.isAvailable()); assertTrue(ordinaryOnlyReference(2045));
 		DeathRecordingV2 before = recording(2045,90,"Snakeling",16,20,true,false,0);
 		DeathRecordingV2 after = new ResolverV1Recording(engine,gson,before).enrich(before);
 		DamageRecord hit = after.getEvents().getDamageEvents().get(0);
@@ -139,8 +152,7 @@ public class ResolverV1Test
 		assertTrue(actual.getCandidates().stream().anyMatch(c -> "Unfamiliar actor".equals(c.getName())));
 		assertTrue(actual.isUnidentifiedPossible());
 		DeathRecordingV2 foreign = recording(2045,90,"Snakeling",16,20,true,false,17);
-		JsonObject normalized = new ResolverV1Recording(engine,gson,foreign).normalize(foreign.getEvents().getDamageEvents().get(0));
-		JsonObject result = ResolverTestCatalog.resolve(engine,normalized);
+		JsonObject result = evaluate(engine, foreign, foreign.getEvents().getDamageEvents().get(0));
 		assertTrue(result.getAsJsonArray("candidates").size() > 0);
 		for (JsonElement row : result.getAsJsonArray("candidates")) assertEquals("EXCLUDED",row.getAsJsonObject().get("status").getAsString());
 	}
@@ -149,7 +161,7 @@ public class ResolverV1Test
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class);
 		JsonObject input = gson.fromJson("{hit:{amount:9,recipientRef:'player'},cues:[{key:'one',pattern:'projectile_impact',source:{kind:'npc',id:123,actorRef:'actual'}}]}",JsonObject.class);
-		java.util.List<JsonObject> results = ResolverTestCatalog.resolveBatch(new ResolverV1(ResolverTestCatalog.lower(catalog)),Arrays.asList(input,input));
+		java.util.List<JsonObject> results = ResolverTestCatalog.resolveBatch(ResolverTestCatalog.engine(ResolverTestCatalog.lower(catalog)),Arrays.asList(input,input));
 		assertEquals(2,results.size());
 		for (JsonObject result : results)
 		{
@@ -165,20 +177,36 @@ public class ResolverV1Test
 		DeathRecordingV2 original = recording(2045,90,"Snakeling",5,1,true,false,0);
 		DamageRecord hit = original.getEvents().getDamageEvents().get(0);
 		DeathRecordingV2 absent = replaceHit(original,hit.toBuilder().hitsplatTypeKnown(null).build());
-		JsonObject normalized = new ResolverV1Recording(engine,gson,absent).normalize(absent.getEvents().getDamageEvents().get(0));
-		assertEquals(5,normalized.getAsJsonObject("hit").get("hitsplatType").getAsInt());
+		Hit actual = rawHit(absent, absent.getEvents().getDamageEvents().get(0));
+		assertEquals(5, fact(engine, actual, null, "hit", "hitsplatType").getAsInt());
 		SourceResolution result = new ResolverV1Recording(engine,gson,absent).enrich(absent).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertFalse(result.getCandidates().stream().anyMatch(c -> Integer.valueOf(2045).equals(c.getNpcId())));
 		assertTrue(result.getCandidates().stream().anyMatch(c -> "Venom".equals(c.getName())));
 		assertEquals(1,absent.getEvents().getDamageEvents().get(0).getAmount());
 		DeathRecordingV2 unknown = replaceHit(original,hit.toBuilder().hitsplatTypeKnown(false).build());
-		assertFalse(new ResolverV1Recording(engine,gson,unknown).normalize(unknown.getEvents().getDamageEvents().get(0)).getAsJsonObject("hit").has("hitsplatType"));
+		assertFalse(known(fact(engine, rawHit(unknown, unknown.getEvents().getDamageEvents().get(0)), null, "hit", "hitsplatType")));
+	}
+
+
+	@Test public void unavailableHitTypeCannotAcquireAnOrdinaryNpcMaximum()
+	{
+		ResolverV1 engine = ResolverV1.load(gson);
+		DeathRecordingV2 input = recording(2045, 90, "Snakeling", 16, 20, true, false, 0);
+		DamageRecord hit = input.getEvents().getDamageEvents().get(0).toBuilder().hitsplatTypeKnown(false).build();
+		input = replaceHit(input, hit);
+		SourceResolution result = new ResolverV1Recording(engine, gson, input).enrich(input)
+			.getEvents().getDamageEvents().get(0).getSourceResolution();
+		assertTrue(result.getCandidates().stream().anyMatch(candidate -> Integer.valueOf(2045).equals(candidate.getNpcId())));
+		assertTrue(result.getExcludedCandidates() == null || result.getExcludedCandidates().stream()
+			.noneMatch(candidate -> candidate.getReasons().stream().anyMatch(reason -> reason.contains("MAXIMUM_EXCEEDED"))));
+		assertEquals(20, input.getEvents().getDamageEvents().get(0).getAmount());
+		assertFalse(input.getEvents().getDamageEvents().get(0).getHitsplatTypeKnown());
 	}
 
 	@Test public void originalContactMasksLegacyDefinitionFamilyWithoutBorrowingReceiverAsEmitter()
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact',label:'Synthetic cloud',pattern:'contact_hazard',source:{kind:'object',ids:[900301]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',hitsplatTypeIds:[5],signatureComplete:true,signatureAuthority:'verified'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class);
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(catalog));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(catalog));
 		DeathRecordingV2 input = recording(900201,90,"Rival",12,0,true,false,0);
 		DamageRecord original = input.getEvents().getDamageEvents().get(0);
 		SourceResolution.Candidate cloud = SourceResolution.Candidate.builder().key("old-cloud").familyKey("object-definition:900301")
@@ -188,9 +216,14 @@ public class ResolverV1Test
 		DamageRecord hit = original.toBuilder().hitsplatTypeKnown(null).observedHazardContacts(Collections.singletonList(contact))
 			.sourceResolution(original.getSourceResolution().toBuilder().candidates(Arrays.asList(original.getSourceResolution().getCandidates().get(0),cloud)).build()).build();
 		input = replaceHit(input,hit);
-		JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(hit);
-		for (JsonElement element : normalized.getAsJsonArray("cues"))
-			if ("contact_hazard".equals(element.getAsJsonObject().get("pattern").getAsString())) assertFalse(element.getAsJsonObject().has("position"));
+		Hit actual = rawHit(input, hit);
+		java.util.List<Source> contacts = sources(actual, Channel.HP_CONTACT);
+		assertEquals(1, contacts.size());
+		assertTrue(contacts.get(0).raw().has("contactWorldX"));
+		assertFalse(contacts.get(0).raw().has("worldX"));
+		assertFalse(contacts.get(0).raw().has("worldY"));
+		assertNotEquals(Truth.TRUE, OriginalSourceProof.geometry(contacts.get(0), actual,
+			gson.fromJson("{shape:'point',anchor:'source_position'}", JsonObject.class)));
 		SourceResolution result = new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertFalse(result.getCandidates().stream().anyMatch(c -> "object-definition:900301".equals(c.getFamilyKey())));
 		assertTrue(result.getCandidates().stream().anyMatch(c -> Integer.valueOf(900201).equals(c.getNpcId())));
@@ -199,7 +232,7 @@ public class ResolverV1Test
 
 	@Test public void graphicCreatedThenGoneStillHasExactOriginalNativeAnchor()
 	{
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'graphic',label:'Transient impact',pattern:'area_impact',source:{kind:'graphic',ids:[900401]},signals:{graphicIds:[900401]},timing:{anchor:'effect_event',authority:'unknown'},geometry:{shape:'point',anchor:'effect_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'graphic',label:'Transient impact',pattern:'area_impact',source:{kind:'graphic',ids:[900401]},signals:{graphicIds:[900401]},timing:{anchor:'effect_event',authority:'unknown'},geometry:{shape:'point',anchor:'effect_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Rival",16,9,true,false,0);
 		ObservedEvent creation = ObservedEvent.builder().type("GRAPHICS_OBJECT_CREATED").sequence(18).tick(10).gameCycle(299).sceneKey("room")
 			.data(map("id",900401,"scopeKnown",true,"positionScopeKnown",true,"worldViewId",0,"localWorldViewId",0,"plane",0,"localX",1280,"localY",1280)).build();
@@ -213,17 +246,17 @@ public class ResolverV1Test
 
 	@Test public void retainedDeclaredDeathUsesOriginalClockAndDoesNotCreateUnlistedExplosions()
 	{
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'death',label:'Terminal clue',pattern:'delayed_effect',source:{kind:'npc',ids:[900201]},signals:{lifecycleEvents:['actor_death']},timing:{anchor:'lifecycle_event',clock:'game_tick',minimumOffset:0,maximumOffset:3,authority:'correlation_window'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'death',label:'Terminal clue',pattern:'delayed_effect',source:{kind:'npc',ids:[900201]},signals:{lifecycleEvents:['actor_death']},timing:{anchor:'lifecycle_event',clock:'game_tick',minimumOffset:0,maximumOffset:3,authority:'correlation_window'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block'},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Terminal source",16,9,true,false,0);
 		Map<String,Object> originalActor = input.getEvents().getObservations().get(0).getData();
 		ObservedEvent death = ObservedEvent.builder().type("ACTOR_DEATH").actorRef("terminal:actual").sequence(10).tick(8).gameCycle(240).sceneKey("room").data(originalActor).build();
 		java.util.List<ObservedEvent> observations = new java.util.ArrayList<>(input.getEvents().getObservations()); observations.add(death);
 		input = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(input.getEvents().getDamageEvents()).observations(observations).build()).build();
-		JsonObject result = ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		JsonObject result = evaluate(engine, input, input.getEvents().getDamageEvents().get(0));
 		assertTrue(result.getAsJsonArray("candidates").toString().contains("\"ruleId\":\"death\""));
 		assertTrue(result.get("unidentifiedPossible").getAsBoolean());
 		JsonObject absentCatalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class);
-		JsonObject unlisted = ResolverTestCatalog.resolve(new ResolverV1(ResolverTestCatalog.lower(absentCatalog)),new ResolverV1Recording(new ResolverV1(ResolverTestCatalog.lower(absentCatalog)),gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		JsonObject unlisted = evaluate(ResolverTestCatalog.engine(ResolverTestCatalog.lower(absentCatalog)), input, input.getEvents().getDamageEvents().get(0));
 		for (JsonElement row : unlisted.getAsJsonArray("candidates")) assertNotEquals("observed:delayed_effect",row.getAsJsonObject().get("ruleId").getAsString());
 	}
 
@@ -232,7 +265,7 @@ public class ResolverV1Test
 
 	@Test public void exactNpcContactUsesOriginalSourceAnchorAndDoesNotBorrowLaterPose()
 	{
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact.synthetic',label:'Contact component',pattern:'contact_hazard',source:{kind:'npc',ids:[900201],combatLevels:[77]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified',when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'}]}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'contact.synthetic',label:'Contact component',pattern:'contact_hazard',source:{kind:'npc',ids:[900201],combatLevels:[77]},timing:{anchor:'contact',authority:'unknown'},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified',when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'}]}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 		for (boolean original : new boolean[] {false,true})
 		{
 			DeathRecordingV2 input = recording(900201,77,"Synthetic hazard",16,9,true,false,0);
@@ -252,16 +285,16 @@ public class ResolverV1Test
 			input = input.toBuilder().ticks(Collections.singletonList(WorldSnapshot.builder().tick(10).sceneKey("room").worldViewId(0).plane(0)
 				.nativeContextKnown(true).gameCycleKnown(true).gameCycle(302).npcs(Collections.singletonList(later)).build()))
 				.events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(hit)).observations(Collections.singletonList(input.getEvents().getObservations().get(1))).build()).build();
-			JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(hit);
-			boolean found = false;
-			for (JsonElement value : normalized.getAsJsonArray("cues"))
-			{
-				JsonObject cue = value.getAsJsonObject();
-				if (cue.get("key").getAsString().startsWith("original-npc-contact:")) { found = true; assertEquals(3200,cue.getAsJsonObject("position").get("x").getAsInt()); assertFalse(cue.has("contactObserved")); }
-				if (cue.get("key").getAsString().startsWith("body:")) assertFalse(cue.get("componentBound").getAsBoolean());
-			}
-			assertEquals(original,found);
-			JsonObject results = ResolverTestCatalog.resolve(engine,normalized);
+			Hit actual = rawHit(input, hit);
+			java.util.List<Source> contacts = sources(actual, Channel.HP_CONTACT);
+			assertEquals(1, contacts.size());
+			Source contactSource = contacts.get(0);
+			assertEquals(3200, contactSource.raw().get("worldX").getAsInt());
+			assertEquals(original ? Truth.TRUE : Truth.FALSE, OriginalSourceProof.contact(contactSource, actual));
+			assertNull(contactSource.frame());
+			for (Source body : sources(actual, Channel.FRAME_NPC))
+				assertFalse(OriginalSourceProof.numericReference(body, actual));
+			JsonObject results = ResolverTestCatalog.render(engine.evaluate(actual));
 			assertEquals(original,results.getAsJsonArray("candidates").toString().contains("MAXIMUM_EXCEEDED"));
 			assertSame(input.getEvents().getObservations(),new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getObservations());
 		}
@@ -276,22 +309,21 @@ public class ResolverV1Test
 			WorldSnapshot frame = WorldSnapshot.builder().tick(10).gameCycle(frameCycle).gameCycleKnown(true).nativeContextKnown(true)
 				.sceneKey("room").worldViewId(0).plane(0).context(com.tickreplaylogger.model.world.ContextBlock.builder().activity("toa").build()).build();
 			input = input.toBuilder().ticks(Collections.singletonList(frame)).build();
-			JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0));
-			for (JsonElement value : normalized.getAsJsonArray("cues"))
-			{
-				JsonObject cue = value.getAsJsonObject();
-				if ("callback:19".equals(cue.get("key").getAsString()))
-				{
-					assertEquals(frameCycle==300,cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_activity"));
-					assertFalse(cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("encounter_mode"));
-				}
-			}
+			Hit actual = rawHit(input, input.getEvents().getDamageEvents().get(0));
+			java.util.List<Source> callbacks = sources(actual, Channel.ACTOR_CALLBACK);
+			assertEquals(1, callbacks.size());
+			Source callback = callbacks.get(0);
+			assertEquals(Long.valueOf(19), callback.receipt().clock.sequence);
+			assertEquals(frameCycle == 300, known(fact(engine, actual, callback, "source_event", "encounter_activity")));
+			assertFalse(known(fact(engine, actual, callback, "source_event", "encounter_mode")));
+			if (frameCycle == 300) assertSame(frame, callback.frame());
+			else assertNull(callback.frame());
 		}
 	}
 
 	@Test public void ownedApiProjectileKeepsItsSourceWhenNoNpcSnapshotExists()
 	{
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class)));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[]}",JsonObject.class)));
 		DeathRecordingV2 input = recording(900201,77,"Rival",16,9,true,false,0); DamageRecord hit = input.getEvents().getDamageEvents().get(0);
 		com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation owner = com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation.builder()
 			.actorKind("NPC").sourceEvidence("ACTOR").sourceActorKnown(true).sourceNameKnown(true).sourceObservedName("Ephemeral actor").sourceRef("owned:ephemeral")
@@ -304,15 +336,17 @@ public class ResolverV1Test
 		hit = hit.toBuilder().sourceResolution(hit.getSourceResolution().toBuilder().candidates(Collections.emptyList()).build()).build();
 		input = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(hit))
 			.observations(Arrays.asList(observed,input.getEvents().getObservations().get(1))).build()).build();
-		JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(hit);
-		for (JsonElement value : normalized.getAsJsonArray("cues"))
-		{
-			JsonObject cue = value.getAsJsonObject(); if (!cue.has("apiSourceObserved")) continue;
-			assertFalse(cue.has("endpoint"));
-			assertFalse(cue.getAsJsonObject("originalSourceObservation").has("sourceSceneKey"));
-			assertFalse(cue.getAsJsonObject("originalSourceObservation").has("sourceModelOverridesPresent"));
-			assertFalse(cue.getAsJsonObject("source").getAsJsonObject("scope").has("sceneKey"));
-		}
+		Hit actual = rawHit(input, hit);
+		java.util.List<Source> projectiles = sources(actual, Channel.PROJECTILE);
+		assertEquals(1, projectiles.size());
+		Source source = projectiles.get(0);
+		assertFalse(known(source.first().get("sourceSceneKey")));
+		assertFalse(known(source.first().get("sourceModelOverridesPresent")));
+		assertNull(source.identity().scope.sceneKey);
+		assertEquals(gson.toJsonTree(projectile), source.raw());
+		assertEquals(Integer.valueOf(300), source.sample().clock.cycle);
+		assertEquals(301, source.raw().get("endCycle").getAsInt());
+		assertFalse(OriginalSourceProof.numericReference(source, actual));
 		SourceResolution resolution = new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertTrue(resolution.getCandidates().stream().anyMatch(c -> "owned:ephemeral".equals(c.getActorRef()) && "Ephemeral actor".equals(c.getName())));
 		assertTrue(resolution.isUnidentifiedPossible()); assertEquals(9,input.getEvents().getDamageEvents().get(0).getAmount());
@@ -324,34 +358,38 @@ public class ResolverV1Test
 		for (boolean frameOnly : new boolean[] {false,true}) for (boolean knownOverride : new boolean[] {false,true})
 		{
 			DeathRecordingV2 input=apiRecording(frameOnly,false,knownOverride); DamageRecord hit=input.getEvents().getDamageEvents().get(0);
-			JsonObject normalized=new ResolverV1Recording(engine,gson,input).normalize(hit); int count=0;
-			for (JsonElement value : normalized.getAsJsonArray("cues"))
-			{
-				JsonObject cue=value.getAsJsonObject(); if (!cue.has("apiSourceObserved")) continue; count++;
-				assertEquals("HP_DURING_OBSERVED_FLIGHT",cue.get("clockEvidence").getAsString());
-				assertEquals("room",cue.getAsJsonObject("source").getAsJsonObject("scope").get("sceneKey").getAsString());
-				assertFalse(cue.has("identityOnly"));
-				assertEquals(knownOverride,cue.getAsJsonObject("originalSourceObservation").has("sourceModelOverridesPresent"));
-				if(knownOverride) assertFalse(cue.getAsJsonObject("originalSourceObservation").get("sourceModelOverridesPresent").getAsBoolean());
-				assertFalse(cue.has("facts") && cue.getAsJsonObject("facts").has("source_event") && cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("source_model_overrides"));
-			}
-			assertEquals(1,count); assertEquals(9,hit.getAmount());
+			Hit actual = rawHit(input, hit);
+			java.util.List<Source> projectiles = sources(actual, Channel.PROJECTILE);
+			assertEquals(1, projectiles.size());
+			Source source = projectiles.get(0);
+			assertTrue(OriginalSourceProof.api(source));
+			assertEquals("room", source.identity().scope.sceneKey);
+			assertEquals(Integer.valueOf(270), source.receipt().clock.cycle);
+			assertEquals(Integer.valueOf(300), source.sample().clock.cycle);
+			assertTrue(source.sample().clock.cycle < hit.getObservedCycle());
+			assertTrue(source.raw().get("endCycle").getAsInt() > hit.getObservedCycle());
+			assertEquals(knownOverride, known(source.first().get("sourceModelOverridesPresent")));
+			if (knownOverride) assertFalse(source.first().get("sourceModelOverridesPresent").getAsBoolean());
+			assertEquals(source.first().get("sourceModelOverridesPresent"),
+				fact(engine, actual, source, "source_event", "source_model_overrides"));
+			assertNull(source.frame());
+			assertEquals(9,hit.getAmount());
 		}
 	}
 
 	@Test public void changedLaterProjectileHistoryKeepsOnlyOriginalOwnerIdentity()
 	{
 		ResolverV1 engine=referenceEngine(false,false); DeathRecordingV2 input=apiRecording(false,true,true);
-		DamageRecord hit=input.getEvents().getDamageEvents().get(0); JsonObject normalized=new ResolverV1Recording(engine,gson,input).normalize(hit);
-		int count=0;
-		for (JsonElement value : normalized.getAsJsonArray("cues"))
-		{
-			JsonObject cue=value.getAsJsonObject(); if (!cue.has("apiSourceObserved")) continue; count++;
-			assertEquals("owned:original",cue.getAsJsonObject("source").get("actorRef").getAsString());
-			assertFalse(cue.getAsJsonObject("source").has("numericEligible"));
-			assertTrue(cue.get("unstableOriginalSource").getAsBoolean()); assertFalse(cue.has("endpoint"));
-		}
-		assertEquals(1,count);
+		DamageRecord hit=input.getEvents().getDamageEvents().get(0);
+		Hit actual = rawHit(input, hit);
+		java.util.List<Source> projectiles = sources(actual, Channel.PROJECTILE);
+		assertEquals(1, projectiles.size());
+		Source source = projectiles.get(0);
+		assertEquals("owned:original", source.identity().actorRef);
+		assertTrue("Definition/reference changes do not replace the immutable observed API owner", OriginalSourceProof.stableOwner(source));
+		assertFalse(OriginalSourceProof.numericReference(source, actual));
+		assertEquals(Integer.valueOf(270), source.receipt().clock.cycle);
+		assertTrue(source.raw().getAsJsonObject("sourceHistory").get("definitionChanged").getAsBoolean());
 		SourceResolution resolution=new ResolverV1Recording(engine,gson,input).enrich(input).getEvents().getDamageEvents().get(0).getSourceResolution();
 		assertTrue(resolution.getCandidates().stream().anyMatch(c -> "owned:original".equals(c.getActorRef())));
 		assertFalse(resolution.getCandidates().stream().anyMatch(c -> "owned:later".equals(c.getActorRef())));
@@ -381,8 +419,8 @@ public class ResolverV1Test
 
 	@Test public void identifiedComponentRejectedByVerifiedTimingCannotReviveAsUnclassifiedActivity()
 	{
-		ResolverV1 engine=new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'timed',pattern:'projectile_impact',source:{kind:'npc',ids:[900202]},signals:{projectileIds:[900501]},timing:{anchor:'projectile_event',clock:'game_tick',minimumOffset:0,maximumOffset:0,authority:'verified'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',outcome:{surface:'hp_or_block'},scopePolicy:'same_native_scope'}]}",JsonObject.class)));
-		DeathRecordingV2 input=apiRecording(false,false,true); JsonObject result=ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(0)));
+		ResolverV1 engine=ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'timed',pattern:'projectile_impact',source:{kind:'npc',ids:[900202]},signals:{projectileIds:[900501]},timing:{anchor:'projectile_event',clock:'game_tick',minimumOffset:0,maximumOffset:0,authority:'verified'},geometry:{shape:'unknown',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',outcome:{surface:'hp_or_block'},scopePolicy:'same_native_scope'}]}",JsonObject.class)));
+		DeathRecordingV2 input=apiRecording(false,false,true); JsonObject result=evaluate(engine, input, input.getEvents().getDamageEvents().get(0));
 		boolean rejected=false;
 		for (JsonElement value : result.getAsJsonArray("candidates"))
 		{
@@ -399,8 +437,7 @@ public class ResolverV1Test
 		{
 			DeathRecordingV2 input = emitterRecording(variation, null);
 			DamageRecord hit = input.getEvents().getDamageEvents().get(0);
-			JsonObject normalized = new ResolverV1Recording(engine, gson, input).normalize(hit);
-			JsonObject result = ResolverTestCatalog.resolve(engine,normalized);
+			JsonObject result = evaluate(engine, input, hit);
 			assertEquals(variation, "original".equals(variation) ? 1 : 0, result.getAsJsonArray("candidates").size());
 			for (JsonElement value : result.getAsJsonArray("candidates"))
 			{
@@ -494,7 +531,7 @@ public class ResolverV1Test
 		{
 			catalog.add("sourceBounds", gson.fromJson("[{id:'whole.synthetic',source:{kind:'npc',ids:[900201]},when:[{fact:'world_mode',op:'equals',value:'NORMAL',at:'source_event'},{fact:'source_model_overrides',op:'equals',value:false,at:'source_event'}],maximum:{kind:'fixed_max',value:1,authority:'verified'},outcome:{surface:'hp_or_block',signatureComplete:true,signatureAuthority:'verified',hitsplatTypeIds:[16]}}]", com.google.gson.JsonArray.class));
 		}
-		return new ResolverV1(ResolverTestCatalog.lower(catalog));
+		return ResolverTestCatalog.engine(ResolverTestCatalog.lower(catalog));
 	}
 
 	private DeathRecordingV2 emitterRecording(String variation, String priorScope) { return emitterRecording(variation,priorScope,9); }
@@ -596,7 +633,7 @@ public class ResolverV1Test
 	@Test public void harmlessProjectileIdentityRejectsOnlyLinkedProjectileSupportWithoutInventingAnOwner()
 	{
 		JsonObject catalog = gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[],activityClassifications:[{id:'harmless.projectile',source:{kind:'projectile',ids:[900501]},signals:{projectileIds:[900501]},role:'non_damaging',authority:'verified',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class);
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(catalog));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(catalog));
 		for (boolean planeKnown : new boolean[] {false,true}) for (boolean proximity : new boolean[] {false,true}) for (int amount : new int[] {0,9})
 		{
 			DeathRecordingV2 input = recording(900201,77,"Synthetic actor",16,amount,true,false,0);
@@ -609,8 +646,19 @@ public class ResolverV1Test
 				map("actorRef","actual:minion","npcId",900201,"sceneKey","room","worldViewId",0,"plane",0))));
 			hit = hit.toBuilder().attributionCandidates(Collections.singletonList(raw))
 				.sourceResolution(hit.getSourceResolution().toBuilder().candidates(Collections.singletonList(prior)).build()).build();
+			Map<String,Object> originalSource = map("observationId",7,"projectileId",900501,"observedTick",10,"observedCycle",300,
+				"actorKind",proximity ? "UNKNOWN" : "NPC","sourceEvidence",proximity ? "UNAVAILABLE" : "ACTOR",
+				"sourceActorKnown",!proximity,"proximitySampleRetained",true);
+			if (proximity) originalSource.put("proximityCandidate",map("actorRef","actual:minion","npcId",900201,
+				"name","Synthetic actor","sceneKey","room","worldViewId",0,"plane",0));
+			else originalSource.putAll(map("sourceRef","actual:minion","sourceNpcId",900201,"sourceObservedName","Synthetic actor",
+				"sourceNameKnown",true,"sourceSceneKey","room","sourceWorldViewId",0,"sourcePlane",0));
+			com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation first = gson.fromJson(
+				gson.toJson(originalSource),com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation.class);
 			com.tickreplaylogger.model.world.ProjectileState projectile = com.tickreplaylogger.model.world.ProjectileState.builder()
-				.projectileId(900501).observationId(7L).worldViewId(0).plane(0).samplePlaneKnown(planeKnown).endCycle(301).build();
+				.projectileId(900501).observationId(7L).worldViewId(0).plane(0).samplePlaneKnown(planeKnown).endCycle(301)
+				.observedTick(10).observedCycle(300).spawnTick(10)
+				.sourceHistory(com.tickreplaylogger.model.world.ProjectileSourceHistory.builder().version(1).firstObservedSource(first).build()).build();
 			ObservedEvent observed = ObservedEvent.builder().type("PROJECTILE_MOVED").tick(10).sequence(19).gameCycle(300).sceneKey("room")
 				.data(map("projectile",projectile)).build();
 			input = input.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(hit))
@@ -657,7 +705,10 @@ public class ResolverV1Test
 		JsonObject scope = gson.fromJson("{sceneKey:'room',worldViewId:0,plane:0}",JsonObject.class);
 		JsonObject hit = gson.fromJson("{recipientRef:'player',amount:9,tick:10,cycle:301,family:'ordinary',hitsplatType:16,position:{x:3200,y:3200}}",JsonObject.class); hit.add("scope",scope);
 		JsonObject projectile = gson.fromJson("{key:'actual-projectile',pattern:'projectile_impact',source:{kind:'projectile',id:1687},signals:{projectileIds:[1687]}}",JsonObject.class); projectile.getAsJsonObject("source").add("scope",scope);
-		assertTrue(engine.isNonDamagingActivity(projectile,hit));
+		JsonObject nonDamageInput = new JsonObject(); nonDamageInput.add("hit", hit);
+		nonDamageInput.add("cues", gson.toJsonTree(Collections.singletonList(projectile)));
+		assertTrue(ResolverTestCatalog.resolve(engine, nonDamageInput).getAsJsonArray("candidates").toString()
+			.contains("NON_DAMAGING_ACTIVITY"));
 		JsonObject graphic = gson.fromJson("{key:'actual-graphic',pattern:'area_impact',source:{kind:'graphic',id:2148},signals:{graphicIds:[2148],lifecycleEvents:['graphic_spawn']},tick:10,cycle:300,position:{x:3202,y:3200}}",JsonObject.class); graphic.getAsJsonObject("source").add("scope",scope);
 		JsonObject input = new JsonObject(); input.add("hit",hit); input.add("cues",gson.toJsonTree(Collections.singletonList(graphic)));
 		JsonObject result = ResolverTestCatalog.resolve(engine,input);
@@ -704,17 +755,23 @@ public class ResolverV1Test
 		{
 			DeathRecordingV2 input = retaliationRecording("LOCAL_PLAYER",0,900301,later,"");
 			DamageRecord incoming = input.getEvents().getDamageEvents().get(1);
-			JsonObject normalized = new ResolverV1Recording(engine,gson,input).normalize(incoming);
-			JsonObject result = ResolverTestCatalog.resolve(engine,normalized); JsonObject reflected = null;
+			Hit actual = rawHit(input, incoming);
+			JsonObject result = ResolverTestCatalog.render(engine.evaluate(actual)); JsonObject reflected = null;
 			for (JsonElement row : result.getAsJsonArray("candidates")) if ("retal".equals(row.getAsJsonObject().get("ruleId").getAsString())) reflected=row.getAsJsonObject();
 			assertNotNull(reflected); assertEquals("POSSIBLE",reflected.get("status").getAsString());
 			assertFalse("Later co-present source sample cannot acquire even a1HP cap",reflected.has("maximum"));
-			for (JsonElement value : normalized.getAsJsonArray("cues"))
+			java.util.List<Source> triggers = sources(actual, Channel.OUTGOING_TRIGGER);
+			assertEquals(1, triggers.size());
+			Source trigger = triggers.get(0);
+			assertEquals(30, trigger.raw().get("amount").getAsInt());
+			assertEquals(900301, trigger.actor().get("npcId").getAsInt());
+			assertFalse(known(trigger.raw().get("damageType")));
+			for (Source reflector : sources(actual, Channel.FRAME_NPC))
 			{
-				JsonObject cue = value.getAsJsonObject(); if (!"retaliation".equals(cue.get("pattern").getAsString())) continue;
-				assertEquals(30,cue.getAsJsonObject("facts").getAsJsonObject("source_event").get("observed_trigger_damage").getAsInt());
-				assertEquals(900301,cue.getAsJsonObject("facts").getAsJsonObject("source_event").get("trigger_target_npc_id").getAsInt());
-				assertFalse(cue.getAsJsonObject("facts").getAsJsonObject("source_event").has("trigger_attack_style"));
+				if (!"reflector".equals(reflector.identity().actorRef)) continue;
+				assertEquals(30, engine.new RawFacts(actual, reflector, trigger).value("source_event", "observed_trigger_damage").getAsInt());
+				assertEquals(900301, engine.new RawFacts(actual, reflector, trigger).value("source_event", "trigger_target_npc_id").getAsInt());
+				assertFalse(known(engine.new RawFacts(actual, reflector, trigger).value("source_event", "trigger_attack_style")));
 			}
 			DeathRecordingV2 after = new ResolverV1Recording(engine,gson,input).enrich(input);
 			assertSame(input.getEvents().getDamageEvents().get(0),after.getEvents().getDamageEvents().get(0));
@@ -731,7 +788,7 @@ public class ResolverV1Test
 			retaliationRecording("LOCAL_PLAYER",0,900309,false,""),retaliationRecording("LOCAL_PLAYER",0,900301,false,"born_after"),
 			retaliationRecording("LOCAL_PLAYER",0,900301,false,"prior_despawn")))
 		{
-			JsonObject result=ResolverTestCatalog.resolve(engine,new ResolverV1Recording(engine,gson,input).normalize(input.getEvents().getDamageEvents().get(1)));
+			JsonObject result=evaluate(engine, input, input.getEvents().getDamageEvents().get(1));
 			for (JsonElement row : result.getAsJsonArray("candidates")) assertNotEquals("retal",row.getAsJsonObject().get("ruleId").getAsString());
 			assertTrue(result.get("unidentifiedPossible").getAsBoolean());
 		}
@@ -739,7 +796,7 @@ public class ResolverV1Test
 
 	private ResolverV1 retaliationEngine()
 	{
-		return new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'retal',label:'Reflected component',pattern:'retaliation',source:{kind:'npc',ids:[900302]},when:[{fact:'trigger_target_npc_id',op:'one_of',value:[900301],at:'source_event'}],timing:{anchor:'retaliation_event',authority:'unknown'},geometry:{shape:'target',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified'}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
+		return ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[],specialRules:[{id:'retal',label:'Reflected component',pattern:'retaliation',source:{kind:'npc',ids:[900302]},when:[{fact:'trigger_target_npc_id',op:'one_of',value:[900301],at:'source_event'}],timing:{anchor:'retaliation_event',authority:'unknown'},geometry:{shape:'target',anchor:'source_position',authority:'reference_only'},recipients:'direct_target',calculationTick:'unknown',outcome:{surface:'hp_or_block',maximum:{kind:'fixed_max',value:1,authority:'verified'}},ordinaryAttacksContinue:true,scopePolicy:'same_native_scope',references:[{source:'synthetic',claim:'test'}]}]}",JsonObject.class)));
 	}
 	private DeathRecordingV2 retaliationRecording(String owner,int sourceView,int targetId,boolean later,String lifetime)
 	{
@@ -783,4 +840,45 @@ public class ResolverV1Test
 	}
 	private static Map<String,Object> map(Object... entries)
 	{ Map<String,Object> result = new LinkedHashMap<>(); for (int i=0;i<entries.length;i+=2) result.put((String)entries[i],entries[i+1]); return result; }
+	private Hit rawHit(DeathRecordingV2 recording, DamageRecord hit)
+	{
+		DeathRecordingV2.Events events = recording.getEvents();
+		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(recording.getTicks(),
+			recording.getScenes(), events.getObservations(), events.getDamageEvents(), events.getCaptureGaps(),
+			events.getObservationLinks(), Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE, 0);
+		return new RawEvidenceWindow(window, gson).hit(hit);
+	}
+
+	private JsonObject evaluate(ResolverV1 engine, DeathRecordingV2 recording, DamageRecord hit)
+	{
+		return ResolverTestCatalog.render(engine.evaluate(rawHit(recording, hit)));
+	}
+
+	private static java.util.List<Source> sources(Hit hit, Channel channel)
+	{
+		java.util.List<Source> result = new java.util.ArrayList<>();
+		for (Source source : hit.sources()) if (source.channel() == channel) result.add(source);
+		return result;
+	}
+
+	private static JsonElement fact(ResolverV1 engine, Hit hit, Source source, String domain, String path)
+	{
+		return engine.new RawFacts(hit, source).value(domain, path);
+	}
+
+	private boolean ordinaryOnlyReference(int id)
+	{
+		boolean ordinary = false;
+		for (JsonElement value : ResolverTestCatalog.rows(RuntimeCatalog.load(gson).section("resolver"), "component"))
+		{
+			JsonObject row = value.getAsJsonObject();
+			JsonObject selector = row.getAsJsonObject("source");
+			if (!"npc".equals(selector.get("kind").getAsString()) || !selector.has("ids")
+				|| !selector.getAsJsonArray("ids").contains(new com.google.gson.JsonPrimitive(id))) continue;
+			if (!row.has("profile") || !row.get("profile").getAsBoolean()) return false;
+			ordinary = true;
+		}
+		return ordinary;
+	}
+
 }

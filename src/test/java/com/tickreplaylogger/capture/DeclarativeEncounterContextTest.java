@@ -45,7 +45,8 @@ import static org.junit.Assert.*;
 public class DeclarativeEncounterContextTest
 {
 	private final Gson gson = new Gson();
-	private final CombatCatalog catalog = CombatCatalog.load(gson);
+	private final CombatCatalog catalog = CombatCatalog.referenceView(
+		RuntimeCatalog.load(gson).section("references").deepCopy());
 	private final Map<Integer, Integer> values = new HashMap<>();
 	private boolean failLastSlot;
 
@@ -71,6 +72,16 @@ public class DeclarativeEncounterContextTest
 		values.put(991002, 0);
 		values.put(991003, 30);
 		values.put(991004, 0);
+	}
+
+	@Test
+	public void heldOutBindingsDoNotReplaceTheSharedBindingsUsedByIndependentCaptures()
+	{
+		JsonObject reviewed = CombatCatalog.load(gson).contextBindings().deepCopy();
+		heldOutRules();
+		assertEquals("held_out_arena", capture().getActivity());
+		assertEquals(reviewed, CombatCatalog.load(gson).contextBindings());
+		assertEquals(reviewed, RuntimeCatalog.load(gson).section("references").getAsJsonObject("contextBindings"));
 	}
 
 	@Test

@@ -21,8 +21,8 @@ public class ExportFailureRetentionTest
 	{
 		Gson plain = new Gson();
 		AtomicInteger contextReads = new AtomicInteger();
-		Gson gson = new GsonBuilder().registerTypeAdapter(ContextBlock.class,
-			(JsonSerializer<ContextBlock>) (context, type, serialization) ->
+		Gson gson = new GsonBuilder().registerTypeAdapter(NpcState.class,
+			(JsonSerializer<NpcState>) (context, type, serialization) ->
 			{
 				if (contextReads.getAndIncrement() == 0)
 					throw new IllegalStateException("Synthetic interpretation failure");
@@ -33,7 +33,7 @@ public class ExportFailureRetentionTest
 			.direction("RECEIVED").defenderRef("player").amount(12).hitsplatType(16).hitsplatTypeKnown(true)
 			.impactSceneKey("scene").impactWorldViewId(0).impactPlane(0).attackerName("Unknown").build();
 		recorder.addSnapshot(WorldSnapshot.builder().tick(1).sceneKey("scene").worldViewId(0).plane(0)
-			.nativeContextKnown(true).player(PlayerState.builder().build())
+			.nativeContextKnown(true).player(PlayerState.builder().build()).npcs(Collections.singletonList(NpcState.builder().npcId(900001).build()))
 			.context(ContextBlock.builder().activity("Synthetic activity").build()).build());
 		recorder.addDamage(hit);
 		recorder.addDeath(DeathRecordingV2.Events.DeathMark.builder().tick(1).build());

@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Observed interaction pointer; it can mean combat, following or trading, not damage causality. */
 @Data

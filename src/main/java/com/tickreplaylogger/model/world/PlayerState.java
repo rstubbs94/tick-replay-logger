@@ -24,42 +24,21 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.Map;
-import java.util.List;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 /**
  * The local player's full per-tick state for death reconstruction. Unlike the lightweight
  * {@code TickData} used by the in-plugin journal, this stores absolute + local coordinates and
  * the rich fields needed for local recording analysis. Part of a {@link WorldSnapshot}.
  */
-@Data
-@Builder
-public class PlayerState
+@Getter
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@SuperBuilder(toBuilder = true)
+public class PlayerState extends ObservedActorState
 {
-	private final Integer worldViewId;
-	private final ActorInteractionState interaction;
-	private final Integer combatLevel;
-	private final Map<String, String> observationIssues;
-	private final Boolean localPositionKnown;
-	private final Boolean worldPositionKnown;
-	private final Boolean planeKnown;
-	private final int worldX;
-	private final int worldY;
-	private final int plane;
-	private final int localX; // scene-local (0..104*128), for sub-tile animation
-	private final int localY;
-	private final Integer orientation; // 0..2047
-	private final Integer currentOrientation; // sampled client-facing angle; orientation is the target
-
-	private final Integer animationId;
-	private final Integer animationFrame;
-	private final Integer poseAnimationId;
-	private final Integer poseAnimationFrame;
-	private final int[] graphicIds; // active spotanims (freeze/teleblock/etc. show here)
-	private final Boolean graphicsKnown;
-	private final ActorGraphicsState graphicsState;
 
 	private final Integer hp;
 	private final Integer maxHp;
@@ -69,8 +48,6 @@ public class PlayerState
 	private final Map<String, Boolean> prayerFlagValues; // unread flags are absent, not false
 	private final List<String> activePrayers;
 	private final String overheadPrayer; // the single active overhead, or null
-	private final String overheadText;
-	private final Integer overheadCycle;
 	private final String overheadIcon; // raw actor icon, independent of prayer varbit flags
 	private final Boolean overheadIconKnown;
 	private final List<String> reportedActivePrayers;
@@ -92,7 +69,6 @@ public class PlayerState
 	private final Integer specEnergyRaw; // SPECIAL_ATTACK_PERCENT/SA_ENERGY varp, native tenths of one percent
 	private final Boolean runEnergyKnown;
 	private final Boolean specEnergyKnown;
-	private final Integer interactingNpcIndex; // who the player is interacting with, or null
 
 	private final int[] equipmentItemIds; // actual local container, indexed by EquipmentInventorySlot.getSlotIdx()
 	private final boolean[] equipmentSlotKnown;

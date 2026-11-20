@@ -32,34 +32,20 @@ import net.runelite.api.*;
 import net.runelite.api.coords.*;
 
 /** Independent reads of one reported NPC; a failed field cannot erase another observation. */
-final class NpcSnapshotObservation
+final class NpcSnapshotObservation extends ActorObservation
 {
-	final NPC actor;
-	final Map<String, String> issues = new LinkedHashMap<>();
-	final Integer index, baseId, id, level, size, animation, animationFrame;
-	final LocalPoint local;
-	final WorldPoint world;
-	final WorldView view;
-	final Actor target;
-	final Boolean interactionFlag, hasTransforms;
+	final Integer index, baseId, id, size;
+	final Boolean hasTransforms;
 	final NpcOverrides overrides;
-	final String name, speech;
-	final NpcState.NpcStateBuilder state;
+	final NpcState.NpcStateBuilder<?, ?> state;
 
 	NpcSnapshotObservation(NPC npc, WorldPoint observedWorld, String worldIssue)
 	{
-		actor = npc;
-		if (worldIssue != null)
-		{
-			issues.put("worldPosition", worldIssue);
-		}
+		super(npc, observedWorld, worldIssue);
 		index = read("sceneId", npc::getIndex);
 		NpcDefinitionObservation definition = NpcDefinitionObservation.capture(npc, issues, "");
 		baseId = definition.getBaseId();
-		view = read("worldView", npc::getWorldView);
-		Integer viewId = view == null ? null : read("worldViewId", view::getId);
-		world = observedWorld;
-		local = read("localPosition", npc::getLocalLocation);
+		position(false);
 		name = read("name", npc::getName);
 		level = read("combatLevel", npc::getCombatLevel);
 		int[] transforms = definition.getTransforms();
@@ -69,92 +55,33 @@ final class NpcSnapshotObservation
 		size = definition.getSize();
 		overrides = read("modelOverrides", npc::getModelOverrides);
 		int[] overrideIds = overrides == null ? null : read("overrideModelIds", () -> copy(overrides.getModelIds()));
-		animation = read("animationId", npc::getAnimation);
-		animationFrame = animation == null || animation == -1 ? null : read("animationFrame", npc::getAnimationFrame);
-		Integer pose = read("poseAnimationId", npc::getPoseAnimation);
-		Integer poseFrame = pose == null || pose == -1 ? null : read("poseAnimationFrame", npc::getPoseAnimationFrame);
-		Integer orientation = read("orientation", npc::getOrientation);
-		Integer currentOrientation = read("currentOrientation", npc::getCurrentOrientation);
-		Integer healthRatio = read("healthRatio", npc::getHealthRatio);
-		Integer healthScale = read("healthScale", npc::getHealthScale);
-		speech = read("overheadText", npc::getOverheadText);
-		Integer overheadCycle = speech == null ? null : read("overheadCycle", npc::getOverheadCycle);
+		animations();
+		orientation();
+		health();
+		speech();
 		int[] archives = read("overheadArchiveIds", () -> copy(npc.getOverheadArchiveIds()));
 		short[] sprites = read("overheadSpriteIds", () ->
 		{
 			short[] value = npc.getOverheadSpriteIds();
 			return value == null ? null : value.clone();
 		});
-		target = read("interactionTarget", npc::getInteracting);
-		interactionFlag = read("reportedInteracting", npc::isInteracting);
-		ActorGraphicsObservation observedGraphics = new ActorGraphicsObservation(npc);
-		com.tickreplaylogger.model.world.ActorGraphicsState graphicsState = observedGraphics.getState();
-		if (graphicsState.getObservationIssues() != null)
-		{
-			issues.putAll(graphicsState.getObservationIssues());
-		}
-		state = NpcState.builder().sceneId(index).npcId(id).baseNpcId(baseId).worldViewId(viewId)
-			.definitionName(definitionName).definitionEvidence(evidence).definitionHasTransforms(hasTransforms)
-			.definitionTransformIds(transforms).name(name == null ? null : removeTags(name).trim()).combatLevel(level)
-			.localPositionKnown(local != null).worldPositionKnown(world != null).planeKnown(world != null)
-			.localX(local == null ? 0 : local.getX()).localY(local == null ? 0 : local.getY())
-			.worldX(world == null ? 0 : world.getX()).worldY(world == null ? 0 : world.getY())
-			.plane(world == null ? 0 : world.getPlane()).size(size)
+		interaction(true);
+		graphics();
+		state = fill(NpcState.builder()).sceneId(index).npcId(id).baseNpcId(baseId).definitionName(definitionName)
+			.definitionEvidence(evidence).definitionHasTransforms(hasTransforms).definitionTransformIds(transforms)
+			.name(name == null ? null : removeTags(name).trim()).size(size)
 			.modelOverridesPresent(issues.containsKey("modelOverrides") ? null : overrides != null)
-			.overrideModelIds(overrideIds).animationId(animation).animationFrame(animationFrame).poseAnimationId(pose)
-			.poseAnimationFrame(poseFrame).orientation(orientation).currentOrientation(currentOrientation)
-			.healthRatio(healthRatio).healthScale(healthScale).overheadText(speech).overheadCycle(overheadCycle)
+			.overrideModelIds(overrideIds).healthRatio(healthRatio).healthScale(healthScale)
 			.overheadArchiveIds(archives).overheadSpriteIds(sprites)
-			.overheadIconsKnown(archives != null && sprites != null).graphicIds(observedGraphics.getIds())
-			.graphicsKnown(observedGraphics.isIdsKnown()).graphicsState(graphicsState);
+			.overheadIconsKnown(archives != null && sprites != null);
 		captureOccupiedArea(viewId);
 	}
 
-	/** Preserve the direct API observation independently of coordinates, definition size and combat state. */
+	/** Independent sampling point; callbacks deliberately perform their own subsequent area read. */
 	private void captureOccupiedArea(Integer viewId)
 	{
-		boolean viewKnown = view != null && viewId != null && !issues.containsKey("worldView")
-			&& !issues.containsKey("worldViewId");
-		state.worldAreaKnown(false).worldAreaWorldViewKnown(viewKnown).worldAreaWorldViewId(viewKnown ? viewId : null)
-			.worldAreaEvidence("UNAVAILABLE");
-		WorldArea area = read("worldArea", actor::getWorldArea);
-		if (area == null)
-		{
-			return;
-		}
-		try
-		{
-			if (area.getWidth() <= 0 || area.getHeight() <= 0)
-			{
-				issues.put("worldArea", "INVALID_BOUNDS");
-				return;
-			}
-			Map<String, Integer> bounds = new LinkedHashMap<>();
-			bounds.put("minX", area.getX());
-			bounds.put("minY", area.getY());
-			bounds.put("maxX", Math.addExact(area.getX(), area.getWidth() - 1));
-			bounds.put("maxY", Math.addExact(area.getY(), area.getHeight() - 1));
-			bounds.put("plane", area.getPlane());
-			state.worldArea(Collections.unmodifiableMap(bounds)).worldAreaKnown(true)
-				.worldAreaEvidence("ACTOR_GET_WORLD_AREA");
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put("worldArea", unavailable.getClass().getSimpleName());
-		}
-	}
-
-	<T> T read(String field, Supplier<T> getter)
-	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
+		area();
+		snapshotArea(state);
 	}
 
 	private static int[] copy(int[] value)

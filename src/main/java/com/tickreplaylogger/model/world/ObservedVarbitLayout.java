@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Actual client composition fields, independent from a bundled reference layout. */
 @Data

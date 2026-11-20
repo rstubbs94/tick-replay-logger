@@ -152,7 +152,7 @@ public class GenericCaptureTest
 	public void selectedWindowIsSelfContainedAfterTrimAndRestartsCheckpointAfterFailedChannel()
 	{
 		ObservedObjectState first = object(1, 999991), second = object(2, 999992);
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(2, new com.google.gson.Gson());
+		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(2, new com.google.gson.Gson());
 		recorder.addSnapshot(frame(1, Arrays.asList(first), new int[]
 		{ 0, 4 }));
 		recorder.addSnapshot(frame(2, Arrays.asList(first, second), new int[]

@@ -24,6 +24,7 @@
  */
 package com.tickreplaylogger.ui.playback;
 
+import com.tickreplaylogger.ui.ReplayIcons;
 import com.google.gson.Gson;
 import com.tickreplaylogger.ui.LiveTickPanel;
 import com.tickreplaylogger.util.DisplayFormat;
@@ -31,7 +32,6 @@ import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import static com.tickreplaylogger.ui.LiveTickPanel.buildTelemetryText;
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.capture.DamageMap;
-import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
@@ -39,7 +39,6 @@ import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.KeyEvent;
-import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -72,20 +71,13 @@ public class PlaybackPanel extends JPanel
 	private static final Color TICK_BADGE_ALT = new Color(38, 38, 42);
 	private static final int TICK_BADGE_WIDTH = 46;
 
-	private static final int ICON_SIZE = 18;
-
 	private final Runnable onBackCallback;
-	private final SpriteManager spriteManager;
 	private final DamageMap damageMap;
 	private final Gson gson;
 	private TickRecording recording;
 	private List<TickData> ticks;
 
-	// Cached icons
-	private ImageIcon iconHitpoints;
-	private ImageIcon iconPrayer;
-	private ImageIcon iconAttack;
-	private ImageIcon iconAgility;
+	private final ReplayIcons icons;
 
 	// Playback state
 	private int currentTickIndex = 0;
@@ -132,56 +124,15 @@ public class PlaybackPanel extends JPanel
 	public PlaybackPanel(Runnable onBackCallback, SpriteManager spriteManager, DamageMap damageMap, Gson gson)
 	{
 		this.onBackCallback = onBackCallback;
-		this.spriteManager = spriteManager;
 		this.damageMap = damageMap;
 		this.gson = gson;
 
 		setLayout(new BorderLayout());
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		loadSprites();
+		icons = ReplayIcons.load(spriteManager);
 		buildUI();
 		setupKeyboardShortcuts();
-	}
-
-	private void loadSprites()
-	{
-		if (spriteManager == null)
-		{
-			return;
-		}
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_HITPOINTS, 0, img ->
-		{
-			iconHitpoints = scaleIcon(img);
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_PRAYER, 0, img ->
-		{
-			iconPrayer = scaleIcon(img);
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img ->
-		{
-			iconAttack = scaleIcon(img);
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_AGILITY, 0, img ->
-		{
-			iconAgility = scaleIcon(img);
-		});
-
-		com.tickreplaylogger.ui.CombatIcons.load(spriteManager);
-	}
-
-	private ImageIcon scaleIcon(BufferedImage img)
-	{
-		if (img == null)
-		{
-			return null;
-		}
-		Image scaled = img.getScaledInstance(ICON_SIZE, ICON_SIZE, Image.SCALE_SMOOTH);
-		return new ImageIcon(scaled);
 	}
 
 	private void buildUI()
@@ -783,7 +734,7 @@ public class PlaybackPanel extends JPanel
 			{
 				continue;
 			}
-			ImageIcon icon = getActionIcon(action);
+			ImageIcon icon = icons.action(action);
 			Color color = getActionColor(action);
 			JLabel label = createIconLabel(DisplayFormat.actionText(action), icon, color, action.getDescription());
 			currentTickPanel.add(label);
@@ -794,7 +745,7 @@ public class PlaybackPanel extends JPanel
 		{
 			for (String note : tick.getEffectNotes())
 			{
-				JLabel label = createIconLabel(note, iconPrayer, EFFECT_COLOR);
+				JLabel label = createIconLabel(note, icons.prayer(), EFFECT_COLOR);
 				currentTickPanel.add(label);
 			}
 		}
@@ -803,7 +754,7 @@ public class PlaybackPanel extends JPanel
 		MovementData movement = tick.getMovement();
 		if (movement != null && movement.hasMovement())
 		{
-			JLabel label = createIconLabel(movement.getDescription(), iconAgility, MOVEMENT_COLOR);
+			JLabel label = createIconLabel(movement.getDescription(), icons.agility(), MOVEMENT_COLOR);
 			currentTickPanel.add(label);
 		}
 
@@ -833,29 +784,6 @@ public class PlaybackPanel extends JPanel
 	private JLabel createIconLabel(String text, ImageIcon icon, Color color, String tooltip)
 	{
 		return LiveTickPanel.createIconLabel(text, icon, color, tooltip, 13);
-	}
-
-	private ImageIcon getActionIcon(PlayerAction action)
-	{
-		String desc = action.getDescription().toLowerCase();
-		if (desc.startsWith("ate") || desc.startsWith("drank"))
-		{
-			return iconHitpoints;
-		}
-		else if (desc.contains("prayer") || desc.startsWith("activated") || desc.startsWith("deactivated")
-			|| desc.contains("disabled"))
-		{
-			return iconPrayer;
-		}
-		else if (desc.startsWith("equipped") || desc.startsWith("unequipped"))
-		{
-			return iconAttack;
-		}
-		else if (desc.startsWith("attacked") || desc.startsWith("special"))
-		{
-			return iconAttack;
-		}
-		return null;
 	}
 
 	private Color getActionColor(PlayerAction action)
@@ -1245,38 +1173,26 @@ public class PlaybackPanel extends JPanel
 			int w = getWidth();
 			int h = getHeight();
 
-			// Death tick gets solid red background
+			Color solid = null;
 			if (isDeathTick)
 			{
-				g2d.setColor(ROW_DEATH);
-				g2d.fillRect(0, 0, w, h);
-				g2d.dispose();
-				return;
+				solid = ROW_DEATH;
 			}
-
-			// Current tick gets selection highlight
-			if (isCurrentTick)
+			else if (isCurrentTick)
 			{
-				g2d.setColor(ROW_SELECTED);
-				g2d.fillRect(0, 0, w, h);
-				g2d.dispose();
-				return;
+				solid = ROW_SELECTED;
 			}
-
-			// No events - use alternating background
-			if (colors.isEmpty())
+			else if (colors.isEmpty())
 			{
-				Color bgColor = (rowIndex % 2 == 0) ? ROW_NORMAL_1 : ROW_NORMAL_2;
-				g2d.setColor(bgColor);
-				g2d.fillRect(0, 0, w, h);
-				g2d.dispose();
-				return;
+				solid = rowIndex % 2 == 0 ? ROW_NORMAL_1 : ROW_NORMAL_2;
 			}
-
-			// Single event - solid color
-			if (colors.size() == 1)
+			else if (colors.size() == 1)
 			{
-				g2d.setColor(colors.get(0));
+				solid = colors.get(0);
+			}
+			if (solid != null)
+			{
+				g2d.setColor(solid);
 				g2d.fillRect(0, 0, w, h);
 				g2d.dispose();
 				return;
@@ -1294,32 +1210,11 @@ public class PlaybackPanel extends JPanel
 				int leftStart = (w * i) / numColors;
 				int rightStart = (w * (i + 1)) / numColors;
 
-				// Create angled polygon
-				int[] xPoints, yPoints;
-				if (i == 0)
-				{
-					// First stripe - left edge is straight
-					xPoints = new int[]
-					{ 0, rightStart + slant, rightStart, 0 };
-					yPoints = new int[]
-					{ 0, 0, h, h };
-				}
-				else if (i == numColors - 1)
-				{
-					// Last stripe - right edge is straight
-					xPoints = new int[]
-					{ leftStart + slant, w, w, leftStart };
-					yPoints = new int[]
-					{ 0, 0, h, h };
-				}
-				else
-				{
-					// Middle stripes - both edges angled
-					xPoints = new int[]
-					{ leftStart + slant, rightStart + slant, rightStart, leftStart };
-					yPoints = new int[]
-					{ 0, 0, h, h };
-				}
+				// Interior dividers slant; the two outer edges stay vertical.
+				int[] xPoints =
+				{ i == 0 ? 0 : leftStart + slant, i == numColors - 1 ? w : rightStart + slant, rightStart, leftStart };
+				int[] yPoints =
+				{ 0, 0, h, h };
 
 				g2d.fillPolygon(xPoints, yPoints, 4);
 			}

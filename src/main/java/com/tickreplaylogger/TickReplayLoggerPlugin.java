@@ -37,6 +37,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
 import javax.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.*;
@@ -154,27 +155,17 @@ public class TickReplayLoggerPlugin extends Plugin
 	private NativeHitScope activeHitScope;
 	private CallbackContext activeHitCallbackContext;
 
+	@RequiredArgsConstructor
 	private static final class NativeHitScope
 	{
 		final Player localPlayer;
 		final WorldView view;
 		final Scene scene;
 		final Integer viewId, baseX, baseY, plane, width, height;
-		final boolean known;
 
-		NativeHitScope(Player localPlayer, WorldView view, Scene scene, Integer viewId, Integer baseX, Integer baseY,
-			Integer plane, Integer width, Integer height)
+		boolean known()
 		{
-			this.localPlayer = localPlayer;
-			this.view = view;
-			this.scene = scene;
-			this.viewId = viewId;
-			this.baseX = baseX;
-			this.baseY = baseY;
-			this.plane = plane;
-			this.width = width;
-			this.height = height;
-			known = view != null && scene != null && baseX != null && baseY != null && plane != null && plane >= 0
+			return view != null && scene != null && baseX != null && baseY != null && plane != null && plane >= 0
 				&& width != null && width > 0 && height != null && height > 0;
 		}
 	}
@@ -287,6 +278,7 @@ public class TickReplayLoggerPlugin extends Plugin
 	}
 
 	/** Primitive callback facts survive independently of optional enrichment reads. */
+	@RequiredArgsConstructor
 	private static class CallbackContext
 	{
 		final long epoch;
@@ -301,11 +293,6 @@ public class TickReplayLoggerPlugin extends Plugin
 		WorldView primaryView, localView;
 		Integer primaryPlane, primaryViewId;
 		String primarySceneKey;
-
-		CallbackContext(long epoch)
-		{
-			this.epoch = epoch;
-		}
 	}
 
 	private CallbackContext callbackContext()
@@ -1460,7 +1447,7 @@ public class TickReplayLoggerPlugin extends Plugin
 				positionScopeKnown = false;
 			}
 			List<Map<String, Object>> contactWitnesses = new ArrayList<>();
-			if (nativeScope.known && positionScopeKnown)
+			if (nativeScope.known() && positionScopeKnown)
 			{
 				readHitContext("impactHazards", () -> inNativeHitScope(nativeScope, context, () ->
 				{
@@ -1484,7 +1471,7 @@ public class TickReplayLoggerPlugin extends Plugin
 					pending.sourceWitnesses.add(witness);
 				}
 			}
-			if (nativeScope.known && isPvpContext())
+			if (nativeScope.known() && isPvpContext())
 			{
 				inNativeHitScope(nativeScope, () ->
 				{
@@ -3766,7 +3753,7 @@ public class TickReplayLoggerPlugin extends Plugin
 			hit.captureIssues
 				.add("impactContextEpoch: CHANGED_BEFORE_FINALIZATION " + hit.epoch + " -> " + causalSceneEpoch);
 		}
-		if (hit.nativeScope != null && hit.nativeScope.known && activeHitScope != null && activeHitScope.known
+		if (hit.nativeScope != null && hit.nativeScope.known() && activeHitScope != null && activeHitScope.known()
 			&& hit.epoch == causalSceneEpoch && hit.nativeScope.view == nativeView()
 			&& hit.nativeScope.scene == nativeScene()
 			&& (hit.position == null ? hit.nativeScope.plane : hit.position.getPlane()) == nativePlane()

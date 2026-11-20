@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
-import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
 
 /** Raw API visual lifecycle samples; presence does not establish protection or damage eligibility. */
 @Data

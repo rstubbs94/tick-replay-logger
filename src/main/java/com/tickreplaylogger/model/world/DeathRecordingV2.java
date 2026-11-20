@@ -24,11 +24,9 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import com.tickreplaylogger.model.TickData;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * The versioned local export envelope (export-schema-v1.3.md) written by the plugin.

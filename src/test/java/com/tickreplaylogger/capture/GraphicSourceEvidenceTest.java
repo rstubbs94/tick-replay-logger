@@ -48,7 +48,8 @@ public class GraphicSourceEvidenceTest
 		DamageMap map = DamageMap.load(GSON);
 		Field field = CombatCatalog.class.getDeclaredField("root");
 		field.setAccessible(true);
-		JsonObject root = (JsonObject) field.get(map.catalog());
+		JsonObject root = ((JsonObject) field.get(map.catalog())).deepCopy();
+		field.set(map.catalog(),root);
 		root.getAsJsonObject("reviewedBindings").getAsJsonObject("graphicRules").add(String.valueOf(GRAPHIC),
 			GSON.fromJson("{\"name\":\"Held-out pool\",\"state\":\"active\",\"damaging\":true,\"key\":\"held-out-pool\",\"mapRef\":\"fixture:evidence\"}", JsonObject.class));
 		return map;
@@ -230,14 +231,13 @@ public class GraphicSourceEvidenceTest
 			TickReplayLoggerPlugin plugin = new TickReplayLoggerPlugin();
 			set(plugin, "client", client);
 			set(plugin, "damageMap", map);
-			Method method = TickReplayLoggerPlugin.class.getDeclaredMethod("hazardsOnTile", LocalPoint.class,
+			Method method = TickReplayLoggerPlugin.class.getDeclaredMethod("observeHazardsOnTile", LocalPoint.class,
 				int.class, List.class, boolean.class);
 			method.setAccessible(true);
 			List<Map<String, Object>> contacts = new ArrayList<>();
-			List<?> names = (List<?>) method.invoke(plugin, tile, 0, contacts, true);
+			method.invoke(plugin, tile, 0, contacts, true);
 			if (foreign)
 			{
-				assertTrue(names.isEmpty());
 				assertTrue(contacts.isEmpty());
 			}
 			else
@@ -282,11 +282,12 @@ public class GraphicSourceEvidenceTest
 		TickReplayLoggerPlugin plugin = new TickReplayLoggerPlugin();
 		set(plugin, "client", client);
 		set(plugin, "damageMap", map);
-		Method method = TickReplayLoggerPlugin.class.getDeclaredMethod("hazardsOnTile", LocalPoint.class, int.class, List.class, boolean.class);
+		Method method = TickReplayLoggerPlugin.class.getDeclaredMethod("observeHazardsOnTile", LocalPoint.class, int.class, List.class, boolean.class);
 		method.setAccessible(true);
 		List<Map<String, Object>> contacts = new ArrayList<>();
-		List<?> names = (List<?>) method.invoke(plugin, tile, 0, contacts, true);
-		assertEquals(Collections.singletonList("Held-out pool"), names);
+		method.invoke(plugin, tile, 0, contacts, true);
+		assertEquals(Collections.singletonList("Held-out pool"),contacts.stream().filter(witness -> Boolean.TRUE.equals(witness.get("damaging")))
+			.map(witness -> witness.get("name")).collect(java.util.stream.Collectors.toList()));
 		assertEquals(2, contacts.size());
 		Map<String, Object> witness = contacts.get(0);
 		assertEquals("GRAPHIC_SURFACE", witness.get("kind"));

@@ -27,9 +27,8 @@ package com.tickreplaylogger.capture;
 import com.tickreplaylogger.model.world.ActorGraphicsState;
 import java.util.*;
 import java.util.List;
-import java.util.function.Supplier;
-import net.runelite.api.Actor;
-import net.runelite.api.ActorSpotAnim;
+import static com.tickreplaylogger.capture.ObservationReads.read;
+import net.runelite.api.*;
 
 /** Sample each channel once, preserving delayed animations and independent getter failures. */
 public final class ActorGraphicsObservation
@@ -117,16 +116,4 @@ public final class ActorGraphicsObservation
 		return issues.isEmpty() ? null : Collections.unmodifiableMap(new LinkedHashMap<>(issues));
 	}
 
-	private static <T> T read(Map<String, String> issues, String field, Supplier<T> getter)
-	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
-	}
 }

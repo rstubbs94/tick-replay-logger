@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Retained observations of one registered API object, not a hidden launch or causal hit ID. */
 @Data

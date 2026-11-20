@@ -26,7 +26,7 @@ package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.ActorInteractionState;
 import java.util.function.Function;
-import java.util.function.Supplier;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 import java.util.*;
 import net.runelite.api.*;
 
@@ -128,16 +128,4 @@ public final class ActorInteractions
 			: flag ? "ACTOR_REFERENCE_OBSERVED" : "ACTOR_REFERENCE_FLAG_CONFLICT").build();
 	}
 
-	private static <T> T read(Map<String, String> issues, String field, Supplier<T> getter)
-	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
-	}
 }

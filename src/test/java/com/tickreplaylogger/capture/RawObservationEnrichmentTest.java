@@ -43,7 +43,7 @@ public class RawObservationEnrichmentTest
 	@Test
 	public void currentTailReplacementLeavesHistoryAndOriginalCallbackIdentityUntouched()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, new Gson());
+		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
 		ObservedEvent historical = event(1, 1), current = event(2, 2);
 		recorder.addObservation(historical); recorder.addObservation(current);
 		Map<String, Object> derived = new HashMap<>(); derived.put("resourceOutcomeStatus", "UNRESOLVED"); derived.put("amount", 999);
@@ -64,7 +64,7 @@ public class RawObservationEnrichmentTest
 	@Test
 	public void unorderedInputUsesCompleteBoundedFallbackAndPreservesOriginalSequenceOrder()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, new Gson());
+		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
 		for (ObservedEvent event : Arrays.asList(event(2, 1), event(1, 2), event(2, 3))) recorder.addObservation(event);
 		Map<Long, Map<String, Object>> derived = new HashMap<>();
 		derived.put(1L, Collections.singletonMap("resourceOutcomeStatus", "UNRESOLVED"));
@@ -81,7 +81,7 @@ public class RawObservationEnrichmentTest
 	@Test
 	public void optionalEnrichmentFailureCannotRemovePreviouslyCapturedCallbacks()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(100, new Gson());
+		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(100, new Gson());
 		for (ObservedEvent event : Arrays.asList(event(1, 1), event(2, 2), event(2, 3))) recorder.addObservation(event);
 		Map<Long, Map<String, Object>> derived = new HashMap<Long, Map<String, Object>>()
 		{

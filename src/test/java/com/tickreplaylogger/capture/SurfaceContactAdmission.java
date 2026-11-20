@@ -49,7 +49,7 @@ final class SurfaceContactAdmission
 	}
 
 	static boolean accepts(DamageMap.ObjectHazardRule rule, DamageRecord hit, LegacyCombatCatalog catalog,
-		ObservedHpCallbackContext original)
+		LegacyObservedHpCallbackContext original)
 	{
 		if (!declared(rule))
 			return true;
@@ -63,12 +63,12 @@ final class SurfaceContactAdmission
 	}
 
 	static LegacyConstraintOracle.Hypothesis constrain(LegacyConstraintOracle.Hypothesis hypothesis,
-		DamageMap.ObjectHazardRule rule, DamageRecord hit, ObservedHpCallbackContext original,
+		DamageMap.ObjectHazardRule rule, DamageRecord hit, LegacyObservedHpCallbackContext original,
 		boolean definitionQualified)
 	{
 		if (!declared(rule) || !valid(rule.getContactAdmission()) || !definitionQualified
 			|| !rule.getContactAdmission().has("perHitMaximum") || !original.positionMatches(hit)
-			|| !ObservedHpCallbackContext.normal(original.forHit(hit), Collections.singletonList("LEAGUE_TYPE"),
+			|| !LegacyObservedHpCallbackContext.normal(original.forHit(hit), Collections.singletonList("LEAGUE_TYPE"),
 				EXCLUDED_WORLDS))
 			return hypothesis;
 		String component = rule.getKey(), family = hypothesis.getCandidate().getFamilyKey();

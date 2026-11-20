@@ -138,7 +138,7 @@ public class ResolverPredicateTest
 		JsonObject document=gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[{id:'predicate.profile',source:{kind:'npc',ids:[900001]},styles:['melee']}]} " ,JsonObject.class);
 		if(!(predicates instanceof JsonArray)){JsonArray values=new JsonArray();values.add(predicates);predicates=values;}
 		document.getAsJsonArray("ordinaryProfiles").get(0).getAsJsonObject().add("when",predicates);
-		JsonObject row=ResolverTestCatalog.resolve(new ResolverV1(ResolverTestCatalog.lower(document)),input).getAsJsonArray("candidates").get(0).getAsJsonObject();
+		JsonObject row=ResolverTestCatalog.resolve(ResolverTestCatalog.engine(ResolverTestCatalog.lower(document)),input).getAsJsonArray("candidates").get(0).getAsJsonObject();
 		assertEquals(truth,"FALSE".equals(truth)?"EXCLUDED":"POSSIBLE",row.get("status").getAsString());
 		assertEquals(truth,"TRUE".equals(truth),row.get("componentQualified").getAsBoolean());
 	}

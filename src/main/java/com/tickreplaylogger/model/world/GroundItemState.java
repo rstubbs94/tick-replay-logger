@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Value;
-import lombok.Builder;
+import lombok.*;
 import java.util.List;
 
 /** Exposed TileItem observation; ownership is not an inflicting actor. Timer fields use Client.getTickCount(). */

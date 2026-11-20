@@ -26,8 +26,7 @@ package com.tickreplaylogger.model.world;
 
 import com.google.gson.JsonElement;
 import java.util.List;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Lossless full snapshot values; references never imply actor continuity or server state. */
 @Data

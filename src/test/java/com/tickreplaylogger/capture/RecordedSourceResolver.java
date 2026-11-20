@@ -56,14 +56,14 @@ public final class RecordedSourceResolver
 	private final Map<Long, ProjectileSample> firstProjectiles = new LinkedHashMap<>();
 	private final Map<Integer, List<WorldSnapshot>> nativeFramesByTick = new HashMap<>();
 	private final Map<Long, ActorSourceSample> projectileActorSamples = new HashMap<>();
-	private final DamageMap map;
+	private final LegacyDamageMap map;
 	private final LegacyCombatCatalog catalog;
 	private final ObservedActorMechanismResolver actorMechanisms;
 	private final ObservedActorActivityResolver actorActivity;
 	private final ObservedNpcContactHintResolver npcContactHints;
 	private final ObservedGraphicCueResolver graphicCues;
 	private final ObservedSelfDamageTextResolver selfResponses;
-	private final ObservedHpCallbackContext hpCallbackContexts;
+	private final LegacyObservedHpCallbackContext hpCallbackContexts;
 	private final ObservedProjectileEndpointResolver projectileEndpoints;
 
 	private static final class ProjectileSample
@@ -112,7 +112,7 @@ public final class RecordedSourceResolver
 		List<ObservedEvent> observations, List<DeathRecordingV2.Events.CaptureGap> gaps,
 		boolean projectileBatchComplete, boolean retainedLifecycleWindowComplete)
 	{
-		this.map = map;
+		this.map = map == null ? null : LegacyDamageMap.from(map);
 		this.catalog = map == null ? null : LegacyCombatCatalog.from(map.catalog());
 		if (sceneData != null)
 			for (SceneData scene : sceneData)
@@ -120,7 +120,7 @@ public final class RecordedSourceResolver
 					scenes.put(scene.getSceneKey(), scene);
 		if (history != null)
 			collect(history);
-		hpCallbackContexts = new ObservedHpCallbackContext(observations);
+		hpCallbackContexts = new LegacyObservedHpCallbackContext(observations);
 		actorMechanisms = new ObservedActorMechanismResolver(
 			catalog == null ? MechanismRules.load(null) : catalog.mechanismRules(), frames, observations, gaps,
 			hpCallbackContexts, retainedLifecycleWindowComplete);
@@ -1198,7 +1198,7 @@ public final class RecordedSourceResolver
 			: catalog.projectileDamageType(npc.getNpcId(), projectile, npc.getCombatLevel(), normal);
 		if (style == null && projectile == null && animation != null)
 		{
-			DamageMap.AttackRule rule = map.attackRuleForNpc(npc.getNpcId(), animation, npc.getCombatLevel(), normal);
+			PreRuleIrDamageMap.AttackRule rule = map.attackRuleForNpc(npc.getNpcId(), animation, npc.getCombatLevel(), normal);
 			if (rule != null && !rule.isRequiresProjectile())
 				style = rule.getDamageType();
 		}

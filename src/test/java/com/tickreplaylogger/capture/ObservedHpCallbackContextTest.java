@@ -79,15 +79,15 @@ public class ObservedHpCallbackContextTest
 		return ObservedEvent.builder().type("HITSPLAT").actorRef("player").tick(hit.getImpactTick()).gameCycle(hit.getObservedCycle())
 			.sequence(hit.getObservationSequence()).sceneKey(hit.getImpactSceneKey()).data(data).build();
 	}
-	private static boolean normal(ObservedHpCallbackContext contexts, DamageRecord hit)
-	{ return ObservedHpCallbackContext.normal(contexts.forHit(hit), Collections.singletonList("LEAGUE_TYPE"), Arrays.asList("SEASONAL", "DEADMAN", "TOURNAMENT", "BETA")); }
+	private static boolean normal(LegacyObservedHpCallbackContext contexts, DamageRecord hit)
+	{ return LegacyObservedHpCallbackContext.normal(contexts.forHit(hit), Collections.singletonList("LEAGUE_TYPE"), Arrays.asList("SEASONAL", "DEADMAN", "TOURNAMENT", "BETA")); }
 	@SuppressWarnings("unchecked") private static Map<String, Object> nested(ObservedEvent event, String field)
 	{ return (Map<String, Object>) event.getData().get(field); }
 
 	@Test public void originalSequenceClockNativeRecipientAndObservedValueMustAllMatch()
 	{
 		DamageRecord hit = hit(); ObservedEvent original = observation(hit, normal());
-		ObservedHpCallbackContext contexts = new ObservedHpCallbackContext(Collections.singletonList(original));
+		LegacyObservedHpCallbackContext contexts = new LegacyObservedHpCallbackContext(Collections.singletonList(original));
 		assertTrue(normal(contexts, hit));
 		for (DamageRecord changed : Arrays.asList(hit.toBuilder().observationSequence(21L).build(), hit.toBuilder().impactTick(6).build(),
 			hit.toBuilder().observedCycle(101).build(), hit.toBuilder().impactSceneKey("other").build(), hit.toBuilder().impactWorldViewId(1).build(),
@@ -97,10 +97,10 @@ public class ObservedHpCallbackContextTest
 
 	@Test public void unavailableDuplicateAndContradictoryOriginalMetadataCannotQualify()
 	{
-		assertFalse(normal(new ObservedHpCallbackContext(null), hit()));
+		assertFalse(normal(new LegacyObservedHpCallbackContext(null), hit()));
 		ObservedEvent valid = observation(hit(), normal());
-		assertFalse(normal(new ObservedHpCallbackContext(Arrays.asList(valid, valid)), hit()));
-		assertFalse(normal(new ObservedHpCallbackContext(Arrays.asList(valid, valid, valid)), hit()));
+		assertFalse(normal(new LegacyObservedHpCallbackContext(Arrays.asList(valid, valid)), hit()));
+		assertFalse(normal(new LegacyObservedHpCallbackContext(Arrays.asList(valid, valid, valid)), hit()));
 		for (int change = 0; change < 11; change++)
 		{
 			ObservedEvent event = observation(hit(), normal());
@@ -115,7 +115,7 @@ public class ObservedHpCallbackContextTest
 			if (change == 8) event.getData().put("captureIssues", Collections.singletonList("observationContext: UNAVAILABLE"));
 			if (change == 9) nested(event, "numericContext").put("worldTypes", Collections.singletonList(1));
 			if (change == 10) nested(event, "actorState").put("plane", -1);
-			assertFalse("Change " + change, normal(new ObservedHpCallbackContext(Collections.singletonList(event)), hit()));
+			assertFalse("Change " + change, normal(new LegacyObservedHpCallbackContext(Collections.singletonList(event)), hit()));
 		}
 	}
 
@@ -125,12 +125,12 @@ public class ObservedHpCallbackContextTest
 		nested(event, "numericContext").put("worldTypes", names);
 		nested(event, "actorState").put("observationIssues", Collections.singletonMap("name", "UNAVAILABLE"));
 		event.getData().put("captureIssues", Collections.singletonList("observationActorName: UNAVAILABLE"));
-		ObservedHpCallbackContext index = new ObservedHpCallbackContext(Collections.singletonList(event));
+		LegacyObservedHpCallbackContext index = new LegacyObservedHpCallbackContext(Collections.singletonList(event));
 		names.add("SEASONAL"); nested(event, "numericContext").put("leagueType", 1);
 		assertTrue(normal(index, hit()));
 		try { index.forHit(hit()).put("leagueType", 1); fail("Frozen callback context must be immutable"); }
 		catch (UnsupportedOperationException expected) { }
-		assertFalse(ObservedHpCallbackContext.normal(index.forHit(hit()), Collections.singletonList("UNOBSERVED_FACT"), Collections.singletonList("BETA")));
+		assertFalse(LegacyObservedHpCallbackContext.normal(index.forHit(hit()), Collections.singletonList("UNOBSERVED_FACT"), Collections.singletonList("BETA")));
 	}
 
 	@Test public void captureReadsOnlyTheTwoScalarFactsAndKeepsFailureIndependent()
@@ -143,12 +143,12 @@ public class ObservedHpCallbackContextTest
 		facts = ObservedInventorySourceHints.captureNumericContext(failed, 5, 100);
 		assertNull(facts.get("worldTypes")); assertEquals(0, facts.get("leagueType"));
 		assertEquals(Arrays.asList("worldTypes", "LEAGUE_TYPE"), reads);
-		assertFalse(ObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
+		assertFalse(LegacyObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
 		reads.clear(); Client missingLeague = scalarClient(false, true, reads);
 		facts = ObservedInventorySourceHints.captureNumericContext(missingLeague, 5, 100);
 		assertEquals(Collections.emptyList(), facts.get("worldTypes")); assertNull(facts.get("leagueType"));
 		assertEquals(Arrays.asList("worldTypes", "LEAGUE_TYPE"), reads);
-		assertFalse(ObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
+		assertFalse(LegacyObservedHpCallbackContext.normal(facts, Collections.singletonList("LEAGUE_TYPE"), Collections.singletonList("BETA")));
 	}
 
 	private static Client scalarClient(boolean missingWorldTypes, boolean missingLeague, List<String> reads)

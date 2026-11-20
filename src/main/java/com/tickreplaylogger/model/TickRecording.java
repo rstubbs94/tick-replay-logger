@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model;
 
-import java.util.Objects;
-import lombok.Builder;
-import lombok.Data;
-import java.util.List;
+import java.util.*;
+import lombok.*;
 
 /**
  * Represents a complete tick recording - a snapshot of ticks (e.g., leading up to death or saved manually).

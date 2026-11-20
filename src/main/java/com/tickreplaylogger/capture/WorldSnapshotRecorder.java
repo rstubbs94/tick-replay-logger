@@ -28,7 +28,7 @@ import com.tickreplaylogger.util.RecordingLimits;
 import com.google.gson.Gson;
 import com.tickreplaylogger.model.world.*;
 import java.util.*;
-import java.util.List;
+import java.util.function.ToIntFunction;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -37,7 +37,7 @@ import lombok.extern.slf4j.Slf4j;
  * in detached objects; interpretation and JSON preparation run on workers.
  *
  * <p>Scene grids are retained for every scene a buffered snapshot still references (so travel-heavy
- * deaths reconstruct — architecture §4b), and events are windowed to the buffered tick range.
+ * deaths reconstruct â€” architecture Â§4b), and events are windowed to the buffered tick range.
  */
 @Slf4j
 public class WorldSnapshotRecorder
@@ -270,7 +270,7 @@ public class WorldSnapshotRecorder
 
 	/**
 	 * Assemble the export for a death: window events to the buffered tick range, keep only the
-	 * scenes still referenced, and build the id→name maps from the buffer. Does not clear state.
+	 * scenes still referenced, and build the idâ†’name maps from the buffer. Does not clear state.
 	 */
 	public DeathRecordingV2 buildExport(DeathRecordingV2.Meta meta, DeathRecordingV2.Summary summary)
 	{
@@ -323,10 +323,12 @@ public class WorldSnapshotRecorder
 		}
 
 		DeathRecordingV2.Events events = DeathRecordingV2.Events.builder().damageEvents(windowDamage(minTick, maxTick))
-			.effectEvents(windowEffects(minTick, maxTick)).playerActions(windowActions(minTick, maxTick))
-			.deaths(windowDeaths(minTick, maxTick)).observations(windowObservations(minTick, maxTick))
-			.observationLinks(windowObservationLinks(minTick, maxTick)).captureGaps(windowCaptureGaps(minTick, maxTick))
-			.build();
+			.effectEvents(window(effectEvents, EffectEvent::getStartTick, minTick, maxTick))
+			.playerActions(window(playerActions, DeathRecordingV2.Events.PlayerActionRecord::getTick, minTick, maxTick))
+			.deaths(window(deaths, DeathRecordingV2.Events.DeathMark::getTick, minTick, maxTick))
+			.observations(window(observations, ObservedEvent::getTick, minTick, maxTick))
+			.observationLinks(window(observationLinks, ObservedEventLink::getTick, minTick, maxTick))
+			.captureGaps(windowCaptureGaps(minTick, maxTick)).build();
 
 		return DeathRecordingV2.builder().schemaVersion(DeathRecordingV2.LATEST_SCHEMA_VERSION).meta(meta)
 			.scenes(usedScenes).ticks(ticks).events(events)
@@ -370,17 +372,25 @@ public class WorldSnapshotRecorder
 
 	private List<DamageRecord> windowDamage(int min, int max)
 	{
-		List<DamageRecord> out = new ArrayList<>();
-		for (DamageRecord d : damageEvents)
+		List<DamageRecord> selected = window(damageEvents, DamageRecord::getImpactTick, min, max);
+		selected.sort(Comparator.comparingInt(DamageRecord::getImpactTick).thenComparingLong(
+			hit -> hit.getObservationSequence() == null ? Long.MAX_VALUE : hit.getObservationSequence()));
+		return selected;
+	}
+
+	/** Retain the same original event objects in capture order within the selected tick range. */
+	private static <T> List<T> window(Iterable<T> events, ToIntFunction<T> tick, int min, int max)
+	{
+		List<T> selected = new ArrayList<>();
+		for (T event : events)
 		{
-			if (d.getImpactTick() >= min && d.getImpactTick() <= max)
+			int observed = tick.applyAsInt(event);
+			if (observed >= min && observed <= max)
 			{
-				out.add(d);
+				selected.add(event);
 			}
 		}
-		out.sort(java.util.Comparator.comparingInt(DamageRecord::getImpactTick)
-			.thenComparingLong(d -> d.getObservationSequence() == null ? Long.MAX_VALUE : d.getObservationSequence()));
-		return out;
+		return selected;
 	}
 
 	private List<DeathRecordingV2.Events.CaptureGap> windowCaptureGaps(int min, int max)
@@ -395,71 +405,6 @@ public class WorldSnapshotRecorder
 		{
 			out.add(DeathRecordingV2.Events.CaptureGap.builder().tick(entry.getKey()).channel("observationLinks")
 				.omittedObservations(entry.getValue()).reason("OBSERVATION_LINK_BUFFER_LIMIT").build());
-		}
-		return out;
-	}
-
-	private List<ObservedEventLink> windowObservationLinks(int min, int max)
-	{
-		List<ObservedEventLink> out = new ArrayList<>();
-		for (ObservedEventLink link : observationLinks)
-		{
-			if (link.getTick() >= min && link.getTick() <= max)
-			{
-				out.add(link);
-			}
-		}
-		return out;
-	}
-
-	private List<ObservedEvent> windowObservations(int min, int max)
-	{
-		List<ObservedEvent> out = new ArrayList<>();
-		for (ObservedEvent e : observations)
-		{
-			if (e.getTick() >= min && e.getTick() <= max)
-			{
-				out.add(e);
-			}
-		}
-		return out;
-	}
-
-	private List<DeathRecordingV2.Events.DeathMark> windowDeaths(int min, int max)
-	{
-		List<DeathRecordingV2.Events.DeathMark> out = new ArrayList<>();
-		for (DeathRecordingV2.Events.DeathMark e : deaths)
-		{
-			if (e.getTick() >= min && e.getTick() <= max)
-			{
-				out.add(e);
-			}
-		}
-		return out;
-	}
-
-	private List<EffectEvent> windowEffects(int min, int max)
-	{
-		List<EffectEvent> out = new ArrayList<>();
-		for (EffectEvent e : effectEvents)
-		{
-			if (e.getStartTick() >= min && e.getStartTick() <= max)
-			{
-				out.add(e);
-			}
-		}
-		return out;
-	}
-
-	private List<DeathRecordingV2.Events.PlayerActionRecord> windowActions(int min, int max)
-	{
-		List<DeathRecordingV2.Events.PlayerActionRecord> out = new ArrayList<>();
-		for (DeathRecordingV2.Events.PlayerActionRecord a : playerActions)
-		{
-			if (a.getTick() >= min && a.getTick() <= max)
-			{
-				out.add(a);
-			}
 		}
 		return out;
 	}
@@ -505,25 +450,6 @@ public class WorldSnapshotRecorder
 		return buffer.size();
 	}
 
-	/** The buffered snapshot for a given tick, or null. Used to read defender state at a launch tick. */
-	public synchronized WorldSnapshot snapshotAtTick(int tick)
-	{
-		for (WorldSnapshot ws : buffer)
-		{
-			if (ws.getTick() == tick)
-			{
-				return ws;
-			}
-		}
-		return null;
-	}
-
-	/** The most recently added damage event, including a zero-damage block, or null. */
-	public synchronized DamageRecord lastDamage()
-	{
-		return damageEvents.isEmpty() ? null : damageEvents.get(damageEvents.size() - 1);
-	}
-
 	/** Only positive damage received by the local player can be the killing blow. */
 	public synchronized List<DamageRecord> positiveReceivedAtTick(int tick)
 	{
@@ -554,22 +480,6 @@ public class WorldSnapshotRecorder
 		return Collections.unmodifiableList(out);
 	}
 
-	/** Finished capture values only; no live actor or scene API objects leave the recorder. */
-	public synchronized List<WorldSnapshot> snapshotsForSourceResolution()
-	{
-		return Collections.unmodifiableList(new ArrayList<>(buffer));
-	}
-
-	public synchronized List<SceneData> scenesForSourceResolution()
-	{
-		return Collections.unmodifiableList(new ArrayList<>(scenes.values()));
-	}
-
-	public synchronized List<ObservedEvent> observationsForSourceResolution()
-	{
-		return Collections.unmodifiableList(new ArrayList<>(observations));
-	}
-
 	/** Freeze membership only; interpretation and indexing belong to the worker. */
 	public synchronized ResolverV1Recording.EvidenceWindow freezeSourceEvidence(int throughTick, long cutoffSequence,
 		long revision, List<DamageRecord> additionalContexts)
@@ -587,18 +497,10 @@ public class WorldSnapshotRecorder
 			}
 		}
 		return new ResolverV1Recording.EvidenceWindow(new ArrayList<>(buffer), new ArrayList<>(scenes.values()),
-			windowObservations(firstTick, throughTick), hits, windowCaptureGaps(firstTick, throughTick),
-			windowObservationLinks(firstTick, throughTick), firstTick, throughTick, cutoffSequence, revision);
-	}
-
-	public synchronized List<DeathRecordingV2.Events.CaptureGap> captureGapsForSourceResolution()
-	{
-		return Collections.unmodifiableList(windowCaptureGaps(Integer.MIN_VALUE, Integer.MAX_VALUE));
-	}
-
-	public synchronized List<DeathRecordingV2.Events.CaptureGap> captureGapsAtTickForSourceResolution(int tick)
-	{
-		return Collections.unmodifiableList(windowCaptureGaps(tick, tick));
+			window(observations, ObservedEvent::getTick, firstTick, throughTick), hits,
+			windowCaptureGaps(firstTick, throughTick),
+			window(observationLinks, ObservedEventLink::getTick, firstTick, throughTick), firstTick, throughTick,
+			cutoffSequence, revision);
 	}
 
 	/** Enrich an original callback by identity. Derived source context never becomes a new HP event. */
@@ -665,29 +567,6 @@ public class WorldSnapshotRecorder
 			.sequence(event.getSequence()).type(event.getType()).actorRef(event.getActorRef())
 			.actorName(event.getActorName()).relatedActorRef(event.getRelatedActorRef()).sceneKey(event.getSceneKey())
 			.data(Collections.unmodifiableMap(data)).build();
-	}
-
-	/** Replace derived interpretations by callback identity, leaving the original records intact. */
-	public synchronized void applySourceResolutions(int tick, Map<Long, SourceResolution> resolutions)
-	{
-		if (resolutions == null || resolutions.isEmpty())
-		{
-			return;
-		}
-		for (int index = damageEvents.size() - 1; index >= 0; index--)
-		{
-			DamageRecord record = damageEvents.get(index);
-			if (record.getImpactTick() != tick || record.getObservationSequence() == null
-				|| record.getDirection() != null && !"RECEIVED".equals(record.getDirection()))
-			{
-				continue;
-			}
-			SourceResolution resolution = resolutions.get(record.getObservationSequence());
-			if (resolution != null)
-			{
-				damageEvents.set(index, record.toBuilder().sourceResolution(resolution).build());
-			}
-		}
 	}
 
 	/** Apply derived records only to their original observed hit; never replace a different callback. */

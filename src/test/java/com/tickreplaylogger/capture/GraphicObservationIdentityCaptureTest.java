@@ -53,7 +53,7 @@ public class GraphicObservationIdentityCaptureTest
 		assertEquals(first.getGraphicObservationId(), second.getGraphicObservationId());
 		assertNull(first.getObjectKey());
 		List<Map<String, Object>> contacts = new ArrayList<>();
-		Method callback = TickReplayLoggerPlugin.class.getDeclaredMethod("hazardsOnTile", LocalPoint.class, int.class,
+		Method callback = TickReplayLoggerPlugin.class.getDeclaredMethod("observeHazardsOnTile", LocalPoint.class, int.class,
 			List.class, boolean.class); callback.setAccessible(true);
 		callback.invoke(fixture.plugin, fixture.tile, 0, contacts, true);
 		assertEquals(1, contacts.size());

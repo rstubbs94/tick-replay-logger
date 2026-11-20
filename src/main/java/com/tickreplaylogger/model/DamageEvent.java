@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * Represents a damage event - either damage received or dealt.

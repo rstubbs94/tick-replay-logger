@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** A client callback observation, independent of combat attribution or inferred outcomes. */
 @Data

@@ -164,7 +164,7 @@ public final class SelfInputConstraints
 			{
 				qualified = rule.pageHash.equals(input.get("pageHash"))
 					&& qualifiedInput.test(rule.sourceRef, rule.operations)
-					&& ObservedHpCallbackContext.normal(originalCallbackContext, rule.zeros, rule.excludedTypes);
+					&& LegacyObservedHpCallbackContext.normal(originalCallbackContext, rule.zeros, rule.excludedTypes);
 			}
 			catch (RuntimeException missing)
 			{

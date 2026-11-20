@@ -25,23 +25,14 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.Gson;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import lombok.extern.slf4j.Slf4j;
 import lombok.Getter;
 
 /**
- * Loads the bundled, versioned combat-source map (generated from the osrs-pvm-research data map)
- * and provides fast lookups used to LABEL observed events: an NPC's attack styles, a hazard
- * graphic/object name, and whether a spotanim on the player is a known freeze/teleblock/bind.
- *
- * <p>The map only ever sharpens labels; the raw capture is the source of truth (observed over
- * predicted). Missing bindings retain unknown state; reference coverage alone is not a guarantee
- * of correct mechanic interpretation or causal attribution.
+ * Bundled factual capture lookups for NPC attack speeds and named object/graphic surfaces.
+ * Attack and effect interpretation belongs to the shared retrospective resolver. Missing
+ * references preserve unknown state and never establish an actual damage cause.
  */
 @Slf4j
 public class DamageMap
@@ -51,10 +42,6 @@ public class DamageMap
 	private Map<String, Integer> npcAttackSpeeds = Collections.emptyMap();
 	private Map<String, Map<String, String>> hazardNamesByKind = Collections.emptyMap();
 	private Map<String, ObjectHazardRule> objectHazardRules = Collections.emptyMap();
-	private Map<String, String> effectSpotanims = Collections.emptyMap();
-	private Map<String, String> projectileStyles = Collections.emptyMap();
-	private Map<String, String> playerAnimationStyles = Collections.emptyMap();
-	private Map<String, Map<String, AttackRule>> npcAttackRules = Collections.emptyMap();
 
 	@Getter
 	public static class ObjectHazardRule
@@ -79,28 +66,15 @@ public class DamageMap
 		private int sizeY;
 	}
 
-	@Getter
-	public static class AttackRule
-	{
-		private String name;
-		private String damageType;
-		private boolean requiresProjectile;
-		private String mapRef;
-	}
-
 	private static class Model
 	{
 		String version;
 		Map<String, Integer> npcAttackSpeeds;
 		Map<String, Map<String, String>> hazardNamesByKind;
 		Map<String, ObjectHazardRule> objectHazardRules;
-		Map<String, String> effectSpotanims;
-		Map<String, String> projectileStyles;
-		Map<String, String> playerAnimationStyles;
-		Map<String, Map<String, AttackRule>> npcAttackRules;
 	}
 
-	/** Load the bundled {@code damage_map.json} resource. Never throws — logs and no-ops on failure. */
+	/** Load the capture view of the bundled mechanics package. Never throws — logs and no-ops on failure. */
 	public static DamageMap load(Gson gson)
 	{
 		return load(gson, CombatCatalog.load(gson));
@@ -131,26 +105,9 @@ public class DamageMap
 				{
 					map.objectHazardRules = m.objectHazardRules;
 				}
-				if (m.effectSpotanims != null)
-				{
-					map.effectSpotanims = m.effectSpotanims;
-				}
-				if (m.projectileStyles != null)
-				{
-					map.projectileStyles = m.projectileStyles;
-				}
-				if (m.playerAnimationStyles != null)
-				{
-					map.playerAnimationStyles = m.playerAnimationStyles;
-				}
-				if (m.npcAttackRules != null)
-				{
-					map.npcAttackRules = m.npcAttackRules;
-				}
 			}
-			log.debug("Loaded damage map v{}: {} npc ids, {} hazards, {} effect spotanims", map.version,
-				map.npcAttackSpeeds.size(), map.hazardNamesByKind.values().stream().mapToInt(Map::size).sum(),
-				map.effectSpotanims.size());
+			log.debug("Loaded capture map v{}: {} npc ids, {} hazards", map.version, map.npcAttackSpeeds.size(),
+				map.hazardNamesByKind.values().stream().mapToInt(Map::size).sum());
 		}
 		catch (Exception e)
 		{
@@ -167,36 +124,6 @@ public class DamageMap
 	public CombatCatalog catalog()
 	{
 		return catalog;
-	}
-
-	public String styleForProjectile(int id)
-	{
-		return projectileStyles.get(String.valueOf(id));
-	}
-
-	public String styleForPlayerAnimation(int id)
-	{
-		return playerAnimationStyles.get(String.valueOf(id));
-	}
-
-	public AttackRule attackRuleForNpc(int npcId, int animationId)
-	{
-		return attackRuleForNpc(npcId, animationId, null);
-	}
-
-	public AttackRule attackRuleForNpc(int npcId, int animationId, Integer level)
-	{
-		return attackRuleForNpc(npcId, animationId, level, false);
-	}
-
-	public AttackRule attackRuleForNpc(int npcId, int animationId, Integer level, boolean normalContext)
-	{
-		if (!normalContext || (catalog != null && !catalog.baseVariantEstablished(npcId, level, true)))
-		{
-			return null;
-		}
-		Map<String, AttackRule> attacks = npcAttackRules.get(String.valueOf(npcId));
-		return attacks == null ? null : attacks.get(String.valueOf(animationId));
 	}
 
 	/** Attack speed in ticks for an NPC id, or 0 if unknown. */
@@ -232,12 +159,6 @@ public class DamageMap
 	public ObjectHazardRule objectHazardRule(int id)
 	{
 		return objectHazardRules.get(String.valueOf(id));
-	}
-
-	/** Source-associated graphic family only; the runtime must qualify its client target. Never applied-effect proof. */
-	public String effectForSpotanim(int spotanimId)
-	{
-		return effectSpotanims.get(String.valueOf(spotanimId));
 	}
 
 }

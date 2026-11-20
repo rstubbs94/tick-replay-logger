@@ -1209,21 +1209,14 @@ public class WorldCaptureService
 		Integer fromY = lastWorld != null ? Integer.valueOf(lastWorld.getY())
 			: w == null ? null : Integer.valueOf(w.getY());
 		recordPlayerIssues("player", sample);
-		return PlayerState.builder().worldViewId(sample.viewId).combatLevel(sample.level).interaction(interaction)
+		return sample.fill(PlayerState.builder()).interaction(interaction)
 			.observationIssues(sample.issues.isEmpty() ? null : new LinkedHashMap<>(sample.issues))
-			.localPositionKnown(l != null).worldPositionKnown(w != null).planeKnown(w != null)
-			.worldX(w == null ? 0 : w.getX()).worldY(w == null ? 0 : w.getY()).plane(w == null ? 0 : w.getPlane())
-			.localX(l == null ? 0 : l.getX()).localY(l == null ? 0 : l.getY()).orientation(sample.orientation)
-			.currentOrientation(sample.currentOrientation).animationId(sample.animation)
-			.animationFrame(sample.animationFrame).poseAnimationId(sample.pose).poseAnimationFrame(sample.poseFrame)
-			.graphicIds(sample.graphics).graphicsKnown(sample.graphicsKnown).graphicsState(sample.graphicsState)
 			.hp(boostedSkills.get("HITPOINTS")).maxHp(baseSkills.get("HITPOINTS")).prayer(boostedSkills.get("PRAYER"))
 			.maxPrayer(baseSkills.get("PRAYER")).activePrayers(prayer.active).reportedActivePrayers(prayer.reported)
 			.prayerFlagValues(prayer.flags).prayerStateKnown(prayer.complete && prayer.resolved)
 			.overheadPrayer(prayer.overhead).overheadPrayerEvidence(prayer.evidence)
 			.prayerStateConflict(prayer.conflict).overheadIcon(sample.icon == null ? null : sample.icon.name())
-			.overheadIconKnown(!sample.issues.containsKey("overheadIcon")).overheadText(sample.speech)
-			.overheadCycle(sample.overheadCycle).boostedAttack(boostedSkills.get("ATTACK"))
+			.overheadIconKnown(!sample.issues.containsKey("overheadIcon")).boostedAttack(boostedSkills.get("ATTACK"))
 			.boostedStrength(boostedSkills.get("STRENGTH")).boostedDefence(boostedSkills.get("DEFENCE"))
 			.boostedRanged(boostedSkills.get("RANGED")).boostedMagic(boostedSkills.get("MAGIC"))
 			.baseSkillLevels(baseSkills).boostedSkillLevels(boostedSkills)
@@ -1540,24 +1533,15 @@ public class WorldCaptureService
 				}
 				PlayerSnapshotObservation sample = new PlayerSnapshotObservation(p, w, worldIssue);
 				LocalPoint l = sample.local;
-				OtherPlayerState.OtherPlayerStateBuilder row = OtherPlayerState.builder()
+				OtherPlayerState.OtherPlayerStateBuilder<?, ?> row = sample.fill(OtherPlayerState.builder())
 					.actorRef(sample.read("actorRef", () -> actorRef(p, lp)))
-					.playerId(sample.read("playerId", p::getId)).worldViewId(sample.viewId).combatLevel(sample.level)
-					.name(sample.read("name", () -> clean(p.getName())))
+					.playerId(sample.read("playerId", p::getId)).name(sample.read("name", () -> clean(p.getName())))
 					.interaction(sample.read("interaction",
 						() -> ActorInteractions.captureObserved(sample.target, sample.interactionFlag,
 							!sample.issues.containsKey("interactionTarget"), lp, true, target -> actorRef(target, lp))))
-					.localPositionKnown(l != null).worldPositionKnown(w != null).planeKnown(w != null)
-					.worldX(w == null ? 0 : w.getX()).worldY(w == null ? 0 : w.getY())
-					.plane(w == null ? 0 : w.getPlane()).localX(l == null ? 0 : l.getX())
-					.localY(l == null ? 0 : l.getY()).orientation(sample.orientation)
-					.currentOrientation(sample.currentOrientation).animationId(sample.animation)
-					.animationFrame(sample.animationFrame).poseAnimationId(sample.pose)
-					.poseAnimationFrame(sample.poseFrame).graphicIds(sample.graphics)
-					.graphicsKnown(sample.graphicsKnown).graphicsState(sample.graphicsState)
 					.overheadPrayer(sample.icon == null ? null : sample.icon.name())
-					.overheadIconKnown(!sample.issues.containsKey("overheadIcon")).overheadText(sample.speech)
-					.overheadCycle(sample.overheadCycle).healthRatio(sample.read("healthRatio", p::getHealthRatio))
+					.overheadIconKnown(!sample.issues.containsKey("overheadIcon"))
+					.healthRatio(sample.read("healthRatio", p::getHealthRatio))
 					.healthScale(sample.read("healthScale", p::getHealthScale))
 					.interactingNpcIndex(sample.target instanceof NPC
 						? sample.read("interactingNpcIndex", () -> ((NPC) sample.target).getIndex())

@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.Map;
-import java.util.List;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
 
 /**
  * Rich per-tick world state for death reconstruction (architecture §4). One per game tick in the

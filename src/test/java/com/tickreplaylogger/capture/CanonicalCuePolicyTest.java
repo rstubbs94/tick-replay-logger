@@ -5,7 +5,7 @@
 package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
-import java.lang.reflect.Method;
+import static com.tickreplaylogger.capture.ResolverEvidence.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -39,17 +39,26 @@ public class CanonicalCuePolicyTest
     @Test public void stableKnownNativeOriginalApiRemainsNumericallyEligible() throws Exception
     {
         assertFlag(interpret(api()),"staticReferenceEligible",true);assertFlag(interpret(api()),"numericEligible",true);
-        JsonObject cue=api();cue.addProperty("numericEligible",false);assertFlag(interpret(cue),"numericEligible",false);
+        JsonObject cue=api();cue.addProperty("numericEligible",false);
+        object(cue,"originalSourceObservation").remove("sourceSceneKey");
+        assertFlag(interpret(cue),"numericEligible",false);
     }
-    @Test public void changedOrUnknownSourceHistoryCannotSupplyStyleOrCap() throws Exception
+    @Test public void changedOrUnknownActorDefinitionScopeAndGapCannotSupplyStyleOrCap() throws Exception
     {
-        for(String field:new String[]{"actorChanged","referenceChanged","definitionChanged","scopeChanged","observationGap","projectileDefinitionChanged"})
+        for(String field:new String[]{"actorChanged","definitionChanged","scopeChanged","observationGap","projectileDefinitionChanged"})
         {
             JsonObject cue=api();object(object(cue,"witness"),"sourceHistory").addProperty(field,true);
             assertFlag(interpret(cue),"staticReferenceEligible",false);assertFlag(interpret(cue),"numericEligible",false);
             object(object(cue,"witness"),"sourceHistory").remove(field);
             assertFlag(interpret(cue),"staticReferenceEligible",false);assertFlag(interpret(cue),"numericEligible",false);
         }
+    }
+    @Test public void aReferenceAliasCannotEraseTheImmutableModelOrQualifyANumericBound() throws Exception
+    {
+        JsonObject cue=api();object(object(cue,"witness"),"sourceHistory").addProperty("referenceChanged",true);
+        assertFlag(interpret(cue),"staticReferenceEligible",true);assertFlag(interpret(cue),"numericEligible",false);
+        object(object(cue,"witness"),"sourceHistory").remove("referenceChanged");
+        assertFlag(interpret(cue),"staticReferenceEligible",true);assertFlag(interpret(cue),"numericEligible",false);
     }
     @Test public void laterOriginalActorPoseCannotSupplyEarlierActualStyle() throws Exception
     {
@@ -103,8 +112,13 @@ public class CanonicalCuePolicyTest
     private JsonObject interpret(JsonObject cue) throws Exception
     {
         JsonObject hit=gson.fromJson("{recipientRef:'player',amount:5,hitsplatType:16,tick:3,cycle:130,sequence:20,scope:{sceneKey:'native',worldViewId:0,plane:0}}",JsonObject.class);
-        Method method=ResolverV1.class.getDeclaredMethod("interpretedCue",JsonObject.class,JsonObject.class);method.setAccessible(true);
-        return (JsonObject)method.invoke(ResolverV1.load(gson),cue,hit);
+        JsonObject input=new JsonObject();input.add("hit",hit);
+        Hit original=DirectFixtureEvidence.hit(input);Source source=DirectFixtureEvidence.source(cue);
+        ResolverV1.Facts facts=ResolverV1.load(gson).new RawFacts(original,source);
+        JsonObject result=new JsonObject();result.add("source",cue.get("source"));
+        result.addProperty("staticReferenceEligible",OriginalSourceProof.staticReference(source,original));
+        result.addProperty("numericEligible",facts.numeric());
+        return result;
     }
     private static JsonObject object(JsonObject value,String field) { return value.getAsJsonObject(field); }
     private static void assertFlag(JsonObject value,String field,boolean expected) { assertEquals(field,expected,value.get(field).getAsBoolean()); }

@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Immutable raw numeric channels. No client strings or arbitrary objects are recorded. */
 @Data

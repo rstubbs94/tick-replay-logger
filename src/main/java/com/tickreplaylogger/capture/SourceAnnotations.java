@@ -6,7 +6,7 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
 import java.util.*;
-import static com.tickreplaylogger.capture.ResolverV1.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.*;
 
 /** Folds already-admitted annotation effects; never matches a reference or qualifies a source. */
 final class SourceAnnotations
@@ -15,7 +15,7 @@ final class SourceAnnotations
 	{
 	}
 
-	static JsonObject fold(List<JsonObject> rules, JsonObject cue, ResolutionCandidate row)
+	static JsonObject fold(List<JsonObject> rules, ResolutionCandidate row, boolean referenceHints)
 	{
 		Map<String, List<JsonObject>> groups = new LinkedHashMap<>();
 		for (JsonObject rule : rules)
@@ -71,7 +71,9 @@ final class SourceAnnotations
 			}
 		}
 		JsonArray hints = new JsonArray();
-		for (String field : Arrays.asList("styles", "attackStyles"))
+		for (String field : referenceHints && row != null && Boolean.TRUE.equals(row.componentQualified)
+			? Arrays.asList("styles", "attackStyles")
+			: Collections.<String>emptyList())
 		{
 			for (JsonElement value : array(reference.get(field)))
 			{
@@ -82,7 +84,8 @@ final class SourceAnnotations
 			}
 		}
 		append(result, "candidateStyles", hints);
-		Integer level = row == null ? null : integer(object(row.source).get("combatLevel"));
+		Integer level = row == null ? null
+			: (row.identityOverride == null ? row.source.identity() : row.identityOverride).combatLevel;
 		if (level != null)
 		{
 			result.addProperty("attackerCombatLevel", level);
@@ -127,11 +130,22 @@ final class SourceAnnotations
 		}
 		for (JsonElement value : incoming)
 		{
+			if ("candidateStyles".equals(field)
+				&& (textValue(value) == null || "unknown".equalsIgnoreCase(textValue(value))))
+			{
+				continue;
+			}
 			if (seen.add(value))
 			{
 				values.add(value);
 			}
 		}
 		result.add(field, values);
+	}
+
+	private static String textValue(JsonElement value)
+	{
+		return value instanceof JsonPrimitive && value.getAsJsonPrimitive().isString()
+			&& !value.getAsString().trim().isEmpty() ? value.getAsString() : null;
 	}
 }

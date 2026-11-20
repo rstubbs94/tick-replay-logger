@@ -31,14 +31,12 @@ import static com.tickreplaylogger.ui.LiveTickPanel.createTextLabel;
 import static com.tickreplaylogger.ui.LiveTickPanel.createIconLabel;
 import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.capture.DamageMap;
-import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.Cursor;
-import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -57,27 +55,18 @@ public class RecordingEntryPanel extends JPanel
 	private static final Color ROW_COLOR_2 = new Color(45, 45, 45);
 	private static final Color DEATH_ROW_COLOR = new Color(60, 30, 30);
 
-	private static final int ICON_SIZE = 18;
-
 	private final TickRecording recording;
 	private final DamageMap damageMap;
 	private final Gson gson;
 	private final List<TickData> displayTicks;
 	private final JPanel ticksPanel;
-	private final SpriteManager spriteManager;
 	private final Consumer<TickRecording> saveCallback;
 	private final Consumer<TickRecording> renameCallback;
 	private final boolean isSaved;
 	private boolean expanded = false;
 	private boolean collapseUnchanged = false;
 
-	// Cached icons
-	private ImageIcon iconHitpoints;
-	private ImageIcon iconPrayer;
-	private ImageIcon iconAttack;
-	private ImageIcon iconSkull;
-	private ImageIcon iconHeart;
-	private ImageIcon iconAgility;
+	private final ReplayIcons icons;
 
 	/**
 	 * Constructor for recordings (without save callback).
@@ -102,12 +91,11 @@ public class RecordingEntryPanel extends JPanel
 		this.damageMap = damageMap;
 		this.gson = gson;
 		this.displayTicks = recording.getTicks();
-		this.spriteManager = spriteManager;
 		this.saveCallback = saveCallback;
 		this.renameCallback = renameCallback;
 		this.isSaved = isSaved;
 
-		loadSprites();
+		icons = ReplayIcons.load(spriteManager);
 
 		setLayout(new BorderLayout());
 		setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -122,54 +110,6 @@ public class RecordingEntryPanel extends JPanel
 		ticksPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		ticksPanel.setVisible(false);
 		add(ticksPanel, BorderLayout.CENTER);
-	}
-
-	private void loadSprites()
-	{
-		if (spriteManager == null)
-		{
-			return;
-		}
-		// Load sprites from the game using SpriteManager
-		// These are the native OSRS skill icons
-		spriteManager.getSpriteAsync(SpriteID.SKILL_HITPOINTS, 0, img ->
-		{
-			iconHitpoints = scaleIcon(img);
-			iconHeart = iconHitpoints; // Reuse for heart
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_PRAYER, 0, img ->
-		{
-			iconPrayer = scaleIcon(img);
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img ->
-		{
-			iconAttack = scaleIcon(img);
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_AGILITY, 0, img ->
-		{
-			iconAgility = scaleIcon(img);
-		});
-
-		// Use the TAB_COMBAT for skull (combat-related deaths)
-		spriteManager.getSpriteAsync(SpriteID.TAB_COMBAT, 0, img ->
-		{
-			iconSkull = scaleIcon(img);
-		});
-
-		com.tickreplaylogger.ui.CombatIcons.load(spriteManager);
-	}
-
-	private ImageIcon scaleIcon(BufferedImage img)
-	{
-		if (img == null)
-		{
-			return null;
-		}
-		Image scaled = img.getScaledInstance(ICON_SIZE, ICON_SIZE, Image.SCALE_SMOOTH);
-		return new ImageIcon(scaled);
 	}
 
 	@Override
@@ -202,9 +142,9 @@ public class RecordingEntryPanel extends JPanel
 		}
 		titleLabel.setForeground(Color.WHITE);
 		titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-		if (iconSkull != null)
+		if (icons.skull() != null)
 		{
-			titleLabel.setIcon(iconSkull);
+			titleLabel.setIcon(icons.skull());
 			titleLabel.setIconTextGap(6);
 		}
 		titleRow.add(titleLabel, BorderLayout.WEST);
@@ -437,7 +377,7 @@ public class RecordingEntryPanel extends JPanel
 		gbc.anchor = GridBagConstraints.WEST;
 
 		panel.add(LiveTickPanel.createTickHeader(tick, isDeathTick ? "DEATH" : String.valueOf(ticksBeforeDeath),
-			isDeathTick ? HP_LOW_COLOR : Color.WHITE, bgColor, iconPrayer, iconHitpoints,
+			isDeathTick ? HP_LOW_COLOR : Color.WHITE, bgColor, icons.prayer(), icons.hitpoints(),
 			Boolean.FALSE.equals(tick.getPrayerStateKnown()) ? "Prayer state unavailable at this tick"
 				: "Active prayers: " + String.join(", ", tick.getActivePrayers())),
 			gbc);
@@ -477,7 +417,7 @@ public class RecordingEntryPanel extends JPanel
 			if (hpChange > 0)
 			{
 				// HP increased = healing (from food eaten previous tick, or passive healing)
-				JLabel healLabel = createIconLabel("+" + hpChange + " HP", iconHeart, HP_HIGH_COLOR);
+				JLabel healLabel = createIconLabel("+" + hpChange + " HP", icons.hitpoints(), HP_HIGH_COLOR);
 				panel.add(healLabel, gbc);
 				gbc.gridy++;
 				hasContent = true;
@@ -502,13 +442,13 @@ public class RecordingEntryPanel extends JPanel
 		TickData previous = prevTickIndex >= 0 ? displayTicks.get(prevTickIndex) : null;
 		for (String prayer : DisplayFormat.prayerChanges(tick, previous))
 		{
-			JLabel label = createIconLabel(prayer, iconPrayer, PRAYER_COLOR);
+			JLabel label = createIconLabel(prayer, icons.prayer(), PRAYER_COLOR);
 			panel.add(label, gbc);
 			gbc.gridy++;
 			hasContent = true;
 		}
 
-		hasContent |= LiveTickPanel.appendCombatRows(panel, gbc, tick, iconAgility, this::getActionIcon);
+		hasContent |= LiveTickPanel.appendCombatRows(panel, gbc, tick, icons.agility(), icons::action);
 
 		// Telemetry (tick duration and ping)
 		JLabel telLabel = LiveTickPanel.createTelemetryLabel(tick);
@@ -528,28 +468,6 @@ public class RecordingEntryPanel extends JPanel
 		}
 
 		return panel;
-	}
-
-	private ImageIcon getActionIcon(PlayerAction action)
-	{
-		String desc = action.getDescription().toLowerCase();
-		if (desc.startsWith("ate") || desc.startsWith("drank"))
-		{
-			return iconHitpoints; // Use HP icon for consumables
-		}
-		else if (desc.contains("prayer") || desc.startsWith("activated") || desc.startsWith("deactivated"))
-		{
-			return iconPrayer;
-		}
-		else if (desc.startsWith("equipped") || desc.startsWith("unequipped"))
-		{
-			return iconAttack; // Use attack icon for gear
-		}
-		else if (desc.startsWith("attacked"))
-		{
-			return iconAttack;
-		}
-		return null;
 	}
 
 }

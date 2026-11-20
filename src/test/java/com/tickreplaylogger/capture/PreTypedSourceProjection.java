@@ -3,7 +3,7 @@ import com.google.gson.*;
 import com.tickreplaylogger.model.world.SourceResolution;
 import com.tickreplaylogger.util.SourceResolutionLabels;
 import java.util.*;
-import static com.tickreplaylogger.capture.ResolverV1.*;
+import static com.tickreplaylogger.capture.PreRuleIrResolverV1.*;
 /** Frozen pre-typed presentation conversion; no runtime call sites. */
 final class PreTypedSourceProjection
 {

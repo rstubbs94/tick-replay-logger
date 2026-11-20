@@ -203,15 +203,7 @@ public final class PrayerObservation
 
 	private <T> T read(String field, Supplier<T> getter)
 	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			observationIssues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
+		return ObservationReads.read(observationIssues, field, getter);
 	}
 
 	static String prayerForIcon(HeadIcon icon)

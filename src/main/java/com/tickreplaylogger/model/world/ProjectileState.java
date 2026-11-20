@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * Independent client observations. First observation and estimated arrival do not establish

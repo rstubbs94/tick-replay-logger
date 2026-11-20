@@ -12,6 +12,10 @@ public final class ResolverTestCatalog
         {"activityClassifications","activity"},{"sourceBounds","source_bound"},{"sourceAssociations","presence"},
         {"qualifiedLimits","qualified_limit"},{"evidenceRules","evidence"},{"inputLimits","input_limit"},{"contactPolicies","contact_limit"}};
     private ResolverTestCatalog() {}
+    public static ResolverV1 engine(JsonObject document)
+    {
+        return new ResolverV1(document,JSON,null,null);
+    }
     public static JsonObject lower(JsonObject document)
     {
         if(document==null) return null;
@@ -62,21 +66,42 @@ public final class ResolverTestCatalog
             if(role.equals(value.getAsJsonObject().get("role").getAsString())) result.add(value);
         return result;
     }
-    /** The shared JSON protocol is a test/conformance boundary, not an active replay intermediate. */
+    /** JSON exists only at the retained synthetic/conformance test boundary. */
     public static JsonObject render(ResolutionCandidate candidate)
     {
-        JsonObject result=JSON.toJsonTree(candidate).getAsJsonObject();
-        result.addProperty("ruleId",candidate.ruleId);
-        result.addProperty("sourceKey",candidate.sourceKey);
-        result.add("source",candidate.source);
-        result.add("evidence",candidate.evidence);
-        result.add("reasons",candidate.reasons);
-        if(candidate.referenceAnnotations!=null) result.add("referenceAnnotations",candidate.referenceAnnotations);
-        if(candidate.derivedAnnotations!=null) result.add("derivedAnnotations",candidate.derivedAnnotations);
-        if(candidate.references!=null) result.add("references",candidate.references);
-        if(candidate.maximum!=null) result.add("maximum",candidate.maximum);
-        if(candidate.hitMultiplicity!=null) result.add("hitMultiplicity",candidate.hitMultiplicity);
+        JsonObject result = new JsonObject();
+        put(result,"key",candidate.key);put(result,"ruleId",candidate.ruleId);put(result,"sourceKey",candidate.sourceKey);
+        put(result,"status",candidate.status);put(result,"confidence",candidate.confidence);
+        put(result,"sourceAssociation",candidate.sourceAssociation);put(result,"attributionEvidence",candidate.attributionEvidence);
+        put(result,"label",candidate.label);put(result,"evidenceMode",candidate.evidenceMode);
+        put(result,"candidateStrength",candidate.candidateStrength);put(result,"exclusionScope",candidate.exclusionScope);
+        put(result,"observedLabel",candidate.observedLabel);result.addProperty("ordinary",candidate.ordinary);
+        put(result,"componentQualified",candidate.componentQualified);put(result,"componentIdentified",candidate.componentIdentified);
+        put(result,"identityQualified",candidate.identityQualified);put(result,"causalAssociationOnly",candidate.causalAssociationOnly);
+        put(result,"legacyApiReferenceConflictEligible",candidate.legacyApiReferenceConflictEligible);put(result,"scalarEligible",candidate.scalarEligible);
+        ResolverEvidence.Identity identity=candidate.identityOverride==null ? candidate.source.identity() : candidate.identityOverride;
+        JsonObject source=new JsonObject();
+        put(source,"kind",identity.kind);put(source,"id",identity.id);put(source,"actorRef",identity.actorRef);
+        put(source,"observationKey",identity.observationKey);put(source,"name",identity.name);put(source,"combatLevel",identity.combatLevel);
+        put(source,"familyKey",candidate.familyKey);
+        if(identity.observationKey!=null && identity.observationKey.startsWith("observed-hit-kind:"))
+            put(source,"statusFamily",identity.observationKey.substring("observed-hit-kind:".length()));
+        if(identity.scope!=null)
+        {
+            JsonObject scope=new JsonObject();put(scope,"sceneKey",identity.scope.sceneKey);put(scope,"worldViewId",identity.scope.worldViewId);
+            put(scope,"plane",identity.scope.plane);source.add("scope",scope);
+        }
+        result.add("source",source);result.add("evidence",candidate.evidence);result.add("reasons",candidate.reasons);
+        put(result,"referenceAnnotations",candidate.referenceAnnotations);put(result,"derivedAnnotations",candidate.derivedAnnotations);
+        put(result,"references",candidate.references);put(result,"maximum",candidate.maximum);put(result,"hitMultiplicity",candidate.hitMultiplicity);
         return result;
+    }
+    private static void put(JsonObject target,String key,Object value)
+    {
+        if(value instanceof JsonElement) target.add(key,(JsonElement)value);
+        else if(value instanceof String) target.addProperty(key,(String)value);
+        else if(value instanceof Number) target.addProperty(key,(Number)value);
+        else if(value instanceof Boolean) target.addProperty(key,(Boolean)value);
     }
     public static JsonObject render(ResolutionResult evaluated)
     {
@@ -91,13 +116,25 @@ public final class ResolverTestCatalog
     }
     public static JsonObject resolve(ResolverV1 engine,JsonObject input)
     {
-        return render(engine.evaluate(input));
+        ResolverEvidence.Hit hit=DirectFixtureEvidence.hit(input);
+        List<ResolverV1.Facts> facts=new ArrayList<>();
+        for(JsonElement value:ResolverEvidence.array(input.get("cues"))) facts.add(new DeclaredMechanicFacts(engine,input,value.getAsJsonObject()));
+        return render(engine.evaluate(hit,facts));
     }
     public static List<JsonObject> resolveBatch(ResolverV1 engine,List<JsonObject> inputs)
     {
+        List<ResolverEvidence.Hit> hits=new ArrayList<>();
+        List<ResolutionResult> interpreted=new ArrayList<>();
+        for(JsonObject input:inputs)
+        {
+            ResolverEvidence.Hit hit=DirectFixtureEvidence.hit(input);hits.add(hit);
+            List<ResolverV1.Facts> facts=new ArrayList<>();
+            for(JsonElement value:ResolverEvidence.array(input.get("cues"))) facts.add(new DeclaredMechanicFacts(engine,input,value.getAsJsonObject()));
+            interpreted.add(engine.evaluate(hit,facts));
+        }
+        ResolverV1.reconcileBatch(hits,interpreted);
         List<JsonObject> results=new ArrayList<>();
-        for(ResolutionResult result:engine.evaluateBatch(inputs)) results.add(render(result));
+        for(ResolutionResult result:interpreted) results.add(render(result));
         return results;
     }
-
 }

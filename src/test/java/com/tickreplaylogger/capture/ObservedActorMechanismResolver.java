@@ -51,7 +51,7 @@ public final class ObservedActorMechanismResolver
 	private final Map<Integer, List<WorldSnapshot>> frames = new HashMap<>();
 	private final Set<Integer> gapTicks = new HashSet<>();
 	private final boolean eventsKnown;
-	private final ObservedHpCallbackContext hpContexts;
+	private final LegacyObservedHpCallbackContext hpContexts;
 	private final boolean retainedWindowComplete;
 	private boolean truncated;
 
@@ -138,17 +138,17 @@ public final class ObservedActorMechanismResolver
 	public ObservedActorMechanismResolver(MechanismRules rules, List<WorldSnapshot> history, List<ObservedEvent> events,
 		List<DeathRecordingV2.Events.CaptureGap> gaps)
 	{
-		this(rules, history, events, gaps, new ObservedHpCallbackContext(events));
+		this(rules, history, events, gaps, new LegacyObservedHpCallbackContext(events));
 	}
 
 	public ObservedActorMechanismResolver(MechanismRules rules, List<WorldSnapshot> history, List<ObservedEvent> events,
-		List<DeathRecordingV2.Events.CaptureGap> gaps, ObservedHpCallbackContext hpContexts)
+		List<DeathRecordingV2.Events.CaptureGap> gaps, LegacyObservedHpCallbackContext hpContexts)
 	{
 		this(rules, history, events, gaps, hpContexts, true);
 	}
 
 	public ObservedActorMechanismResolver(MechanismRules rules, List<WorldSnapshot> history, List<ObservedEvent> events,
-		List<DeathRecordingV2.Events.CaptureGap> gaps, ObservedHpCallbackContext hpContexts,
+		List<DeathRecordingV2.Events.CaptureGap> gaps, LegacyObservedHpCallbackContext hpContexts,
 		boolean retainedWindowComplete)
 	{
 		this.rules = rules;
@@ -404,7 +404,7 @@ public final class ObservedActorMechanismResolver
 			|| !Boolean.TRUE.equals(hit.getHitsplatTypeKnown()) || hit.getAmount() < 0
 			|| hit.getObservationSequence() == null || hit.getObservationSequence() <= 0 || hit.getImpactTick() < 0
 			|| hit.getObservedCycle() == null || hit.getObservedCycle() < 0 || hpContexts == null
-			|| !hpContexts.positionMatches(hit) || !ObservedHpCallbackContext.normal(hpContexts.forHit(hit),
+			|| !hpContexts.positionMatches(hit) || !LegacyObservedHpCallbackContext.normal(hpContexts.forHit(hit),
 				Collections.singletonList("LEAGUE_TYPE"), Arrays.asList("SEASONAL", "DEADMAN", "TOURNAMENT", "BETA")))
 			return new ObservedMechanismResolver.Result(output, false);
 		if (retained && (!retainedWindowComplete || truncated || !eventsKnown))

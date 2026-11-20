@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * An environmental hazard observed this tick (acid pool, falling-rock shadow, blood splat, fire,

@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 public class ResolverContextScopeTest
 {
     private final Gson gson=new Gson();
-    private final ResolverV1 engine=new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution'}",JsonObject.class)));
+    private final ResolverV1 engine=ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution'}",JsonObject.class)));
     @Test public void everyCausalEvidenceModeHonorsKnownOriginalNativeConflicts()
     {
         for(String mode:Arrays.asList("ACTOR_ACTIVITY","API_PROJECTILE","RETAINED_NAMED","ORIGINAL_CONTACT",
@@ -21,7 +21,7 @@ public class ResolverContextScopeTest
             for(String field:Arrays.asList("sceneKey","worldViewId","plane","contextEpoch"))
             {
                 JsonObject input=input(),cue=cue(input),scope=cue.getAsJsonObject("source").getAsJsonObject("scope");cue.addProperty("evidenceMode",mode);
-                if("sceneKey".equals(field))scope.addProperty(field,"other");else scope.addProperty(field,9);
+                if("sceneKey".equals(field))scope.addProperty(field,"other");else scope.addProperty(field,"plane".equals(field) ? 1 : 9);
                 if("contextEpoch".equals(field))input.getAsJsonObject("hit").getAsJsonObject("scope").addProperty(field,1);
                 assertConflict(mode+":"+field,ResolverTestCatalog.resolve(engine,input));
             }

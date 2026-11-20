@@ -192,7 +192,7 @@ public class SourceResolutionAttachmentTest
 		recorder.addDamage(unlinked);
 		List<DamageRecord> frozen = recorder.receivedAtTick(2);
 		assertEquals(2, frozen.size());
-		recorder.applySourceResolutions(2, Collections.singletonMap(11L, resolution()));
+		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, received.toBuilder().sourceResolution(resolution()).build()));
 		List<DamageRecord> current = recorder.receivedAtTick(2);
 		assertNotNull(current.get(0).getSourceResolution());
 		assertNull(current.get(1).getSourceResolution());
@@ -204,7 +204,7 @@ public class SourceResolutionAttachmentTest
 		derived.remove("sourceResolution");
 		assertEquals(original, derived);
 		recorder.addSnapshot(WorldSnapshot.builder().tick(2).build());
-		List<WorldSnapshot> snapshots = recorder.snapshotsForSourceResolution();
+		List<WorldSnapshot> snapshots = recorder.freezeSourceEvidence(Integer.MAX_VALUE, Long.MAX_VALUE, 0, Collections.emptyList()).getTicks();
 		recorder.clear();
 		assertEquals(1, snapshots.size());
 		assertEquals(2, snapshots.get(0).getTick());
@@ -222,15 +222,22 @@ public class SourceResolutionAttachmentTest
 		recorder.addDamageEvent(dealt);
 		recorder.finalizeTick();
 		List<TickData> frozen = recorder.getTickHistory();
-		recorder.applyReceivedSourceResolutions(2, Collections.singletonMap(11L, resolution()));
+		DamageRecord projected=DamageRecord.builder().impactTick(1).observationSequence(11L).amount(0)
+			.direction("RECEIVED").sourceResolution(resolution()).attackerName("Unknown").damageType("unknown")
+			.attribution("UNKNOWN").determination("UNKNOWN").build();
+		recorder.applyResolvedDamageRecords(2, Collections.singletonMap(11L, projected));
 		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
-		recorder.applyReceivedSourceResolutions(1, Collections.singletonMap(11L, resolution()));
+		recorder.applyResolvedDamageRecords(1,Collections.singletonMap(11L,projected.toBuilder().amount(1).build()));
+		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
+		recorder.applyResolvedDamageRecords(1,Collections.singletonMap(11L,projected.toBuilder().observationSequence(12L).build()));
+		assertNull(recorder.getTickHistory().get(0).getDamageEvents().get(0).getSourceResolution());
+		recorder.applyResolvedDamageRecords(1, Collections.singletonMap(11L, projected));
 		List<DamageEvent> current = recorder.getTickHistory().get(0).getDamageEvents();
 		assertNotNull(current.get(0).getSourceResolution());
 		assertNull(current.get(1).getSourceResolution());
 		assertNull(frozen.get(0).getDamageEvents().get(0).getSourceResolution());
 		assertEquals(0, current.get(0).getAmount());
-		assertEquals("Unknown", current.get(0).getSource());
+		assertEquals("Unfamiliar entity",current.get(0).getSource());
 		assertEquals(7, current.get(1).getAmount());
 	}
 }

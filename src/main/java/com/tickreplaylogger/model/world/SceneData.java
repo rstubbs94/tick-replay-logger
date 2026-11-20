@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.List;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * Collision/map context for one loaded scene (§4b), with observed geometry retained for

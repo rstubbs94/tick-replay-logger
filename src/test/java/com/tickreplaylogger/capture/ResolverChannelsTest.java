@@ -12,42 +12,53 @@ import static org.junit.Assert.*;
 public class ResolverChannelsTest
 {
     private final Gson gson=new Gson();
-    @Test public void onePhysicalCueMatchesTheSameExplicitLegacyFacets()
+    @Test public void onePhysicalSourceMatchesEveryApplicableDeclaredRelationship()
     {
-        JsonObject one=input(),base=one.getAsJsonArray("cues").get(0).getAsJsonObject();
-        JsonObject legacy=one.deepCopy();JsonArray separate=new JsonArray();
-        for(JsonElement value:base.getAsJsonArray("channels"))
+        JsonObject input=input();
+        ResolverEvidence.Hit hit=DirectFixtureEvidence.hit(input);
+        java.util.List<ResolverV1.Facts> facts=facts(engine(),input);
+        ResolutionResult result=engine().evaluate(hit,facts);
+        java.util.Set<String> rules=new java.util.LinkedHashSet<>();
+        ResolutionCandidate endpoint=null;
+        for(ResolutionCandidate row:result.candidates)
         {
-            JsonObject view=base.deepCopy();view.remove("channels");
-            for(java.util.Map.Entry<String,JsonElement> field:value.getAsJsonObject().entrySet())view.add(field.getKey(),field.getValue());
-            view.addProperty("cohortKey","physical:7");separate.add(view);
+            assertTrue("One physical source must not emit duplicate component rows",rules.add(row.ruleId));
+            assertSame(hit.sources().get(0).raw(),row.source.raw());
+            if("endpoint".equals(row.ruleId)) endpoint=row;
         }
-        legacy.add("cues",separate);ResolverV1 engine=engine();
-        assertEquals(ResolverTestCatalog.resolve(engine,legacy),ResolverTestCatalog.resolve(engine,one));
-        JsonObject endpoint=null;
-        for(JsonElement value:ResolverTestCatalog.resolve(engine,one).getAsJsonArray("candidates"))
-            if("endpoint".equals(value.getAsJsonObject().get("ruleId").getAsString()))endpoint=value.getAsJsonObject();
-        assertNotNull(endpoint);assertFalse(endpoint.get("componentQualified").getAsBoolean());assertFalse(endpoint.has("maximum"));
-        assertTrue(endpoint.getAsJsonArray("evidence").toString().contains("PROJECTILE_OBSERVATION_ID:7"));
+        assertTrue(rules.contains("area"));assertNotNull(endpoint);
+        assertFalse(Boolean.TRUE.equals(endpoint.componentQualified));assertNull(endpoint.maximum);
+        assertTrue(endpoint.evidence.toString().contains("PROJECTILE_OBSERVATION_ID:7"));
     }
-    @Test public void endpointOverridesDoNotMutateOrCopyTheOriginalPayload()
+    @Test public void alternativeRelationshipsDoNotMutateOrCloneTheOriginalPayload()
     {
-        JsonObject input=input(),base=input.getAsJsonArray("cues").get(0).getAsJsonObject();String before=input.toString();
-        JsonArray views=ResolverV1.expandChannels(input.getAsJsonArray("cues"));assertEquals(3,views.size());
-        JsonObject endpoint=views.get(2).getAsJsonObject();assertSame(base.get("witness"),endpoint.get("witness"));
-        assertEquals("physical:7",endpoint.get("cohortKey").getAsString());assertEquals("endpoint:7",endpoint.get("key").getAsString());
-        assertFalse(endpoint.get("numericEligible").getAsBoolean());assertFalse(endpoint.get("componentBound").getAsBoolean());
-        assertFalse(endpoint.get("allowFallback").getAsBoolean());assertEquals(before,input.toString());
+        JsonObject input=input();String before=input.toString();
+        ResolverEvidence.Hit hit=DirectFixtureEvidence.hit(input);
+        ResolutionResult result=engine().evaluate(hit,facts(engine(),input));
+        assertTrue(result.candidates.size()>1);
+        for(ResolutionCandidate row:result.candidates)
+            assertSame(hit.sources().get(0).raw(),row.source.raw());
+        assertEquals(before,input.toString());
     }
-    @Test public void evaluatedFacetLimitCannotBeReportedAsComplete()
+    @Test public void boundedOriginalSourcesCannotBeReportedAsCompleteWhenTruncated()
     {
-        JsonObject input=input(),base=input.getAsJsonArray("cues").get(0).getAsJsonObject();JsonArray facets=new JsonArray();
-        for(int n=0;n<ResolverV1.MAX_CUES+4;n++)facets.add(gson.fromJson("{pattern:'projectile_impact',evidenceMode:'API_PROJECTILE'}",JsonObject.class));
-        base.add("channels",facets);assertTrue(ResolverTestCatalog.resolve(engine(),input).get("truncated").getAsBoolean());
+        JsonObject input=input(),base=input.getAsJsonArray("cues").get(0).getAsJsonObject();JsonArray sources=new JsonArray();
+        for(int n=0;n<ResolverV1.MAX_CUES+4;n++)
+        {
+            JsonObject source=base.deepCopy();source.addProperty("key","source:"+n);sources.add(source);
+        }
+        input.add("cues",sources);
+        assertTrue(ResolverTestCatalog.resolve(engine(),input).get("truncated").getAsBoolean());
+    }
+    private java.util.List<ResolverV1.Facts> facts(ResolverV1 engine,JsonObject input)
+    {
+        java.util.List<ResolverV1.Facts> facts=new java.util.ArrayList<>();
+        for(JsonElement cue:input.getAsJsonArray("cues")) facts.add(new DeclaredMechanicFacts(engine,input,cue.getAsJsonObject()));
+        return facts;
     }
     private ResolverV1 engine()
     {
-        return new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[{id:'ordinary',source:{kind:'npc',ids:[900001]},styles:['melee'],maximum:{kind:'fixed_max',value:10,authority:'verified'}}],specialRules:[{id:'area',source:{kind:'npc',ids:[900001]},pattern:'area_impact',signals:{projectileIds:[1001]},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',outcome:{maximum:{kind:'fixed_max',value:20,authority:'verified'}}}],evidenceRules:[{id:'endpoint',evidenceMode:'ENDPOINT_COOCCURRENCE',source:{kind:'npc',ids:[900001]},declaration:{},admissionWhen:{all:[]},geometryRequired:true,geometry:{shape:'point',anchor:'source_position',authority:'reference_only'},clockPolicy:'SAME_RECORDED_TICK'}]}",JsonObject.class)));
+        return ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',ordinaryProfiles:[{id:'ordinary',source:{kind:'npc',ids:[900001]},styles:['melee'],maximum:{kind:'fixed_max',value:10,authority:'verified'}}],specialRules:[{id:'area',source:{kind:'npc',ids:[900001]},pattern:'area_impact',signals:{projectileIds:[1001]},geometry:{shape:'point',anchor:'source_position',authority:'verified'},recipients:'within_area',outcome:{maximum:{kind:'fixed_max',value:20,authority:'verified'}}}],evidenceRules:[{id:'endpoint',evidenceMode:'ENDPOINT_COOCCURRENCE',source:{kind:'npc',ids:[900001]},declaration:{},admissionWhen:{all:[]},geometryRequired:true,geometry:{shape:'point',anchor:'source_position',authority:'reference_only'},clockPolicy:'SAME_RECORDED_TICK'}]}",JsonObject.class)));
     }
     private JsonObject input()
     {

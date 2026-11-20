@@ -17,7 +17,7 @@ public class SettledReferenceWindowTest
 			Gson gson = new Gson();
 			Map<String, Object> npc = fields("kind", "npc", "ids", Collections.singletonList(990001));
 			Map<String, Object> graphic = fields("kind", "graphic", "ids", Collections.singletonList(999002));
-			ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.toJsonTree(fields("schemaVersion", 1,
+			ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.toJsonTree(fields("schemaVersion", 1,
 				"purpose", "retrospective_damage_resolution", "specialRules", Arrays.asList(
 					fields("id", "synthetic:actor", "pattern", "direct_attack", "source", npc,
 						"signals", fields("animationIds", Collections.singletonList(999003))),

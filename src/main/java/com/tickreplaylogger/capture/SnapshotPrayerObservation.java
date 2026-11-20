@@ -26,8 +26,7 @@ package com.tickreplaylogger.capture;
 
 import java.util.*;
 import java.util.List;
-import net.runelite.api.Client;
-import net.runelite.api.Prayer;
+import net.runelite.api.*;
 
 /** A partial flag sample cannot prove an unread flag inactive or resolve competing overheads. */
 final class SnapshotPrayerObservation

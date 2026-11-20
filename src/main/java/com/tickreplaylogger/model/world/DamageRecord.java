@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
-import java.util.Objects;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
 
 /**
  * A damage event in the rich export, carrying the full Â§3 lifecycle: both launch and impact ticks,

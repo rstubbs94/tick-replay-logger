@@ -39,6 +39,17 @@ def lower_resolution_rules(resolver):
 
     def append(original, role, profile=None):
         row = deepcopy(original)
+        if role == 'evidence' and row.get('evidenceMode') == 'SYSTEM_RESPONSE':
+            row['admissionMaximum'] = deepcopy(row['declaration']['admissionMaximum'])
+        # Item possession has the same per-callback bound operation as other
+        # evidence families; quantity is deliberately never a multiplier.
+        if role == 'evidence' and row.get('evidenceMode') == 'INVENTORY_POSSESSION':
+            bound = row.get('declaration', {}).get('componentBound')
+            if bound:
+                if bound.get('numericScope') != 'PER_CALLBACK_MAXIMUM':
+                    raise ValueError('Untranslated possession bound scope')
+                row['perHitMaximum'] = deepcopy(bound['maximum'])
+                row['maximumContextPredicate'] = deepcopy(bound['contextPredicate'])
         if 'role' in row:
             if role != 'activity' or 'classificationRole' in row:
                 raise ValueError('Untranslated pre-existing role field: ' + str(row.get('id', row.get('key'))))

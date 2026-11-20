@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** A local client-variable sample and scoped state interpretation, never a damage/timer event. */
 @Data

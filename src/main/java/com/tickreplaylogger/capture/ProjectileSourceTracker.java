@@ -24,9 +24,8 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.tickreplaylogger.model.world.ProjectileSourceHistory;
+import com.tickreplaylogger.model.world.*;
 import com.tickreplaylogger.model.world.ProjectileSourceHistory.SourceObservation;
-import com.tickreplaylogger.model.world.ProjectileState;
 import java.util.*;
 import net.runelite.api.*;
 

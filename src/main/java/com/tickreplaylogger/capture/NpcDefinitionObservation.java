@@ -25,10 +25,9 @@
 package com.tickreplaylogger.capture;
 
 import java.util.Map;
-import java.util.function.Supplier;
+import static com.tickreplaylogger.capture.ObservationReads.read;
 import lombok.Getter;
-import net.runelite.api.NPC;
-import net.runelite.api.NPCComposition;
+import net.runelite.api.*;
 
 /** Base identity and a nullable effective definition are independent observations. */
 @Getter
@@ -72,16 +71,4 @@ public final class NpcDefinitionObservation
 		return new NpcDefinitionObservation(npc, issues, prefix);
 	}
 
-	private static <T> T read(Map<String, String> issues, String field, Supplier<T> getter)
-	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
-	}
 }

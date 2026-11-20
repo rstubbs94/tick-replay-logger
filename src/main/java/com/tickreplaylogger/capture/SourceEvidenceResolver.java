@@ -26,58 +26,306 @@ package com.tickreplaylogger.capture;
 
 import com.google.gson.*;
 import com.tickreplaylogger.util.SourceResolutionLabels;
-import static com.tickreplaylogger.capture.ResolverV1.*;
-import com.tickreplaylogger.model.world.SourceResolution;
+import static com.tickreplaylogger.capture.ResolverEvidence.*;
+import com.tickreplaylogger.model.world.*;
+import com.tickreplaylogger.model.*;
 import com.tickreplaylogger.model.world.SourceResolution.Candidate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import net.runelite.api.HitsplatID;
+import java.util.*;
+import java.math.BigDecimal;
 
 /** Groups already evaluated source alternatives for consistent retrospective presentation. */
 public final class SourceEvidenceResolver
 {
 	public static final int MAX_HYPOTHESES = 256;
-	private static final Set<Integer> WHOLE_ACTOR_V1_HITSPLATS = Collections
-		.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_OTHER,
-			HitsplatID.DAMAGE_MAX_ME, HitsplatID.BLOCK_ME, HitsplatID.BLOCK_OTHER)));
-
-	/** Contract domain only: membership never identifies an attacker or makes other outcomes impossible. */
-	static boolean wholeActorHitsplatDomain(List<Integer> selected)
-	{
-		return selected != null && !selected.isEmpty() && selected.size() <= WHOLE_ACTOR_V1_HITSPLATS.size()
-			&& new LinkedHashSet<>(selected).size() == selected.size()
-			&& WHOLE_ACTOR_V1_HITSPLATS.containsAll(selected);
-	}
 
 	private SourceEvidenceResolver()
 	{
 	}
 
-	/** Direct typed conversion; eligibility has already been evaluated by the interpreter. */
-	static SourceResolution project(ResolutionResult result, String catalogId)
+	/** All derived display fields come from the same admitted components and original receipts. */
+	static DamageRecord project(Hit hit, ResolutionResult result, String catalogId)
 	{
-		List<Candidate> candidates = new ArrayList<>(), excluded = new ArrayList<>();
-		List<Candidate> apiReferenceConflicts = new ArrayList<>();
+		DamageRecord original = hit.record();
+		SourceResolution resolution = project(result, catalogId);
+		DamageRecord.DamageRecordBuilder display = original.toBuilder().sourceResolution(resolution)
+			.attackerName("Unknown").attackerRef(null).attackerNpcId(null).attackerCombatLevel(null)
+			.attribution("UNKNOWN").attributionEvidence("UNRESOLVED_OBSERVATIONS").damageType("unknown")
+			.damageTypeEvidence("UNKNOWN").damageTypeRuleKey(null).damageTypeCatalogId(null).damageReferenceKey(null)
+			.damagePropertyEvidence(null)
+			.damageTypeCandidates(original.getDamageTypeCandidates() == null ? null : Collections.emptyList())
+			.attackStyleName(null).prayerEffect(null).pvp(false).determination("UNKNOWN").determinationEvidence(null)
+			.determinationRuleKey(null).mapRef(null).launchTick(original.getImpactTick()).launchTickEstimated(true)
+			.launchStateEvidence("UNAVAILABLE").launchPositionKnown(false).launchPrayerStateKnown(false)
+			.prayersAtLaunch(null).overheadAtLaunch(null).launchX(0).launchY(0);
+		JsonObject observed = object(result.hitAnnotations);
+		String observedType = text(observed, "damageType");
+		if (observedType != null)
+		{
+			display.damageType(observedType).damageTypeEvidence(text(observed, "damageTypeEvidence"))
+				.attackerName(text(observed, "attackerName")).attribution("ENVIRONMENTAL")
+				.attributionEvidence("STATUS_HITSPLAT");
+		}
+		display.prayerEffect(text(observed, "prayerEffect")).damageReferenceKey(text(observed, "damageReferenceKey"))
+			.damagePropertyEvidence(text(observed, "damagePropertyEvidence"));
+		List<ResolutionCandidate> rows = new ArrayList<>();
+		Set<String> qualified = new LinkedHashSet<>();
 		for (ResolutionCandidate row : result.candidates)
 		{
-			JsonObject source = object(row.source), scope = object(source.get("scope"));
-			String name = text(source, "name");
-			if (SourceResolutionLabels.usableName(name) == null && !"npc".equals(text(source, "kind")))
+			if ("POSSIBLE".equals(row.status))
 			{
-				name = row.label;
+				rows.add(row);
+				if (Boolean.TRUE.equals(row.componentQualified))
+				{
+					qualified.add(row.source.key());
+				}
 			}
-			if (SourceResolutionLabels.usableName(name) == null)
+		}
+		List<ResolutionCandidate> admitted = new ArrayList<>(rows);
+		rows.removeIf(row -> !Boolean.TRUE.equals(row.componentQualified)
+			&& (qualified.contains(row.source.key()) || referenceOnly(row.source) && admitted.stream()
+				.anyMatch(other -> !referenceOnly(other.source) && sameObservedReference(row.source, other.source))));
+		if (rows.stream().anyMatch(row -> row.source.channel() != Channel.TYPED_STATUS))
+		{
+			rows.removeIf(row -> row.source.channel() == Channel.TYPED_STATUS);
+		}
+		Set<String> hints = new LinkedHashSet<>(strings(observed.get("candidateStyles")));
+		for (ResolutionCandidate row : rows)
+		{
+			hints.addAll(strings(object(row.derivedAnnotations).get("candidateStyles")));
+		}
+		if (!hints.isEmpty() && resolution.getCandidates().size() <= 1)
+		{
+			display.damageTypeCandidates(new ArrayList<>(hints));
+		}
+		if (rows.isEmpty() || resolution.getCandidates().isEmpty())
+		{
+			return display.build();
+		}
+		boolean typed = Arrays.asList("poison", "venom", "burn", "bleed").contains(observedType);
+		String confidence = consensus(rows,
+			row -> Boolean.TRUE.equals(row.scalarEligible) ? row.confidence : "UNKNOWN");
+		boolean scalar = resolution.getCandidates().size() == 1 && !"AMBIGUOUS".equals(result.scalarAssociation)
+			&& confidence != null && !"UNKNOWN".equals(confidence);
+		long relationships = rows.stream().map(row -> supportChannel(row.source)).distinct().count();
+		if (!typed)
+		{
+			if (scalar)
 			{
-				name = integer(source.get("id")) == null
-					? "player".equals(text(source, "kind")) ? "Recorded player" : "Recorded NPC"
-					: text(source, "kind") + " #" + integer(source.get("id"));
+				display.attackerName(SourceResolutionLabels.label(resolution)).attribution(confidence)
+					.pvp(rows.stream().allMatch(row -> "player".equals(row.source.identity().kind)));
+				Set<String> evidence = new LinkedHashSet<>();
+				rows.stream().map(row -> row.attributionEvidence).filter(Objects::nonNull).forEach(evidence::add);
+				if (evidence.size() == 1)
+				{
+					display.attributionEvidence(evidence.iterator().next());
+				}
+			}
+			else if ("AMBIGUOUS".equals(result.scalarAssociation) || resolution.getCandidates().size() > 1)
+			{
+				display.attributionEvidence(
+					resolution.getCandidates().size() > 1 || relationships > 1 ? "MULTIPLE_POSSIBLE_DAMAGE_SOURCES"
+						: "SHARED_OBSERVATION_ASSIGNMENT_UNESTABLISHED");
+			}
+			String actor = consensus(rows, row -> row.source.identity().actorRef);
+			if (actor != null && relationships > 1 && !"AMBIGUOUS".equals(result.scalarAssociation))
+			{
+				display.attackerName(SourceResolutionLabels.label(resolution))
+					.attributionEvidence("SAME_ACTOR_MULTIPLE_ATTACK_CANDIDATES");
+			}
+			if (resolution.getCandidates().size() == 1
+				&& rows.stream().anyMatch(row -> row.source.channel() != Channel.PROJECTILE_ORIGIN))
+			{
+				Candidate source = resolution.getCandidates().get(0);
+				display.attackerRef(source.getActorRef()).attackerNpcId(source.getNpcId());
+			}
+		}
+		String type = annotation(rows, "damageType"), timing = annotation(rows, "determination");
+		// A reference to the activity observed in the HP callback can describe its type
+		// without certifying an attacker. An unassigned in-flight projectile cannot.
+		boolean typeSupported = !"AMBIGUOUS".equals(result.scalarAssociation) && rows.stream()
+			.allMatch(row -> row.source.channel() == Channel.HP_ACTOR_POSE || Boolean.TRUE.equals(row.scalarEligible));
+		if (!typed && typeSupported && type != null && !type.contains("|"))
+		{
+			String evidence = annotation(rows, "damageTypeEvidence");
+			display.damageType(type.toLowerCase(java.util.Locale.ROOT))
+				.damageTypeEvidence(evidence == null ? "SOURCE_REFERENCE" : evidence);
+		}
+		if (!typed && scalar && timing != null && !"UNKNOWN".equals(timing) && !"typeless".equalsIgnoreCase(type))
+		{
+			display.determination(timing).determinationEvidence("REVIEWED_ATTACK_CONTEXT")
+				.determinationRuleKey(annotation(rows, "determinationRuleKey"));
+		}
+		if (!typed && typeSupported)
+		{
+			display.attackStyleName(annotation(rows, "attackStyleName"));
+		}
+		display.damageTypeRuleKey(annotation(rows, "damageTypeRuleKey"))
+			.damageTypeCatalogId(annotation(rows, "damageTypeCatalogId"));
+		Integer level = consensus(rows, row -> row.source.identity().combatLevel);
+		display.attackerCombatLevel(level);
+		Set<String> maps = new LinkedHashSet<>();
+		for (ResolutionCandidate row : rows)
+		{
+			String map = text(object(row.derivedAnnotations), "mapRef");
+			if (map != null)
+			{
+				maps.add(map);
+			}
+		}
+		if (maps.size() == 1)
+		{
+			display.mapRef(maps.iterator().next());
+		}
+		if (text(observed, "prayerEffect") == null && "NONE_REVIEWED".equals(annotation(rows, "prayerEffect")))
+		{
+			display.prayerEffect("NONE_REVIEWED").damagePropertyEvidence("SOURCE_REFERENCE");
+		}
+		if (scalar)
+		{
+			Integer launch = consensus(rows, row -> row.source.launch() != null ? row.source.launch().clock.tick
+				: row.source.receipt() == null ? null : row.source.receipt().clock.tick);
+			if (launch != null && launch >= 0 && launch <= original.getImpactTick())
+			{
+				launch(display, hit, rows, launch);
+			}
+		}
+		return display.build();
+	}
+
+	private static Channel supportChannel(Source source)
+	{
+		return source.channel() == Channel.HP_ACTOR_POSE ? Channel.ACTOR_CALLBACK
+			: source.channel() == Channel.PROJECTILE_ORIGIN ? Channel.PROJECTILE : source.channel();
+	}
+
+	private static String annotation(List<ResolutionCandidate> rows, String field)
+	{
+		return consensus(rows, row -> text(object(row.derivedAnnotations), field));
+	}
+
+	private static <T> T consensus(List<ResolutionCandidate> rows,
+		java.util.function.Function<ResolutionCandidate, T> field)
+	{
+		if (rows.isEmpty())
+		{
+			return null;
+		}
+		T first = field.apply(rows.get(0));
+		return first != null && rows.stream().allMatch(row -> first.equals(field.apply(row))) ? first : null;
+	}
+
+	private static JsonObject launchObservation(List<ResolutionCandidate> rows)
+	{
+		Receipt launch = rows.get(0).source.launch();
+		if (launch == null)
+		{
+			return null;
+		}
+		JsonObject first = launch.raw;
+		for (ResolutionCandidate row : rows)
+		{
+			Receipt receipt = row.source.launch();
+			JsonObject raw = receipt == null ? new JsonObject() : receipt.raw;
+			if (!raw.has("originalProjectileObservation"))
+			{
+				return null;
+			}
+			for (String field : Arrays.asList("firstSeenTick", "prayersAtLaunch", "overheadAtLaunch",
+				"launchPrayerStateKnown", "launchPositionKnown", "launchX", "launchY", "launchPlane", "launchSceneKey",
+				"launchWorldViewId"))
+			{
+				if (!Objects.equals(first.get(field), raw.get(field)))
+				{
+					return null;
+				}
+			}
+		}
+		return first;
+	}
+
+	private static void launch(DamageRecord.DamageRecordBuilder display, Hit hit, List<ResolutionCandidate> rows,
+		int tick)
+	{
+		DamageRecord original = hit.record();
+		display.launchTick(tick).launchTickEstimated(true);
+		JsonObject launch = launchObservation(rows);
+		if (launch != null)
+		{
+			JsonObject projectile = object(launch.get("originalProjectileObservation"));
+			Integer cycle = integer(projectile.get("observedCycle"));
+			if (!Integer.valueOf(tick).equals(integer(launch.get("firstSeenTick"))) || cycle == null
+				|| original.getObservedCycle() == null || cycle > original.getObservedCycle())
+			{
+				return;
+			}
+			display.launchStateEvidence("FIRST_PROJECTILE_OBSERVATION")
+				.prayersAtLaunch(
+					launch.get("prayersAtLaunch") instanceof JsonArray ? strings(launch.get("prayersAtLaunch")) : null)
+				.overheadAtLaunch(text(launch, "overheadAtLaunch"))
+				.launchPrayerStateKnown(bool(launch.get("launchPrayerStateKnown"))).launchPositionKnown(false);
+			if (Boolean.TRUE.equals(bool(launch.get("launchPositionKnown")))
+				&& Objects.equals(text(launch, "launchSceneKey"), original.getImpactSceneKey())
+				&& Objects.equals(integer(launch.get("launchWorldViewId")), original.getImpactWorldViewId())
+				&& Objects.equals(integer(launch.get("launchPlane")), original.getImpactPlane())
+				&& integer(launch.get("launchX")) != null && integer(launch.get("launchY")) != null)
+			{
+				display.launchX(integer(launch.get("launchX"))).launchY(integer(launch.get("launchY")))
+					.launchPositionKnown(true);
+			}
+			return;
+		}
+		Receipt originalReceipt = rows.get(0).source.launch() == null ? rows.get(0).source.receipt()
+			: rows.get(0).source.launch();
+		for (ResolutionCandidate row : rows)
+		{
+			Receipt receipt = row.source.launch() == null ? row.source.receipt() : row.source.launch();
+			if (originalReceipt == null || receipt == null
+				|| !Objects.equals(originalReceipt.clock.tick, receipt.clock.tick)
+				|| !Objects.equals(originalReceipt.clock.cycle, receipt.clock.cycle)
+				|| OriginalSourceProof.scope(originalReceipt.scope, receipt.scope) != Truth.TRUE)
+			{
+				return;
+			}
+		}
+		WorldSnapshot frame = originalReceipt == null ? null
+			: hit.exactFrame(originalReceipt.clock, originalReceipt.scope);
+		if (frame != null && tick != original.getImpactTick() && frame.getTick() == tick && frame.getPlayer() != null
+			&& Objects.equals(original.getImpactContextEpoch(), original.getFinalizationContextEpoch())
+			&& Objects.equals(frame.getSceneKey(), original.getImpactSceneKey())
+			&& Objects.equals(frame.getWorldViewId(), original.getImpactWorldViewId())
+			&& Objects.equals(frame.getPlane(), original.getImpactPlane()))
+		{
+			PlayerState player = frame.getPlayer();
+			display.launchStateEvidence("SNAPSHOT").overheadAtLaunch(player.getOverheadPrayer())
+				.prayersAtLaunch(player.getActivePrayers()).launchPrayerStateKnown(player.getPrayerStateKnown())
+				.launchX(player.getWorldX()).launchY(player.getWorldY())
+				.launchPositionKnown(player.getWorldPositionKnown());
+		}
+	}
+
+	/** One conversion from interpreted components to the exported source grouping. */
+	static SourceResolution project(ResolutionResult result, String catalogId)
+	{
+		List<Candidate> candidates = new ArrayList<>(), excluded = new ArrayList<>(), conflicts = new ArrayList<>();
+		for (ResolutionCandidate row : result.candidates)
+		{
+			ResolutionCandidate representative = representative(row, result.candidates);
+			Identity identity = representative.identityOverride == null ? representative.source.identity()
+				: representative.identityOverride;
+			Scope scope = identity.scope;
+			String contactName = representative.source.channel() == Channel.HP_CONTACT
+				&& Boolean.TRUE.equals(representative.componentQualified)
+					? SourceResolutionLabels.usableName(text(representative.source.raw(), "name"))
+					: null;
+			String name = contactName == null ? SourceResolutionLabels.usableName(identity.name) : contactName;
+			if (name == null && !"npc".equals(identity.kind))
+			{
+				name = SourceResolutionLabels.usableName(row.label);
+			}
+			if (name == null)
+			{
+				name = identity.id == null ? "player".equals(identity.kind) ? "Recorded player" : "Recorded NPC"
+					: identity.kind + " #" + identity.id;
 			}
 			List<String> evidence = strings(row.evidence);
 			evidence.add("RESOLVER_V1:" + row.ruleId);
@@ -86,27 +334,23 @@ public final class SourceEvidenceResolver
 			{
 				evidence.add("COMPONENT_MAXIMUM:" + row.maximum);
 			}
-			Candidate candidate = Candidate.builder().key(presentationKey(row)).name(name)
-				.actorRef(text(source, "actorRef"))
-				.npcId("npc".equals(text(source, "kind")) ? integer(source.get("id")) : null)
-				.familyKey(text(source, "familyKey") != null ? text(source, "familyKey")
-					: "status".equals(text(source, "kind")) && text(source, "statusFamily") != null
-						? "observed-hit-kind:" + text(source, "statusFamily")
-						: text(source, "actorRef") == null && integer(source.get("id")) != null
-							? text(source, "kind") + "-definition:" + integer(source.get("id"))
-							: text(source, "actorRef") == null && "status".equals(text(source, "kind")) ? row.sourceKey
-								: null)
-				.sceneKey(text(scope, "sceneKey")).worldViewId(integer(scope.get("worldViewId")))
-				.plane(integer(scope.get("plane")))
+			boolean scoped = scope != null && scope.sceneKey != null && scope.worldViewId != null
+				&& scope.plane != null;
+			String key = scoped ? row.key
+				: "witness:" + representative.source.key() + "|" + representative.sourceKey + "|" + identity.id;
+			Candidate candidate = Candidate.builder().key(key).name(name).actorRef(identity.actorRef)
+				.npcId("npc".equals(identity.kind) ? identity.id : null).familyKey(representative.familyKey)
+				.sceneKey(scope == null ? null : scope.sceneKey).worldViewId(scope == null ? null : scope.worldViewId)
+				.plane(scope == null ? null : scope.plane)
 				.strength("STRONG".equals(row.candidateStrength) ? "STRONG" : "POSSIBLE").evidence(evidence)
 				.reasons(strings(row.reasons)).exclusionScope(row.exclusionScope).build();
 			if ("EXCLUDED".equals(row.status))
 			{
 				excluded.add(candidate);
 				if (Boolean.TRUE.equals(row.legacyApiReferenceConflictEligible)
-					&& !"ALL_DIRECT_HP_COMPONENTS".equals(candidate.getExclusionScope()))
+					&& !"ALL_DIRECT_HP_COMPONENTS".equals(row.exclusionScope))
 				{
-					apiReferenceConflicts.add(candidate);
+					conflicts.add(candidate);
 				}
 			}
 			else
@@ -116,27 +360,23 @@ public final class SourceEvidenceResolver
 		}
 		if (candidates.isEmpty())
 		{
-			for (Candidate conflict : apiReferenceConflicts)
+			for (Candidate conflict : conflicts)
 			{
-				List<String> evidence = conflict.getEvidence() == null ? new ArrayList<>()
-					: new ArrayList<>(conflict.getEvidence());
+				List<String> evidence = copy(conflict.getEvidence());
 				evidence.add(
 					"REFERENCE_PROFILE_CONFLICT: observed API source actor, target and arrival correlation retained; ordinary profile exceeded");
-				if (conflict.getReasons() != null)
+				for (String reason : copy(conflict.getReasons()))
 				{
-					for (String reason : conflict.getReasons())
-					{
-						evidence.add("ORDINARY_COMPONENT_EXCLUDED:" + reason);
-					}
+					evidence.add("ORDINARY_COMPONENT_EXCLUDED:" + reason);
 				}
 				candidates.add(conflict.toBuilder().strength("POSSIBLE").evidence(evidence).reasons(null)
 					.exclusionScope(null).build());
 				excluded.remove(conflict);
 			}
 		}
+		List<String> familyEvidence = new ArrayList<>();
 		if (candidates.stream().anyMatch(candidate -> !familyOnly(candidate)))
 		{
-			List<String> familyEvidence = new ArrayList<>();
 			for (Candidate candidate : candidates)
 			{
 				if (familyOnly(candidate))
@@ -146,63 +386,62 @@ public final class SourceEvidenceResolver
 				}
 			}
 			candidates.removeIf(SourceEvidenceResolver::familyOnly);
-			if (!familyEvidence.isEmpty())
+		}
+		for (Candidate candidate : candidates)
+		{
+			candidate.getEvidence().addAll(familyEvidence);
+			candidate.getEvidence().add(
+				"HIT_CAUSALITY_UNESTABLISHED: observed source association does not uniquely link this impact callback");
+		}
+		return project(candidates, excluded, result.unidentifiedPossible, catalogId, "RECORDED_RESOLVER_V1_COMPONENTS");
+	}
+
+	/** Presentation aliases share recorded identities, without qualifying their missing native facts. */
+	private static ResolutionCandidate representative(ResolutionCandidate row, List<ResolutionCandidate> rows)
+	{
+		ResolutionCandidate best = row;
+		if (!"POSSIBLE".equals(row.status))
+		{
+			return best;
+		}
+		for (ResolutionCandidate other : rows)
+		{
+			if (!"POSSIBLE".equals(other.status) || !sameObservedReference(row.source, other.source))
 			{
-				for (int index = 0; index < candidates.size(); index++)
-				{
-					Candidate candidate = candidates.get(index);
-					List<String> evidence = new ArrayList<>();
-					if (candidate.getEvidence() != null)
-					{
-						evidence.addAll(candidate.getEvidence());
-					}
-					evidence.addAll(familyEvidence);
-					candidates.set(index, candidate.toBuilder().evidence(evidence).build());
-				}
+				continue;
+			}
+			int rank = (referenceOnly(best.source) ? 2 : 0) + (Boolean.TRUE.equals(best.componentQualified) ? 0 : 1);
+			int otherRank = (referenceOnly(other.source) ? 2 : 0)
+				+ (Boolean.TRUE.equals(other.componentQualified) ? 0 : 1);
+			if (otherRank < rank || otherRank == rank && other.key.compareTo(best.key) < 0)
+			{
+				best = other;
 			}
 		}
-		if (excluded.size() > 256)
-		{
-			excluded = new ArrayList<>(excluded.subList(0, 256));
-		}
-		for (Candidate candidate : candidates)
-		{
-			// These lists are newly owned by this projection, not caller/frozen model lists.
-			List<String> evidence = candidate.getEvidence();
-			evidence.add(
-				"HIT_CAUSALITY_UNESTABLISHED: observed source association does not uniquely link this impact callback");
-			Set<String> unique = new LinkedHashSet<>(evidence);
-			evidence.clear();
-			evidence.addAll(unique);
-		}
-		return project(candidates, excluded, true, catalogId, "RECORDED_RESOLVER_V1_COMPONENTS");
+		return best;
 	}
 
-	static SourceResolution projectAssociations(List<Candidate> candidates, List<Candidate> excluded, String catalogId,
-		String method)
+	private static boolean referenceOnly(Source source)
 	{
-		List<Candidate> associations = new ArrayList<>();
-		for (Candidate candidate : candidates)
-		{
-			List<String> evidence = candidate.getEvidence() == null ? new ArrayList<>()
-				: new ArrayList<>(candidate.getEvidence());
-			evidence.add(
-				"HIT_CAUSALITY_UNESTABLISHED: observed source association does not uniquely link this impact callback");
-			associations
-				.add(candidate.toBuilder().evidence(new ArrayList<>(new java.util.LinkedHashSet<>(evidence))).build());
-		}
-		return SourceEvidenceResolver.project(associations, excluded, true, catalogId, method);
+		return source.channel() == Channel.FRAME_NPC || source.channel() == Channel.FRAME_SURFACE;
 	}
 
-	private static String presentationKey(ResolutionCandidate row)
+	private static boolean sameObservedReference(Source first, Source second)
 	{
-		JsonObject source = object(row.source), scope = object(source.get("scope"));
-		if (text(scope, "sceneKey") != null && integer(scope.get("worldViewId")) != null
-			&& integer(scope.get("plane")) != null || row.key == null || row.ruleId == null || row.cue == null)
+		Identity a = first.identity(), b = second.identity();
+		if (!Objects.equals(a.kind, b.kind) || !Objects.equals(a.id, b.id)
+			|| OriginalSourceProof.scope(a.scope, b.scope) == Truth.FALSE)
 		{
-			return row.key;
+			return false;
 		}
-		return "witness:" + String.valueOf(text(row.cue, "key")) + "|" + row.sourceKey + "|" + source.get("id");
+		if (first.key().equals(second.key())
+			|| (referenceOnly(first) || referenceOnly(second)) && a.actorRef != null && a.actorRef.equals(b.actorRef))
+		{
+			return true;
+		}
+		String field = "graphic".equals(a.kind) ? "graphicObservationId" : "objectObservationId";
+		BigDecimal id = number(first.raw().get(field)), other = number(second.raw().get(field));
+		return id != null && other != null && id.signum() > 0 && id.compareTo(other) == 0;
 	}
 
 	private static boolean familyOnly(Candidate candidate)
@@ -301,44 +540,35 @@ public final class SourceEvidenceResolver
 
 	private static List<Candidate> distinctExclusions(List<Candidate> input, List<Candidate> retained)
 	{
-		Map<String, Candidate> result = new LinkedHashMap<>();
-		Map<String, List<String>> originalKeys = new LinkedHashMap<>();
-		Set<String> retainedKeys = new LinkedHashSet<>();
-		for (Candidate candidate : retained)
-		{
-			retainedKeys.add(candidate.getKey());
-		}
+		Map<List<Object>, Candidate> result = new LinkedHashMap<>();
+		Set<String> keys = new LinkedHashSet<>();
+		retained.forEach(candidate -> keys.add(candidate.getKey()));
 		for (Candidate candidate : input)
 		{
-			String key = candidate.getKey();
-			String matching = null;
-			for (String previousKey : originalKeys.getOrDefault(key, Collections.emptyList()))
+			List<Object> identity = Arrays.asList(candidate.getKey(), candidate.getName(), candidate.getActorRef(),
+				candidate.getNpcId(), candidate.getFamilyKey(), candidate.getSceneKey(), candidate.getWorldViewId(),
+				candidate.getPlane());
+			Candidate previous = result.get(identity);
+			if (previous != null)
 			{
-				if (sameWitnessIdentity(result.get(previousKey), candidate))
-				{
-					matching = previousKey;
-					break;
-				}
-			}
-			if (matching != null)
-			{
-				Candidate previous = result.get(matching);
 				List<String> evidence = copy(previous.getEvidence()), reasons = copy(previous.getReasons());
 				evidence.addAll(copy(candidate.getEvidence()));
 				reasons.addAll(copy(candidate.getReasons()));
-				result.put(matching, previous.toBuilder().evidence(immutable(evidence)).reasons(immutable(reasons))
+				result.put(identity, previous.toBuilder().evidence(immutable(evidence)).reasons(immutable(reasons))
 					.exclusionScope(mergeExclusionScope(previous.getExclusionScope(), candidate.getExclusionScope()))
 					.build());
-				continue;
 			}
-			int collision = 0;
-			while (retainedKeys.contains(key) || result.containsKey(key))
+			else
 			{
-				key = candidate.getKey() + ":excluded-witness:" + ++collision;
+				String key = candidate.getKey();
+				int collision = 0;
+				while (!keys.add(key))
+				{
+					key = candidate.getKey() + ":excluded-witness:" + ++collision;
+				}
+				result.put(identity,
+					Objects.equals(key, candidate.getKey()) ? candidate : candidate.toBuilder().key(key).build());
 			}
-			result.put(key,
-				Objects.equals(key, candidate.getKey()) ? candidate : candidate.toBuilder().key(key).build());
-			originalKeys.computeIfAbsent(candidate.getKey(), ignored -> new ArrayList<>()).add(key);
 		}
 		return new ArrayList<>(result.values());
 	}
@@ -348,14 +578,6 @@ public final class SourceEvidenceResolver
 		return "ALL_DIRECT_HP_COMPONENTS".equals(first) || "ALL_DIRECT_HP_COMPONENTS".equals(second)
 			? "ALL_DIRECT_HP_COMPONENTS"
 			: "ORDINARY_ATTACK".equals(first) || "ORDINARY_ATTACK".equals(second) ? "ORDINARY_ATTACK" : null;
-	}
-
-	private static boolean sameWitnessIdentity(Candidate a, Candidate b)
-	{
-		return Objects.equals(a.getName(), b.getName()) && Objects.equals(a.getActorRef(), b.getActorRef())
-			&& Objects.equals(a.getNpcId(), b.getNpcId()) && Objects.equals(a.getFamilyKey(), b.getFamilyKey())
-			&& Objects.equals(a.getSceneKey(), b.getSceneKey())
-			&& Objects.equals(a.getWorldViewId(), b.getWorldViewId()) && Objects.equals(a.getPlane(), b.getPlane());
 	}
 
 	private static Candidate merge(List<Candidate> values, boolean family)

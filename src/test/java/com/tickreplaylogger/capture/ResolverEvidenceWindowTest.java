@@ -44,10 +44,13 @@ public class ResolverEvidenceWindowTest
 		{
 			DeathRecordingV2 recording = base.toBuilder().events(DeathRecordingV2.Events.builder().damageEvents(Collections.singletonList(hit))
 				.observations(originalAvailable ? Arrays.asList(input, hp) : Collections.singletonList(hp)).build()).build();
-			com.google.gson.JsonObject normalized = new ResolverV1Recording(ResolverV1.load(gson), gson, recording).normalize(hit);
-			com.google.gson.JsonObject source = normalized.getAsJsonArray("cues").get(0).getAsJsonObject().getAsJsonObject("source");
-			if (originalAvailable) assertEquals(7L, source.getAsJsonObject("scope").get("contextEpoch").getAsLong());
-			else assertFalse(source.getAsJsonObject("scope").has("contextEpoch"));
+			ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(recording.getTicks(),
+				recording.getScenes(), recording.getEvents().getObservations(), Collections.singletonList(hit), null,
+				Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE, 0);
+			ResolverEvidence.Source source = new RawEvidenceWindow(window, gson).hit(hit).sources().stream()
+				.filter(value -> value.channel() == ResolverEvidence.Channel.CONSUMPTION).findFirst().get();
+			if (originalAvailable) assertEquals(Long.valueOf(7), source.identity().scope.epoch);
+			else assertNull(source.identity().scope.epoch);
 			assertEquals(Long.valueOf(9), hit.getImpactContextEpoch());
 		}
 	}
@@ -58,15 +61,21 @@ public class ResolverEvidenceWindowTest
 		Gson gson = new Gson();
 		Map<String, Object> selector = map("kind", "npc", "ids", Collections.singletonList(990001));
 		Map<String, Object> signals = map("animationIds", Collections.singletonList(990777));
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.toJsonTree(map("schemaVersion", 1, "purpose", "retrospective_damage_resolution",
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.toJsonTree(map("schemaVersion", 1, "purpose", "retrospective_damage_resolution",
 			"specialRules", Arrays.asList(map("id", "synthetic:direct", "pattern", "direct_attack", "source", selector, "signals", signals),
 				map("id", "synthetic:area", "pattern", "area_impact", "source", selector, "signals", signals)))).getAsJsonObject()));
 		DeathRecordingV2 recording = minimal(false, true);
 		ResolverV1Recording adapter = new ResolverV1Recording(engine, gson, recording);
-		com.google.gson.JsonObject normalized = adapter.normalize(recording.getEvents().getDamageEvents().get(0));
-		assertEquals(1, normalized.getAsJsonArray("cues").size());
-		assertEquals(gson.toJsonTree(recording.getEvents().getObservations().get(0).getData()),
-			normalized.getAsJsonArray("cues").get(0).getAsJsonObject().get("originalActorState"));
+		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(recording.getTicks(),
+			recording.getScenes(), recording.getEvents().getObservations(), recording.getEvents().getDamageEvents(), null,
+			Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE, 0);
+		List<ResolverEvidence.Source> observations = new ArrayList<>();
+		for (ResolverEvidence.Source source : new RawEvidenceWindow(window, gson).hit(recording.getEvents().getDamageEvents().get(0)).sources())
+		{
+			if (source.channel() == ResolverEvidence.Channel.ACTOR_CALLBACK) observations.add(source);
+		}
+		assertEquals(1, observations.size());
+		assertEquals(gson.toJsonTree(recording.getEvents().getObservations().get(0).getData()), observations.get(0).actor());
 		SourceResolution result = adapter.resolveHit(recording.getEvents().getDamageEvents().get(0)).getSourceResolution();
 		assertEquals(1, result.getCandidates().size());
 		assertTrue(result.getCandidates().get(0).getEvidence().contains("RESOLVER_V1:synthetic:direct"));
@@ -405,7 +414,7 @@ public class ResolverEvidenceWindowTest
 		Gson gson = new Gson();
 		Map<String, Object> selector = map("kind", "npc", "ids", Collections.singletonList(990001));
 		Map<String, Object> signals = map("projectileIds", Collections.singletonList(999001));
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.toJsonTree(map("schemaVersion", 1, "purpose", "retrospective_damage_resolution",
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.toJsonTree(map("schemaVersion", 1, "purpose", "retrospective_damage_resolution",
 			"specialRules", Arrays.asList(map("id", "synthetic:component-a", "pattern", "projectile_impact", "source", selector, "signals", signals),
 				map("id", "synthetic:component-b", "pattern", "projectile_impact", "source", selector, "signals", signals)))).getAsJsonObject()));
 		DeathRecordingV2 base = minimal(false, true);

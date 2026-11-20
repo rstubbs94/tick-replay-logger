@@ -35,6 +35,7 @@ import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
+import net.runelite.client.util.ImageUtil;
 
 /**
  * Shared, lazily-loaded combat-style icons so every view (live timeline, playback, recording
@@ -48,10 +49,10 @@ public final class CombatIcons
 	private static final AtomicReference<ImageIcon> melee = new AtomicReference<>(bundledIcon("attack"));
 	private static final AtomicReference<ImageIcon> ranged = new AtomicReference<>(bundledIcon("ranged"));
 	private static final AtomicReference<ImageIcon> magic = new AtomicReference<>(bundledIcon("magic"));
-	private static final ImageIcon unknown = unknownIcon();
-	private static final ImageIcon typeless = typelessIcon();
+	private static final ImageIcon unknown = localIcon("unknown");
+	private static final ImageIcon typeless = localIcon("typeless");
 	private static final ImageIcon burn = bundledIcon("firemaking");
-	private static final ImageIcon bleed = bleedIcon();
+	private static final ImageIcon bleed = localIcon("bleed");
 	private static volatile boolean requested = false;
 
 	private CombatIcons()
@@ -71,48 +72,9 @@ public final class CombatIcons
 		}
 	}
 
-	private static ImageIcon unknownIcon()
+	private static ImageIcon localIcon(String name)
 	{
-		BufferedImage image = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D graphics = image.createGraphics();
-		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		graphics.setColor(DisplayFormat.UNKNOWN);
-		graphics.drawRoundRect(0, 0, 13, 13, 4, 4);
-		graphics.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 12));
-		graphics.drawString("?", 3, 11);
-		graphics.dispose();
-		return new ImageIcon(image);
-	}
-
-	private static ImageIcon typelessIcon()
-	{
-		BufferedImage image = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = image.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		g.setColor(DisplayFormat.TYPELESS);
-		g.drawPolygon(new int[]
-		{ 7, 13, 7, 1 }, new int[]
-		{ 0, 7, 13, 7 }, 4);
-		g.drawLine(4, 4, 10, 4);
-		g.drawLine(7, 4, 7, 10);
-		g.dispose();
-		return new ImageIcon(image);
-	}
-
-	private static ImageIcon bleedIcon()
-	{
-		BufferedImage image = new BufferedImage(SIZE, SIZE, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = image.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		java.awt.geom.Path2D drop = new java.awt.geom.Path2D.Double();
-		drop.moveTo(7, 1);
-		drop.curveTo(6, 4, 2, 7, 2, 9);
-		drop.curveTo(2, 15, 12, 15, 12, 9);
-		drop.curveTo(12, 7, 8, 4, 7, 1);
-		g.setColor(DisplayFormat.BLEED);
-		g.fill(drop);
-		g.dispose();
-		return new ImageIcon(image);
+		return new ImageIcon(ImageUtil.loadImageResource(CombatIcons.class, "icons/" + name + ".png"));
 	}
 
 	/** Request the skill sprites once; safe to call repeatedly. */

@@ -27,8 +27,12 @@ package com.tickreplaylogger;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import com.google.gson.reflect.TypeToken;
 import com.tickreplaylogger.capture.DamageMap;
+import com.tickreplaylogger.capture.ResolverV1;
+import com.tickreplaylogger.capture.ResolverV1Recording;
+import com.tickreplaylogger.capture.RuntimeCatalog;
 import com.tickreplaylogger.model.world.DeathRecordingV2;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -86,6 +90,8 @@ public class CompositeStyleCandidateHandlerTest
 			// callback fields must otherwise be identical under actual handlers.
 			oldHit.remove("damageTypeCandidates");
 			newHit.remove("damageTypeCandidates");
+			normalizeResolverId(oldCapture,before.resolver.id());
+			normalizeResolverId(newCapture,after.resolver.id());
 			stripClocks(oldCapture);
 			stripClocks(newCapture);
 			assertEquals(oldCapture, newCapture);
@@ -196,6 +202,8 @@ public class CompositeStyleCandidateHandlerTest
 			assertFalse(GSON.toJson(newCapture).contains("Private teammate"));
 			oldHit.remove("damageTypeCandidates");
 			newHit.remove("damageTypeCandidates");
+			normalizeResolverId(oldCapture,before.resolver.id());
+			normalizeResolverId(newCapture,after.resolver.id());
 			stripClocks(oldCapture);
 			stripClocks(newCapture);
 			assertEquals(oldCapture, newCapture);
@@ -206,6 +214,7 @@ public class CompositeStyleCandidateHandlerTest
 	{
 		final DeferredAttributionTest harness = new DeferredAttributionTest();
 		final String observedName;
+		final ResolverV1 resolver;
 
 		Fixture(boolean corrected, boolean nonNormal) throws Exception
 		{
@@ -222,8 +231,11 @@ public class CompositeStyleCandidateHandlerTest
 			set(harness, "npcLevel", level);
 			set(harness, "npcObservedName", name);
 			set(harness, "npcObservedSize", Integer.valueOf(size));
+			set(harness,"npcReportsInteraction",true);
+			call(harness,"useProjectileNativeView",new Class<?>[0]);
 			TickReplayLoggerPlugin plugin = (TickReplayLoggerPlugin) get(harness, "plugin");
 			DamageMap map = (DamageMap) get(plugin, "damageMap");
+			List<String> isolatedStyles=null;
 			String candidateFile = System.getProperty("tickreplay.test.compositeCandidateMap");
 			if (candidateFile != null)
 			{
@@ -234,15 +246,13 @@ public class CompositeStyleCandidateHandlerTest
 					{
 					}.getType());
 				assertNotNull("An explicit isolated map must contain its generated style root", styles);
-				set(map, "npcStyles", styles);
+				isolatedStyles=styles.get(String.valueOf(npcId));
 			}
 			if (!corrected)
 			{
-				Map<String, List<String>> styles = new java.util.HashMap<>(
-					(Map<String, List<String>>) get(map, "npcStyles"));
-				styles.put(String.valueOf(npcId), beforeStyles);
-				set(map, "npcStyles", styles);
+				isolatedStyles=beforeStyles;
 			}
+			resolver=isolatedStyles==null ? ResolverV1.load(GSON) : candidateResolver(map,npcId,level,name,isolatedStyles);
 			TickReplayLoggerConfig original = (TickReplayLoggerConfig) get(plugin, "config");
 			TickReplayLoggerConfig privateConfig = (TickReplayLoggerConfig) Proxy
 				.newProxyInstance(TickReplayLoggerConfig.class.getClassLoader(), new Class<?>[]
@@ -267,20 +277,60 @@ public class CompositeStyleCandidateHandlerTest
 				((List<NPC>) get(harness, "npcs")).add(second);
 			}
 			call(harness, "tick", new Class<?>[0]);
+			set(harness,"animation",123);
 			call(harness, "hit", new Class<?>[]
 			{ int.class, int.class }, HitsplatID.DAMAGE_ME, 7);
 			call(harness, "hit", new Class<?>[]
 			{ net.runelite.api.Actor.class, int.class, int.class }, get(harness, "boss"), HitsplatID.DAMAGE_OTHER, 9);
-			set(harness, "animation", 123);
 			set(harness, "hp", 92);
 			call(harness, "tick", new Class<?>[0]);
-			return GSON.toJsonTree((DeathRecordingV2) call(harness, "export", new Class<?>[0])).getAsJsonObject();
+			DeathRecordingV2 recorded=(DeathRecordingV2)call(harness,"export",new Class<?>[0]);
+			return GSON.toJsonTree(new ResolverV1Recording(resolver,GSON,recorded).enrich(recorded)).getAsJsonObject();
 		}
 
 		@Override
 		public void close()
 		{
 			harness.temporary.delete();
+		}
+	}
+
+	private static ResolverV1 candidateResolver(DamageMap map,int npcId,int level,String name,List<String> styles)
+	{
+		JsonObject document=RuntimeCatalog.load(GSON).section("resolver").deepCopy(),template=null;
+		for(JsonElement value:document.getAsJsonArray("resolutionRules"))
+		{
+			JsonObject rule=value.getAsJsonObject();
+			if(rule.has("merge") && "npc_style_hint".equals(rule.getAsJsonObject("merge").get("group").getAsString()))
+			{template=rule.deepCopy();break;}
+		}
+		assertNotNull("The counterfactual uses the same compiled reference-effect grammar",template);
+		template.addProperty("id","test:isolated_candidate_style");
+		template.add("source",GSON.toJsonTree(Collections.singletonMap("kind","npc")));
+		template.getAsJsonObject("source").add("ids",GSON.toJsonTree(Collections.singletonList(npcId)));
+		template.getAsJsonObject("source").add("names",GSON.toJsonTree(Collections.singletonList(name)));
+		template.getAsJsonObject("source").add("combatLevels",GSON.toJsonTree(Collections.singletonList(level)));
+		template.getAsJsonObject("merge").addProperty("priority",100);
+		JsonArray candidates=new JsonArray();if(styles.size()==1)candidates.add(styles.get(0));
+		JsonObject annotations=new JsonObject();annotations.add("candidateStyles",candidates);
+		JsonObject effects=new JsonObject();effects.add("annotations",annotations);template.add("effects",effects);
+		document.getAsJsonArray("resolutionRules").add(template);
+		return new ResolverV1(document,GSON,map.catalog(),map);
+	}
+
+	private static void normalizeResolverId(JsonElement value,String id)
+	{
+		if(value.isJsonObject())for(Map.Entry<String,JsonElement> field:value.getAsJsonObject().entrySet())
+		{
+			JsonElement item=field.getValue();
+			if(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString())field.setValue(GSON.toJsonTree(item.getAsString().replace(id,"TEST_RESOLVER")));
+			else normalizeResolverId(item,id);
+		}
+		else if(value.isJsonArray())for(int n=0;n<value.getAsJsonArray().size();n++)
+		{
+			JsonElement item=value.getAsJsonArray().get(n);
+			if(item.isJsonPrimitive() && item.getAsJsonPrimitive().isString())value.getAsJsonArray().set(n,GSON.toJsonTree(item.getAsString().replace(id,"TEST_RESOLVER")));
+			else normalizeResolverId(item,id);
 		}
 	}
 

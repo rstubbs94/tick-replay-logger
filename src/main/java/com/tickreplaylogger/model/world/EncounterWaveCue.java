@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Last qualified message observation, not an assertion of current damage or server wave state. */
 @Data

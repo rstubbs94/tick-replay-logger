@@ -93,7 +93,7 @@ public class ObservedRetainedLifecycleWindowTest
 		List<DeathRecordingV2.Events.CaptureGap> gaps, boolean complete)
 	{
 		return new ObservedActorMechanismResolver(MechanismRules.load(ObservedLifecycleCooccurrenceTest.namespace(rule)),
-			Collections.emptyList(), events, gaps, new ObservedHpCallbackContext(events), complete).resolve(hit);
+			Collections.emptyList(), events, gaps, new LegacyObservedHpCallbackContext(events), complete).resolve(hit);
 	}
 	private static ObservedMechanismResolver.Result resolve(JsonObject rule, DamageRecord hit, ObservedEvent cue)
 	{ return resolve(rule, hit, Arrays.asList(cue, hp(hit)), Collections.emptyList(), true); }

@@ -27,7 +27,7 @@ package com.tickreplaylogger;
 import com.google.gson.Gson;
 import com.tickreplaylogger.capture.DamageMap;
 import com.tickreplaylogger.capture.WorldCaptureService;
-import com.tickreplaylogger.capture.WorldSnapshotRecorder;
+import com.tickreplaylogger.capture.InspectableWorldSnapshotRecorder;
 import com.tickreplaylogger.model.DamageEvent;
 import com.tickreplaylogger.model.PlayerAction;
 import com.tickreplaylogger.model.TickData;
@@ -86,7 +86,7 @@ public class DeferredAttributionTest
 	private final Gson gson = new Gson();
 	private TickReplayLoggerPlugin plugin;
 	private TickRecorder journal;
-	private WorldSnapshotRecorder world;
+	private InspectableWorldSnapshotRecorder world;
 	private RecordingStorage storage;
 	private Player player;
 	private NPC boss;
@@ -405,7 +405,7 @@ public class DeferredAttributionTest
 			}
 		};
 		journal = new TickRecorder(100);
-		world = new WorldSnapshotRecorder(100, new com.google.gson.Gson());
+		world = new InspectableWorldSnapshotRecorder(100, new com.google.gson.Gson());
 		storage = new RecordingStorage(3, gson,
 			net.runelite.client.util.Filepath.Unchecked.getRooted(temporary.newFolder().toPath()));
 		DamageMap map = DamageMap.load(gson);
@@ -492,7 +492,7 @@ public class DeferredAttributionTest
 	}
 
 	@Test
-	public void animationArrivingAfterHitsplatIsUsedOnTheSameCapturedTick()
+	public void aLaterSettledAnimationCannotProveTheEarlierHitsAttack()
 	{
 		npcReportsInteraction = true;
 		tick();
@@ -504,8 +504,11 @@ public class DeferredAttributionTest
 		hp = 87;
 		tick();
 		DamageRecord damage = world.lastDamage();
-		assertEquals("Test boss", damage.getAttackerName());
-		assertEquals("TIMED", damage.getAttribution());
+		assertEquals("UNKNOWN", damage.getAttribution());
+		assertTrue(damage.getSourceResolution().isUnidentifiedPossible());
+		assertTrue("Later pose is still available as a recorded observation, not original attack proof",
+			world.snapshotAtTick(2).getGameCycle() > damage.getObservedCycle());
+		assertTrue(world.snapshotAtTick(2).getNpcs().stream().anyMatch(npc -> Integer.valueOf(123).equals(npc.getAnimationId())));
 		assertEquals(2, damage.getImpactTick());
 		assertEquals(Boolean.TRUE, damage.getImpactPositionKnown());
 		assertEquals(Boolean.FALSE, damage.getLaunchPositionKnown());
@@ -514,6 +517,41 @@ public class DeferredAttributionTest
 		tick();
 		assertTrue(journal.getTickHistory().get(2).getDamageEvents().isEmpty());
 		assertEquals(1, export().getEvents().getDamageEvents().size());
+	}
+
+	@Test
+	public void anOriginalAnimationCallbackBeforeHpKeepsItsTimingSupport()
+	{
+		useProjectileNativeView(); npcReportsInteraction = true;
+		npcId = 990001; npcLevel = 101; npcObservedSize = 1; npcObservedName = "Uncatalogued NPC";
+		npcLocalPosition = new LocalPoint(6464, 6336); animation = -1; tick();
+		animation = 990002;
+		net.runelite.api.events.AnimationChanged changed = new net.runelite.api.events.AnimationChanged();
+		changed.setActor(boss); plugin.onAnimationChanged(changed);
+		hit(HitsplatID.DAMAGE_ME, 7); tick();
+		DamageRecord observed = world.lastDamage();
+		assertEquals("Uncatalogued NPC", observed.getAttackerName());
+		assertEquals("TIMED", observed.getAttribution());
+		assertRecordedAnimationReceipt(observed, 990002);
+	}
+
+	@Test
+	public void aSameTickAnimationCallbackAfterHpCannotSupplyItsAttackTiming()
+	{
+		useProjectileNativeView(); npcReportsInteraction = true;
+		npcId = 990001; npcLevel = 101; npcObservedSize = 1; npcObservedName = "Uncatalogued NPC";
+		npcLocalPosition = new LocalPoint(6464, 6336); animation = -1; tick();
+		hit(HitsplatID.DAMAGE_ME, 7);
+		animation = 990002;
+		net.runelite.api.events.AnimationChanged changed = new net.runelite.api.events.AnimationChanged();
+		changed.setActor(boss); plugin.onAnimationChanged(changed); tick();
+		DamageRecord observed = world.lastDamage();
+		assertEquals("UNKNOWN", observed.getAttribution());
+		assertTrue(observed.getSourceResolution().isUnidentifiedPossible());
+		assertTrue(export().getEvents().getObservations().stream().anyMatch(event -> "ANIMATION_CHANGED".equals(event.getType())
+			&& event.getTick() == observed.getImpactTick() && event.getSequence() > observed.getObservationSequence()
+			&& event.getData().get("animationId") instanceof Number
+			&& ((Number) event.getData().get("animationId")).intValue() == 990002));
 	}
 
 	@Test
@@ -3167,10 +3205,12 @@ public class DeferredAttributionTest
 	@Test
 	public void pvpMeleeNeedsBothAnAttackAnimationTargetAndObservedPvpContext()
 	{
+		useProjectileNativeView();
 		Player opponent = stub(Player.class,
 			(name, args) -> name.equals("getName") ? "Opponent"
 				: name.equals("getAnimation") ? 401
-					: name.equals("getInteracting") ? player : name.equals("getWorldLocation") ? position : null);
+					: name.equals("getInteracting") ? player : name.equals("isInteracting") ? true
+						: name.equals("getWorldView") ? projectileNativeView : name.equals("getWorldLocation") ? position : null);
 		otherPlayers.add(opponent);
 		hit(HitsplatID.DAMAGE_ME, 6);
 		tick();
@@ -3363,6 +3403,7 @@ public class DeferredAttributionTest
 		{ 401 };
 		Player opponent = stub(Player.class,
 			(name, args) -> name.equals("getName") ? "Opponent"
+				: name.equals("isInteracting") ? true
 				: name.equals("getAnimation") ? action[0]
 					: name.equals("getInteracting") ? player : name.equals("getWorldLocation") ? position : null);
 		otherPlayers.add(opponent);
@@ -3378,8 +3419,15 @@ public class DeferredAttributionTest
 		hit(HitsplatID.DAMAGE_ME, 6);
 		tick();
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertTrue(world.lastDamage().getAttributionCandidates().stream()
-			.anyMatch(candidate -> "PROJECTILE_MAY_HAVE_ALREADY_IMPACTED".equals(candidate.get("kind"))));
+		assertEquals("UNKNOWN",world.lastDamage().getAttribution());
+		assertEquals("SHARED_OBSERVATION_ASSIGNMENT_UNESTABLISHED",world.lastDamage().getAttributionEvidence());
+		assertTrue(world.lastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"Opponent".equals(candidate.getName()) && candidate.getEvidence().contains("PROJECTILE_OBSERVATION_ID:1")
+				&& candidate.getEvidence().contains("SHARED_OBSERVED_PROJECTILE_ASSIGNMENT")));
+		assertTrue(world.lastDamage().getAttributionCandidates().stream().anyMatch(witness ->
+			"PROJECTILE_OBSERVATION".equals(witness.get("kind"))
+				&& ((Number)witness.get("projectileObservationId")).longValue()==1L));
 	}
 
 	@Test
@@ -3394,14 +3442,26 @@ public class DeferredAttributionTest
 		tick();
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
 		assertEquals("UNKNOWN", world.lastDamage().getAttribution());
-		assertTrue(world.lastDamage().getAttributionCandidates().size() >= 2);
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream()
+			.anyMatch(candidate -> "Test boss".equals(candidate.getName())));
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream()
+			.anyMatch(candidate -> "Maiden blood pool".equals(candidate.getName())));
 		graphicsObjects.clear();
 		hit(HitsplatID.DAMAGE_ME, 8);
 		tick();
 		assertEquals("UNKNOWN", world.lastDamage().getAttribution());
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertTrue(world.lastDamage().getAttributionCandidates().stream()
-			.anyMatch(c -> "PROJECTILE_MAY_HAVE_ALREADY_IMPACTED".equals(c.get("kind"))));
+		assertEquals("SHARED_OBSERVATION_ASSIGNMENT_UNESTABLISHED",world.lastDamage().getAttributionEvidence());
+		assertTrue(world.lastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"Test boss".equals(candidate.getName()) && candidate.getEvidence().contains("SHARED_OBSERVED_PROJECTILE_ASSIGNMENT")
+				&& candidate.getEvidence().contains("PROJECTILE_OBSERVATION_ID:1")));
+		List<DamageRecord> impacts=export().getEvents().getDamageEvents().stream()
+			.filter(value -> "RECEIVED".equals(value.getDirection())).collect(java.util.stream.Collectors.toList());
+		assertEquals(2,impacts.size());assertEquals(10,impacts.get(0).getAmount());assertEquals(8,impacts.get(1).getAmount());
+		for(DamageRecord impact:impacts)assertTrue(impact.getAttributionCandidates().stream().anyMatch(witness ->
+			"PROJECTILE_OBSERVATION".equals(witness.get("kind"))
+				&& ((Number)witness.get("projectileObservationId")).longValue()==1L));
 	}
 
 	@Test
@@ -3427,10 +3487,20 @@ public class DeferredAttributionTest
 		graphicsObjects.clear();
 		animation = 123;
 		tick();
-		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertTrue(world.lastDamage().getAttributionCandidates().stream()
-			.anyMatch(c -> "Maiden blood pool".equals(c.get("name"))));
-		assertEquals("MULTIPLE_POSSIBLE_DAMAGE_SOURCES", world.lastDamage().getAttributionEvidence());
+		DamageRecord observed = world.lastDamage();
+		assertEquals("Maiden blood pool", observed.getAttackerName());
+		assertEquals("ENVIRONMENTAL", observed.getAttribution());
+		assertEquals("unknown", observed.getDamageType());
+		assertTrue(observed.getSourceResolution().isUnidentifiedPossible());
+		assertTrue(observed.getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"Maiden blood pool".equals(candidate.getName()) && "POSSIBLE".equals(candidate.getStrength())
+				&& candidate.getEvidence().contains("COMPONENT_UNKNOWN")));
+		assertTrue(observed.getObservedHazardContacts().stream().anyMatch(witness ->
+			"GRAPHIC_SURFACE".equals(witness.get("kind")) && "Maiden blood pool".equals(witness.get("name"))
+				&& "HITSPLAT_CALLBACK".equals(witness.get("observationStage"))
+				&& "SERVER_REPORTED_TILE".equals(witness.get("defenderPositionEvidence"))
+				&& Boolean.TRUE.equals(witness.get("damaging")) && !Boolean.TRUE.equals(witness.get("finished"))
+				&& ((Number) witness.get("observedCycle")).intValue() == observed.getObservedCycle()));
 	}
 
 	@Test
@@ -3443,8 +3513,12 @@ public class DeferredAttributionTest
 		animation = 123;
 		tick();
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertTrue(world.lastDamage().getAttributionCandidates().stream()
-			.anyMatch(c -> "Maiden blood pool".equals(c.get("name"))));
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"Maiden blood pool".equals(candidate.getName()) && candidate.getEvidence().contains("SETTLED_REFERENCE_ONLY")
+				&& candidate.getEvidence().contains("COMPONENT_UNKNOWN")));
+		assertTrue(world.lastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertTrue(world.lastDamage().getObservedHazardContacts()==null || world.lastDamage().getObservedHazardContacts().stream()
+			.noneMatch(witness -> "GRAPHIC_SURFACE".equals(witness.get("kind"))));
 		assertEquals(3200, world.lastDamage().getImpactX());
 	}
 
@@ -3463,6 +3537,7 @@ public class DeferredAttributionTest
 	@Test
 	public void warningFloorDoesNotReplaceAnObservedBossAttackAsTheDamageSource()
 	{
+		npcReportsInteraction = true;
 		addGauntletFloor(36047);
 		animation = 123;
 		hit(HitsplatID.DAMAGE_ME, 10);
@@ -3857,8 +3932,11 @@ public class DeferredAttributionTest
 	{
 		npcObservedName = "Aberrant spectre";
 		npcId = 2; // Bundled sole-style NPC: magic.
-		hit(HitsplatID.DAMAGE_ME, 10);
+		npcLevel = 96;
+		npcReportsInteraction = true;
+		useProjectileNativeView();
 		animation = 123;
+		hit(HitsplatID.DAMAGE_ME, 10);
 		tick();
 		assertEquals("unknown", world.lastDamage().getDamageType());
 		assertTrue(world.lastDamage().getDamageTypeCandidates().contains("magic"));
@@ -4012,13 +4090,20 @@ public class DeferredAttributionTest
 		hit(HitsplatID.DAMAGE_ME, 8);
 		npcs.clear();
 		tick();
-		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertUnresolvedSource(world.lastDamage());
+		assertEquals("Corrupted tornado", world.lastDamage().getAttackerName());
+		assertEquals("ENVIRONMENTAL", world.lastDamage().getAttribution());
+		assertTrue(world.lastDamage().getSourceResolution().isUnidentifiedPossible());
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"POSSIBLE".equals(candidate.getStrength()) && candidate.getEvidence().contains("COMPONENT_UNKNOWN")));
 		java.util.Map<?, ?> witness = world.lastDamage().getObservedHazardContacts().get(0);
 		assertEquals(9039, witness.get("npcId"));
 		assertNotNull(witness.get("actorRef"));
 		assertEquals(3200, witness.get("worldX"));
 		assertEquals("HITSPLAT_CALLBACK", witness.get("observationStage"));
+		assertEquals("SERVER_REPORTED_TILE", witness.get("defenderPositionEvidence"));
+		assertEquals("SAME_SERVER_TILE", witness.get("contactPredicate"));
+		assertEquals(Boolean.TRUE, witness.get("damaging"));
+		assertEquals(world.lastDamage().getObservedCycle().intValue(), ((Number) witness.get("observedCycle")).intValue());
 		assertTrue("The later frame separately records that the contact NPC left", export().getTicks().get(0).getNpcs().isEmpty());
 	}
 
@@ -4067,9 +4152,22 @@ public class DeferredAttributionTest
 		npcs.clear();
 		npcs.add(contactHazard(9039, position, 1));
 		tick();
-		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertUnresolvedSource(world.lastDamage());
+		assertEquals("Corrupted tornado", world.lastDamage().getAttackerName());
+		assertEquals("ENVIRONMENTAL",world.lastDamage().getAttribution());
+		assertEquals("unknown",world.lastDamage().getDamageType());
+		assertTrue(world.lastDamage().getSourceResolution().isUnidentifiedPossible());
 		assertEquals(1, world.lastDamage().getObservedHazardContacts().size());
+		Map<String,Object> original=world.lastDamage().getObservedHazardContacts().get(0);
+		assertEquals("HITSPLAT_CALLBACK",original.get("observationStage"));
+		assertEquals("SERVER_REPORTED_TILE",original.get("defenderPositionEvidence"));
+		assertEquals("SAME_SERVER_TILE",original.get("contactPredicate"));
+		assertEquals(Boolean.TRUE,original.get("damaging"));
+		assertEquals(world.lastDamage().getObservedCycle().intValue(),((Number)original.get("observedCycle")).intValue());
+		assertEquals(1,world.lastDamage().getSourceResolution().getCandidates().size());
+		assertTrue(world.lastDamage().getSourceResolution().getCandidates().stream().allMatch(candidate ->
+			"POSSIBLE".equals(candidate.getStrength()) && original.get("actorRef").equals(candidate.getActorRef())
+				&& candidate.getEvidence().contains("COMPONENT_UNKNOWN")
+				&& candidate.getEvidence().stream().noneMatch(evidence -> evidence.contains("ORIGINAL_CONTACT_AGREEMENT"))));
 		assertNotEquals(world.lastDamage().getObservedHazardContacts().get(0).get("actorRef"),
 			export().getTicks().get(0).getNpcs().get(0).getActorRef());
 	}
@@ -4172,15 +4270,23 @@ public class DeferredAttributionTest
 			}
 			else
 			{
-				assertEquals("Original correlation is retained as evidence", "Vardorvis' Head", damage.getAttackerName());
+				assertEquals("A qualified non-HP projectile cannot remain the displayed HP source", "Unknown", damage.getAttackerName());
 				assertEquals("Unknown", com.tickreplaylogger.util.SourceResolutionLabels.label(damage.getSourceResolution()));
 				assertEquals("UNIDENTIFIED", damage.getSourceResolution().getStatus());
 				assertTrue(damage.getSourceResolution().getCandidates().isEmpty());
 				assertTrue(damage.getSourceResolution().getExcludedCandidates().stream().anyMatch(candidate ->
 					Integer.valueOf(npcId).equals(candidate.getNpcId()) && candidate.getActorRef() != null
+						&& "Vardorvis' Head".equals(candidate.getName())
 						&& candidate.getReasons().stream().anyMatch(reason -> reason.startsWith("HITSPLAT_TYPE_MISMATCH:"))));
 				assertTrue("Original projectile association remains exported even when ineligible for HP",
 					damage.getAttributionCandidates().stream().anyMatch(raw -> raw.get("projectileObservationId") != null));
+				assertTrue("The original actual owner and reference remain raw evidence after exclusion",
+					damage.getAttributionCandidates().stream().filter(raw -> "PROJECTILE_OBSERVATION".equals(raw.get("kind")))
+						.anyMatch(raw -> raw.get("sourceHistory") instanceof com.tickreplaylogger.model.world.ProjectileSourceHistory
+							&& ((com.tickreplaylogger.model.world.ProjectileSourceHistory) raw.get("sourceHistory")).firstActor() != null
+							&& "Vardorvis' Head".equals(((com.tickreplaylogger.model.world.ProjectileSourceHistory) raw.get("sourceHistory"))
+								.firstActor().getSourceObservedName())
+							&& ((com.tickreplaylogger.model.world.ProjectileSourceHistory) raw.get("sourceHistory")).firstActor().getSourceRef() != null));
 			}
 		}
 	}
@@ -4236,12 +4342,18 @@ public class DeferredAttributionTest
 		assertNull(damage.getAttackerRef());
 		assertEquals("unknown", damage.getDamageType());
 		assertEquals("UNKNOWN", damage.getDetermination());
-		com.google.gson.JsonObject encoded = gson.toJsonTree(damage).getAsJsonObject();
-		com.google.gson.JsonObject candidate = encoded.getAsJsonArray("attributionCandidates").get(0).getAsJsonObject();
-		assertEquals("OBSERVED_CLIENT_CYCLE_WINDOW", candidate.get("matchBasis").getAsString());
-		assertEquals(4750, candidate.get("hitObservedCycle").getAsInt());
-		assertEquals(4773, candidate.get("projectileEndCycle").getAsInt());
-		assertEquals(-23, candidate.get("arrivalGapCycles").getAsInt());
+		Map<String,Object> witness=damage.getAttributionCandidates().stream()
+			.filter(value -> "PROJECTILE_OBSERVATION".equals(value.get("kind"))).findFirst().get();
+		com.tickreplaylogger.model.world.ProjectileState recorded=
+			(com.tickreplaylogger.model.world.ProjectileState)witness.get("projectile");
+		assertEquals(Integer.valueOf(4750),damage.getObservedCycle());
+		assertEquals(Integer.valueOf(4773),recorded.getEndCycle());
+		assertEquals(-23,damage.getObservedCycle()-recorded.getEndCycle());
+		assertEquals("PROXIMITY",recorded.getSourceHistory().getFirstObservedSource().getSourceEvidence());
+		assertNotNull(recorded.getSourceHistory().getFirstObservedSource().getProximityCandidate().getActorRef());
+		assertNull("An observed nearby actor is not an API projectile owner",recorded.getSourceRef());
+		assertTrue(damage.getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			candidate.getEvidence().contains("PROJECTILE_OBSERVATION_ID:"+recorded.getObservationId())));
 	}
 
 	@Test
@@ -4410,24 +4522,13 @@ public class DeferredAttributionTest
 
 	private String originalActivityEvidence(DamageRecord hit)
 	{
-		com.tickreplaylogger.capture.ResolverV1Recording replay = new com.tickreplaylogger.capture.ResolverV1Recording(
-			world.freezeSourceEvidence(hit.getImpactTick(),Long.MAX_VALUE,0,Collections.emptyList()),gson);
-		try
-		{
-			java.lang.reflect.Method normalize=replay.getClass().getDeclaredMethod("normalize",DamageRecord.class);normalize.setAccessible(true);
-			com.google.gson.JsonObject input=(com.google.gson.JsonObject)normalize.invoke(replay,hit),summary=new com.google.gson.JsonObject();
-			com.google.gson.JsonArray cues=new com.google.gson.JsonArray();
-			for(com.google.gson.JsonElement value:input.getAsJsonArray("cues"))
-			{
-				com.google.gson.JsonObject cue=value.getAsJsonObject();
-				if(!cue.has("evidenceMode") || !"ACTOR_ACTIVITY".equals(cue.get("evidenceMode").getAsString())) continue;
-				com.google.gson.JsonObject item=new com.google.gson.JsonObject();
-				for(String field:new String[]{"key","source","tick","cycle","sequence","originalActorState"}) if(cue.has(field))item.add(field,cue.get(field));
-				cues.add(item);
-			}
-			summary.add("activity",cues);summary.add("resolution",gson.toJsonTree(hit.getSourceResolution()));return summary.toString();
-		}
-		catch(ReflectiveOperationException unavailable) { throw new AssertionError(unavailable); }
+		Map<String, Object> facts = new java.util.LinkedHashMap<>();
+		facts.put("observations", world.freezeSourceEvidence(hit.getImpactTick(), Long.MAX_VALUE, 0, Collections.emptyList())
+			.getObservations().stream().filter(event -> "ANIMATION_CHANGED".equals(event.getType())
+				|| "OVERHEAD_TEXT_CHANGED".equals(event.getType())).collect(java.util.stream.Collectors.toList()));
+		facts.put("originalWitnesses", hit.getAttributionCandidates());
+		facts.put("resolution", hit.getSourceResolution());
+		return gson.toJson(facts);
 	}
 
 	@Test
@@ -4963,7 +5064,7 @@ public class DeferredAttributionTest
 		hit(HitsplatID.DAMAGE_ME, 5);
 		pickpocketFailure();
 		tick();
-		assertEquals(normalizedInteractionFacts(world.lastDamage()), "Lindir (pickpocket)", world.lastDamage().getAttackerName());
+		assertEquals(originalInteractionFacts(world.lastDamage()), "Lindir (pickpocket)", world.lastDamage().getAttackerName());
 		assertEquals("typeless", world.lastDamage().getDamageType());
 		assertEquals("Pickpocket failure", world.lastDamage().getAttackStyleName());
 		assertEquals("attack_rules.json:pickpocket", world.lastDamage().getMapRef());
@@ -5312,7 +5413,10 @@ public class DeferredAttributionTest
 		hit(HitsplatID.DAMAGE_ME, 8);
 		tick();
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertEquals("MULTIPLE_POSSIBLE_DAMAGE_SOURCES", world.lastDamage().getAttributionEvidence());
+		assertEquals("SHARED_OBSERVATION_ASSIGNMENT_UNESTABLISHED", world.lastDamage().getAttributionEvidence());
+		assertEquals("UNKNOWN",world.lastDamage().getAttribution());
+		assertSharedProjectileRecords(world.lastDamage(),export().getEvents().getDamageEvents().stream()
+			.filter(value -> "RECEIVED".equals(value.getDirection())).collect(java.util.stream.Collectors.toList()));
 	}
 
 	@Test
@@ -5350,7 +5454,11 @@ public class DeferredAttributionTest
 		animation = -1;
 		hit(HitsplatID.DAMAGE_ME, 8);
 		tick();
-		assertEquals("MULTIPLE_POSSIBLE_DAMAGE_SOURCES", world.lastDamage().getAttributionEvidence());
+		assertEquals("SHARED_OBSERVATION_ASSIGNMENT_UNESTABLISHED", world.lastDamage().getAttributionEvidence());
+		assertEquals("Unknown",world.lastDamage().getAttackerName());
+		assertEquals("UNKNOWN",world.lastDamage().getAttribution());
+		assertSharedProjectileRecords(world.lastDamage(),export().getEvents().getDamageEvents().stream()
+			.filter(value -> "RECEIVED".equals(value.getDirection())).collect(java.util.stream.Collectors.toList()));
 	}
 
 	@Test
@@ -7958,10 +8066,17 @@ public class DeferredAttributionTest
 		assertEquals("Unknown", world.lastDamage().getAttackerName());
 		assertUnresolvedSource(world.lastDamage());
 		assertRetainedProjectileConflict(world.lastDamage());
+		DamageRecord observed = world.lastDamage();
+		assertTrue("The paired contradiction is an actual callback before HP, not a later settled sample",
+			export().getEvents().getObservations().stream().anyMatch(event -> event.getType().startsWith("PROJECTILE_")
+				&& event.getSequence() < observed.getObservationSequence() && event.getGameCycle() <= observed.getObservedCycle()
+				&& event.getData().get("projectile") instanceof com.tickreplaylogger.model.world.ProjectileState
+				&& ((com.tickreplaylogger.model.world.ProjectileState) event.getData().get("projectile"))
+					.getSourceHistory().isActorChanged()));
 	}
 
 	@Test
-	public void tickOnlySourceConflictsAreObservedBeforeTheDeferredHitIsAttributed()
+	public void aLaterTickSourceConflictCannotRewriteTheOriginalPreHitOwner()
 	{
 		npcId = 9036;
 		npcLevel = 894;
@@ -7969,15 +8084,21 @@ public class DeferredAttributionTest
 		npcs.clear();
 		Actor[] source =
 		{ boss };
-		Projectile shot = sourceHistoryShot(() -> source[0], () -> player, () -> 60);
+		Projectile shot = sourceHistoryShot(() -> source[0], () -> player, () -> 120);
 		moveSourceShot(shot);
 		tick();
 		source[0] = npc("Corrupted Hunllef", 1);
 		hit(HitsplatID.DAMAGE_ME, 6);
 		tick();
-		assertEquals("Unknown", world.lastDamage().getAttackerName());
-		assertUnresolvedSource(world.lastDamage());
-		assertRetainedProjectileConflict(world.lastDamage());
+		DamageRecord observed = world.lastDamage();
+		// Original owner: cycle500. Actual HP:530. Later conflicting tick sample:560. Arrival:620.
+		assertEquals("Corrupted Hunllef", com.tickreplaylogger.util.SourceResolutionLabels.label(observed.getSourceResolution()));
+		assertEquals("UNKNOWN", observed.getAttribution());
+		assertTrue(observed.getSourceResolution().isUnidentifiedPossible());
+		assertRetainedProjectileConflict(observed);
+		assertTrue(observed.getAttributionCandidates().stream().filter(witness -> "PROJECTILE_OBSERVATION".equals(witness.get("kind")))
+			.anyMatch(witness -> gson.toJsonTree(witness.get("projectile")).getAsJsonObject().get("observedCycle").getAsInt()
+				> observed.getObservedCycle()));
 	}
 
 	@Test
@@ -8053,9 +8174,11 @@ public class DeferredAttributionTest
 				assertTrue(recorded.getSourceResolution().isUnidentifiedPossible());
 				assertTrue(recorded.getSourceResolution().getCandidates().stream()
 					.anyMatch(candidate -> "Vorkath".equals(candidate.getName())));
-				assertTrue(recorded.getAttributionCandidates().stream().anyMatch(witness ->
+				assertTrue(export().getEvents().getObservations().stream().anyMatch(event ->
 				{
-					com.google.gson.JsonElement original = gson.toJsonTree(witness.get("originalProjectileObservation"));
+					if(!event.getType().startsWith("PROJECTILE") || event.getSequence()>=recorded.getObservationSequence()
+						|| event.getGameCycle()==null || event.getGameCycle()>recorded.getObservedCycle())return false;
+					com.google.gson.JsonElement original = gson.toJsonTree(event.getData().get("projectile"));
 					if (!original.isJsonObject())
 					{
 						return false;
@@ -8287,8 +8410,23 @@ public class DeferredAttributionTest
 			.getSourceHistory();
 		assertFalse(h.isActorChanged());
 		assertTrue(h.isReferenceChanged());
-		assertEquals("Corrupted Hunllef", world.lastDamage().getAttackerName());
-		assertEquals("ranged", world.lastDamage().getDamageType());
+		DamageRecord damage=world.lastDamage();
+		assertEquals("Unknown",damage.getAttackerName());
+		assertEquals("UNKNOWN",damage.getAttribution());
+		assertTrue(damage.getSourceResolution().isUnidentifiedPossible());
+		assertTrue(damage.getSourceResolution().getCandidates().stream().anyMatch(candidate ->
+			"Corrupted Hunllef".equals(candidate.getName()) && "POSSIBLE".equals(candidate.getStrength())
+				&& h.firstActor().getSourceRef().equals(candidate.getActorRef()) && Integer.valueOf(9036).equals(candidate.getNpcId())));
+		assertEquals("Corrupted Hunllef",h.firstActor().getSourceObservedName());
+		assertNotNull(h.firstActor().getSourceRef());
+		assertEquals(Integer.valueOf(500),h.firstActor().getObservedCycle());
+		assertEquals(Integer.valueOf(530),damage.getObservedCycle());
+		assertEquals(Integer.valueOf(620),world.snapshotAtTick(2).getProjectiles().get(0).getEndCycle());
+		// The original owner remains an alternative; a hit 90 cycles before visual arrival is not arrival proof.
+		assertEquals("unknown",damage.getDamageType());
+		assertEquals("UNKNOWN",damage.getDamageTypeEvidence());
+		assertEquals("UNKNOWN",damage.getDetermination());
+		assertTrue(damage.getDamageTypeCandidates().contains("ranged"));
 	}
 
 	@Test
@@ -8943,20 +9081,11 @@ public class DeferredAttributionTest
 		return gson.toJson(result);
 	}
 
-	private String normalizedInteractionFacts(DamageRecord hit)
+	private String originalInteractionFacts(DamageRecord hit)
 	{
-		try
-		{
-			com.tickreplaylogger.capture.ResolverV1Recording resolver = new com.tickreplaylogger.capture.ResolverV1Recording(
-				world.freezeSourceEvidence(hit.getImpactTick(), Long.MAX_VALUE, 0, Collections.emptyList()), gson);
-			java.lang.reflect.Method normalize = resolver.getClass().getDeclaredMethod("normalize", DamageRecord.class);
-			normalize.setAccessible(true);
-			return gson.toJson(((com.google.gson.JsonObject) normalize.invoke(resolver, hit)).get("interactionObservations"));
-		}
-		catch (ReflectiveOperationException unavailable)
-		{
-			throw new AssertionError("Could not inspect the original interaction facts", unavailable);
-		}
+		return gson.toJson(world.freezeSourceEvidence(hit.getImpactTick(), Long.MAX_VALUE, 0, Collections.emptyList())
+			.getObservations().stream().filter(event -> "MENU_OPTION".equals(event.getType())
+				|| "SYSTEM_MESSAGE".equals(event.getType())).collect(java.util.stream.Collectors.toList()));
 	}
 
 	@Test
@@ -11303,7 +11432,9 @@ public class DeferredAttributionTest
 	{
 		assertEquals(1L, record.getAttributionCandidates().stream()
 			.filter(candidate -> "INVENTORY_SOURCE_CONTEXT_UNAVAILABLE".equals(candidate.get("kind"))).count());
-		assertEquals(2L, record.getAttributionCandidates().stream()
-			.filter(candidate -> !"INVENTORY_SOURCE_CONTEXT_UNAVAILABLE".equals(candidate.get("kind"))).count());
+		assertNotNull(record.getSourceResolution());
+		assertEquals("Two source alternatives survive independently of the raw witness storage channel", 2,
+			record.getSourceResolution().getCandidates().size());
+		assertTrue(record.getSourceResolution().isUnidentifiedPossible());
 	}
 }

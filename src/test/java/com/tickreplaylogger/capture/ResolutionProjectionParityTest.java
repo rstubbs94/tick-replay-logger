@@ -25,8 +25,11 @@ public class ResolutionProjectionParityTest
 		for (JsonElement value : fixture.getAsJsonArray("cases"))
 		{
 			JsonObject test = value.getAsJsonObject();
-			ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(test.getAsJsonObject("catalog")));
-			assertProjection(engine.evaluate(test.getAsJsonObject("input").deepCopy()), engine.id());
+			ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(test.getAsJsonObject("catalog")));
+			JsonObject input=test.getAsJsonObject("input").deepCopy();
+            java.util.List<ResolverV1.Facts> facts=new java.util.ArrayList<>();
+            for(JsonElement cue:input.getAsJsonArray("cues")) facts.add(new DeclaredMechanicFacts(engine,input,cue.getAsJsonObject()));
+            assertProjection(engine.evaluate(DirectFixtureEvidence.hit(input),facts), engine.id());
 			checked++;
 		}
 		assertEquals(109, checked);
@@ -38,11 +41,11 @@ public class ResolutionProjectionParityTest
 		JsonObject first = cue("observation:1", "{kind:'npc',id:101,name:'Same untracked name'}");
 		JsonObject second = cue("observation:2", "{kind:'npc',id:101,name:'Same untracked name'}");
 		ResolutionResult aliases = new ResolutionResult();
-		aliases.candidates.add(ResolutionCandidate.hint("component:first", first));
-		aliases.candidates.add(ResolutionCandidate.hint("component:second", first));
+		aliases.candidates.add(ResolutionCandidate.hint("component:first", DirectFixtureEvidence.source(first)));
+		aliases.candidates.add(ResolutionCandidate.hint("component:second", DirectFixtureEvidence.source(first)));
 		assertProjection(aliases, "synthetic");
 		assertEquals(1, SourceEvidenceResolver.project(aliases, "synthetic").getCandidates().size());
-		aliases.candidates.add(ResolutionCandidate.hint("component:first", second));
+		aliases.candidates.add(ResolutionCandidate.hint("component:first", DirectFixtureEvidence.source(second)));
 		assertProjection(aliases, "synthetic");
 		SourceResolution distinct = SourceEvidenceResolver.project(aliases, "synthetic");
 		assertEquals(2, distinct.getCandidates().size());
@@ -55,8 +58,8 @@ public class ResolutionProjectionParityTest
 		for (String scope : Arrays.asList("ORDINARY_ATTACK", "ALL_DIRECT_HP_COMPONENTS"))
 		{
 			ResolutionResult result = new ResolutionResult();
-			ResolutionCandidate row = ResolutionCandidate.observed("reference", cue("source:1",
-				"{kind:'npc',id:101,name:'Recorded actor',actorRef:'npc:1',scope:{sceneKey:'room',worldViewId:0,plane:0}}"));
+			ResolutionCandidate row = ResolutionCandidate.observed("reference", DirectFixtureEvidence.source(cue("source:1",
+				"{kind:'npc',id:101,name:'Recorded actor',actorRef:'npc:1',scope:{sceneKey:'room',worldViewId:0,plane:0}}")));
 			row.status = "EXCLUDED";
 			row.candidateStrength = "STRONG";
 			row.exclusionScope = scope;
@@ -66,16 +69,16 @@ public class ResolutionProjectionParityTest
 			assertProjection(result, "synthetic");
 			SourceResolution projected = SourceEvidenceResolver.project(result, "synthetic");
 			assertEquals("ORDINARY_ATTACK".equals(scope) ? 1 : 0, projected.getCandidates().size());
-			assertEquals("ORDINARY_ATTACK".equals(scope) ? 0 : 1, projected.getExcludedCandidates().size());
+			assertEquals("ORDINARY_ATTACK".equals(scope) ? 0 : 1, projected.getExcludedCandidates() == null ? 0 : projected.getExcludedCandidates().size());
 		}
 		ResolutionResult result = new ResolutionResult();
 		JsonObject family = cue("family:1", "{kind:'status',statusFamily:'venom',name:'Venom'}");
 		family.addProperty("hitFamilyOnly", true);
-		result.candidates.add(ResolutionCandidate.hint("family", family));
+		result.candidates.add(ResolutionCandidate.hint("family", DirectFixtureEvidence.source(family)));
 		assertProjection(result, "synthetic");
 		assertEquals("Venom", SourceEvidenceResolver.project(result, "synthetic").getCandidates().get(0).getName());
-		result.candidates.add(ResolutionCandidate.hint("physical-source", cue("source:2",
-			"{kind:'npc',id:101,name:'Recorded actor',actorRef:'npc:1',scope:{sceneKey:'room',worldViewId:0,plane:0}}")));
+		result.candidates.add(ResolutionCandidate.hint("physical-source", DirectFixtureEvidence.source(cue("source:2",
+			"{kind:'npc',id:101,name:'Recorded actor',actorRef:'npc:1',scope:{sceneKey:'room',worldViewId:0,plane:0}}"))));
 		assertProjection(result, "synthetic");
 		SourceResolution projected = SourceEvidenceResolver.project(result, "synthetic");
 		assertEquals(1, projected.getCandidates().size());

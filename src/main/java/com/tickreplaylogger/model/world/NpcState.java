@@ -24,23 +24,22 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.List;
-import java.util.Map;
-import lombok.Builder;
-import lombok.Data;
+import java.util.*;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 /**
  * One NPC's per-tick state in a {@link WorldSnapshot}. Captured for every NPC in the loaded scene
  * retaining each observed enemy pose and position relative to the player.
  */
-@Data
-@Builder
-public class NpcState
+@Getter
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@SuperBuilder(toBuilder = true)
+public class NpcState extends ObservedActorState
 {
 	private final Integer sceneId; // unavailable is distinct from observed index zero
 	private final String actorRef;
-	private final Integer worldViewId;
-	private final ActorInteractionState interaction;
 	private final Integer npcId;
 	private final Integer baseNpcId;
 	private final String definitionName;
@@ -48,7 +47,6 @@ public class NpcState
 	private final NpcDefinitionStateReference definitionStateReference;
 	private final Boolean definitionHasTransforms;
 	private final int[] definitionTransformIds;
-	private final Map<String, String> observationIssues;
 	private final List<String> variantCandidates;
 	private final List<String> researchReferenceKeys;
 	private final String actionEvidence;
@@ -58,9 +56,6 @@ public class NpcState
 	private final String phaseRule;
 	private final Integer phaseObservedTick;
 	private final Integer phaseLastObservedTick;
-	private final Boolean localPositionKnown;
-	private final Boolean worldPositionKnown;
-	private final Boolean planeKnown;
 	// Direct API occupied area; this is not a server damage footprint or activation claim.
 	private final Map<String, Integer> worldArea;
 	private final Boolean worldAreaKnown;
@@ -68,7 +63,6 @@ public class NpcState
 	private final Integer worldAreaWorldViewId;
 	private final String worldAreaEvidence;
 	private final String name;
-	private final Integer combatLevel;
 	private final Boolean normalWorldContextObserved;
 	private final Boolean modelOverridesPresent;
 	private final int[] overrideModelIds;
@@ -77,28 +71,9 @@ public class NpcState
 	private final Boolean overheadIconsKnown;
 	private final short[] overheadSpriteIds;
 
-	private final int worldX;
-	private final int worldY;
-	private final int plane;
-	private final int localX;
-	private final int localY;
-	private final Integer orientation;
-	private final Integer currentOrientation;
-
-	private final Integer animationId;
-	private final Integer animationFrame;
-	private final Integer poseAnimationId;
-	private final Integer poseAnimationFrame;
-	private final int[] graphicIds;
-	private final Boolean graphicsKnown;
-	private final ActorGraphicsState graphicsState;
-
 	private final Integer healthRatio; // -1 if no bar; null if unavailable
 	private final Integer healthScale;
-	private final String overheadText;
-	private final Integer overheadCycle;
 
-	private final Integer interactingNpcIndex; // who it targets; equals player's ref when attacking us
 	private final Boolean interactingWithPlayer;
 
 	private final String derivedAction; // IDLE|MOVING|ATTACKING|MOVING_AND_ATTACKING|COOLDOWN

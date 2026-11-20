@@ -91,7 +91,7 @@ public class CaptureTest
 		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
 		assertTrue(legacy.stylesForNpc(-12345).isEmpty());
 		assertEquals(null, map.hazardName("graphicsObject", -12345));
-		assertEquals(null, map.effectForSpotanim(-12345));
+		assertEquals(null, legacy.effectForSpotanim(-12345));
 	}
 
 	@Test
@@ -237,7 +237,9 @@ public class CaptureTest
 		CombatCatalog catalog = CombatCatalog.load(new Gson());
 		java.lang.reflect.Field field = CombatCatalog.class.getDeclaredField("root");
 		field.setAccessible(true);
-		com.google.gson.JsonObject root = (com.google.gson.JsonObject) field.get(catalog);
+		com.google.gson.JsonObject shared = (com.google.gson.JsonObject) field.get(catalog);
+		com.google.gson.JsonObject original = shared.deepCopy(), root = shared.deepCopy();
+		field.set(catalog, root);
 		com.google.gson.JsonArray rules = root.getAsJsonObject("reviewedBindings")
 			.getAsJsonArray("projectileStyleRules");
 		com.google.gson.JsonObject duplicate = new com.google.gson.JsonObject();
@@ -256,12 +258,13 @@ public class CaptureTest
 			reversed.add(rules.get(i));
 		root.getAsJsonObject("reviewedBindings").add("projectileStyleRules", reversed);
 		assertNull(catalog.projectileDamageType(8061, 1479, 732, true));
+		assertEquals("Synthetic conflicts must not change the bundled reference tree", original, shared);
 	}
 
 	@Test
 	public void environmentalPresenceDoesNotSupplyABlanketDamageType()
 	{
-		CombatCatalog catalog = CombatCatalog.load(new Gson());
+		LegacyCombatCatalog catalog = LegacyCombatCatalog.from(CombatCatalog.load(new Gson()));
 		assertEquals("typeless", catalog.hazardDamageType("Corrupted Hunllef floor"));
 		assertEquals("typeless", catalog.hazardDamageType("Hunllef floor"));
 		assertNull(catalog.hazardDamageType("Poison cloud"));
@@ -278,7 +281,7 @@ public class CaptureTest
 		assertEquals("Blue Moon tornado", catalog.npcContactHazardName(13027, 0, true));
 		assertNull(catalog.npcContactHazardName(9039, 0, false));
 		assertNull(catalog.npcContactHazardName(9035, 894, true));
-		assertNull(catalog.hazardDamageType("Corrupted tornado"));
+		assertNull(LegacyCombatCatalog.from(catalog).hazardDamageType("Corrupted tornado"));
 	}
 
 	@Test
@@ -294,7 +297,7 @@ public class CaptureTest
 		for (int id : new int[]
 		{ 11738, 11739, 14152, 14153 })
 			assertNull(catalog.npcContactHazardName(id, 0, true));
-		assertNull(catalog.hazardDamageType("Unstable orb"));
+		assertNull(LegacyCombatCatalog.from(catalog).hazardDamageType("Unstable orb"));
 	}
 
 	// --- rolling buffer / export assembly ---
@@ -302,23 +305,25 @@ public class CaptureTest
 	public void cacheStyleBindingsExcludeBlockAnimationsAndUnknownProjectiles()
 	{
 		DamageMap map = DamageMap.load(new Gson());
-		assertEquals("ranged", map.styleForProjectile(1712));
-		assertEquals("magic", map.styleForProjectile(1708));
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
+		assertEquals("ranged", legacy.styleForProjectile(1712));
+		assertEquals("magic", legacy.styleForProjectile(1708));
 		for (int projectile : new int[] { 1713, 1714 })
 		{
-			assertNull(map.styleForProjectile(projectile));
+			assertNull(legacy.styleForProjectile(projectile));
 			assertNull(map.catalog().projectileDamageType(-1, projectile, null, true));
 			assertEquals("magic", map.catalog().projectileDamageType(9036, projectile, 894, true));
 		}
-		assertEquals("melee", map.styleForPlayerAnimation(401));
-		assertEquals(null, map.styleForPlayerAnimation(403));
-		assertEquals(null, map.styleForProjectile(-1));
+		assertEquals("melee", legacy.styleForPlayerAnimation(401));
+		assertEquals(null, legacy.styleForPlayerAnimation(403));
+		assertEquals(null, legacy.styleForProjectile(-1));
 	}
 
 	@Test
 	public void environmentalAndNpcAttackRulesAreLoadedFromTheResearchBundle()
 	{
 		DamageMap map = DamageMap.load(new Gson());
+		PreRuleIrDamageMap legacy = PreRuleIrDamageMap.load(new Gson(), LegacyCombatCatalog.from(map.catalog()));
 		com.google.gson.JsonObject environmental = RuntimeCatalog.load(new Gson()).section("capture")
 			.getAsJsonObject("damageRules").getAsJsonObject("environmental");
 		assertEquals("unknown", environmental.get("damageType").getAsString());
@@ -329,10 +334,10 @@ public class CaptureTest
 			assertFalse("tempoross".equals(key.getAsString()));
 		}
 		assertEquals("unknown", environmental.get("prayable").getAsString());
-		assertEquals(null, map.attackRuleForNpc(9036, 8420)); // Shared mode ID without observed context.
-		assertEquals("typeless", map.attackRuleForNpc(9036, 8420, 894, true).getDamageType());
-		assertTrue(map.attackRuleForNpc(9036, 8419, 894, true).isRequiresProjectile());
-		assertEquals(null, map.attackRuleForNpc(9036, 8753));
+		assertEquals(null, legacy.attackRuleForNpc(9036, 8420)); // Shared mode ID without observed context.
+		assertEquals("typeless", legacy.attackRuleForNpc(9036, 8420, 894, true).getDamageType());
+		assertTrue(legacy.attackRuleForNpc(9036, 8419, 894, true).isRequiresProjectile());
+		assertEquals(null, legacy.attackRuleForNpc(9036, 8753));
 	}
 
 	@Test

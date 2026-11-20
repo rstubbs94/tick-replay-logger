@@ -559,37 +559,6 @@ public class RecordingStorage implements AutoCloseable
 		});
 	}
 
-	public CompletableFuture<Void> saveDeaths()
-	{
-		return submit(() -> commit(false, current(false)));
-	}
-
-	public CompletableFuture<Void> saveSavedRecordings()
-	{
-		return submit(() -> commit(true, current(true)));
-	}
-
-	public String exportAllAsJson()
-	{
-		return gson.toJson(getDeaths());
-	}
-
-	public String exportRecordingAsJson(TickRecording recording)
-	{
-		return gson.toJson(recording);
-	}
-
-	public String exportSavedRecordingAsJson(TickRecording recording)
-	{
-		return gson.toJson(recording);
-	}
-
-	public String exportDeathAsJson(int at)
-	{
-		List<TickRecording> records = getDeaths();
-		return at >= 0 && at < records.size() ? gson.toJson(records.get(at)) : "{}";
-	}
-
 	@FunctionalInterface
 	private interface Work
 	{

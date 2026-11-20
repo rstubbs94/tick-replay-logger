@@ -110,7 +110,7 @@ public class CanonicalMechanicsProjectionTest
 
 	@Test public void duplicateRowsWithinOneHitDoNotBecomeCrossHitAssignments()
 	{
-		ResolverV1 engine = new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution'}",JsonObject.class)));
+		ResolverV1 engine = ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution'}",JsonObject.class)));
 		JsonObject input = gson.fromJson("{hit:{recipientRef:'player',amount:1},cues:[{key:'observed-projectile:1',pattern:'projectile_impact',apiSourceObserved:true,source:{kind:'npc',id:900000,actorRef:'synthetic:1'}}]}",JsonObject.class);
 		input.getAsJsonArray("cues").add(input.getAsJsonArray("cues").get(0).deepCopy());
 		assertFalse(ResolverTestCatalog.resolveBatch(engine,Collections.singletonList(input)).get(0).has("scalarAssociation"));
@@ -122,11 +122,11 @@ public class CanonicalMechanicsProjectionTest
 	{
 		JsonObject first = gson.fromJson("{kind:'player',name:'Other player',observationKey:'projectile-observation:1'}",JsonObject.class);
 		JsonObject second = first.deepCopy(); second.addProperty("observationKey","projectile-observation:2");
-		assertNotEquals(ResolverV1.sourceKey(first),ResolverV1.sourceKey(second));
+		assertNotEquals(identityKey(first),identityKey(second));
 		first.addProperty("kind","npc"); second.addProperty("kind","npc"); first.addProperty("id",900001); second.addProperty("id",900001);
-		assertNotEquals(ResolverV1.sourceKey(first),ResolverV1.sourceKey(second));
+		assertNotEquals(identityKey(first),identityKey(second));
 		first.remove("id");
-		first.remove("observationKey"); assertNull(ResolverV1.sourceKey(first));
+		first.remove("observationKey"); assertNull(identityKey(first));
 	}
 
 	@Test public void terminalSourceHintRequiresOriginalHpPositionAndOriginalHpMode()
@@ -196,7 +196,7 @@ public class CanonicalMechanicsProjectionTest
 
 	@Test public void physicalContactAgreementNeverJoinsAReplacementAtTheSameTile()
 	{
-		ResolverV1 engine=new ResolverV1(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',specialRules:[{id:'synthetic.contact',pattern:'contact_hazard',source:{kind:'object',ids:[900001]},recipients:'within_area',geometry:{shape:'point',anchor:'source_position',authority:'verified'}}]}",JsonObject.class)));
+		ResolverV1 engine=ResolverTestCatalog.engine(ResolverTestCatalog.lower(gson.fromJson("{schemaVersion:1,purpose:'retrospective_damage_resolution',specialRules:[{id:'synthetic.contact',pattern:'contact_hazard',source:{kind:'object',ids:[900001]},recipients:'within_area',geometry:{shape:'point',anchor:'source_position',authority:'verified'}}]}",JsonObject.class)));
 		JsonObject input=gson.fromJson("{hit:{recipientRef:'player',amount:1,hitsplatType:16,tick:10,cycle:30,sequence:2,scope:{sceneKey:'synthetic',worldViewId:0,plane:0},position:{x:5,y:5},impactFrame:{tick:10,nativeContextKnown:true,sceneKey:'synthetic',worldViewId:0,plane:0},originalHpCallback:{receiverKind:'PLAYER',amount:1,hitsplatType:16,actorState:{actorKind:'LOCAL_PLAYER',worldPositionKnown:true,planeKnown:true,worldViewId:0,plane:0,worldX:5,worldY:5}},observedHazardContacts:[{kind:'OBJECT_SURFACE',objectId:900001,objectObservationId:7,objectKind:'gameObject',worldViewId:0,plane:0,sceneKey:'synthetic',observedCycle:30,observationStage:'HITSPLAT_CALLBACK',defenderPositionEvidence:'SERVER_REPORTED_TILE',sourceEligibility:'ELIGIBLE_REFERENCE_SURFACE',damaging:true}],impactSurfaces:[{kind:'gameObject',id:900001,objectKey:123,objectObservationId:7,worldViewId:0,plane:0,damaging:true,sourceEligibility:'ELIGIBLE_REFERENCE_SURFACE'}]},cues:[{key:'contact',pattern:'contact_hazard',evidenceMode:'ORIGINAL_CONTACT',contactObserved:true,allowFallback:false,source:{kind:'object',id:900001,scope:{sceneKey:'synthetic',worldViewId:0,plane:0}},position:{x:5,y:5}}]}",JsonObject.class);
 		JsonObject actualCue=input.getAsJsonArray("cues").get(0).getAsJsonObject();
 		actualCue.add("witness",input.getAsJsonObject("hit").getAsJsonArray("observedHazardContacts").get(0).deepCopy());
@@ -227,8 +227,29 @@ public class CanonicalMechanicsProjectionTest
 			.mechanism(text(cue,"mechanism")).damageComponent(text(cue,"damageComponent")).worldMode(text(cue,"worldMode"))
 			.observedAttackStyle(text(cue,"observedAttackStyle")).observedHitsplatType(hit.get("hitsplatType").getAsInt()).build();
 		SourceResolution baseline = LegacyConstraintOracle.resolve(Collections.singletonList(hypothesis), hit.get("amount").getAsInt(), true, "synthetic");
-		JsonObject result = new ResolverV1(ResolverTestCatalog.lower(document)).evaluateQualifications(cue, hit);
-		assertEquals(text(declaration,"id") + ":" + scenario + ":" + hit.get("amount"), baseline.getExcludedCandidates()!=null && !baseline.getExcludedCandidates().isEmpty(), result.get("excluded").getAsBoolean());
+		ResolverV1.BoundCases cases = new ResolverV1.BoundCases();
+		boolean applicable = "verified".equals(text(declaration,"authority"))
+			&& declaration.getAsJsonArray("staticMissing").size()==0
+			&& ResolverV1.conditions(declaration.get("when"),(domain,fact)-> {
+				JsonObject values="hit".equals(domain) ? hit : "cue".equals(domain) ? cue
+					: "source".equals(domain) ? source : cue.getAsJsonObject(domain);
+				return values==null ? null : ResolverV1.path(values,fact);
+			})==ResolverEvidence.Truth.TRUE;
+        if("ALL_DIRECT_HP_COMPONENTS".equals(text(declaration,"exclusionScope")))
+        {
+            ResolverEvidence.Identity identity=DirectFixtureEvidence.source(cue).identity();
+            applicable &= identity.actorRef!=null && !identity.actorRef.trim().isEmpty()
+                && OriginalSourceProof.scope(identity.scope,identity.scope)==ResolverEvidence.Truth.TRUE;
+        }
+		cases.add("independent_guard".equals(text(declaration,"composition")),applicable,
+			ResolverEvidence.number(declaration.get("maximum")),hit.get("amount").getAsBigDecimal());
+		assertEquals(text(declaration,"id") + ":" + scenario + ":" + hit.get("amount"), baseline.getExcludedCandidates()!=null && !baseline.getExcludedCandidates().isEmpty(), cases.excluded());
+	}
+
+	private String identityKey(JsonObject source)
+	{
+		JsonObject cue=new JsonObject();cue.add("source",source);
+		return ResolverEvidence.sourceKey(DirectFixtureEvidence.source(cue).identity());
 	}
 
 	private JsonObject qualified(JsonObject declaration, int npc)

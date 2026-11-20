@@ -24,24 +24,13 @@
  */
 package com.tickreplaylogger.capture;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
+import com.tickreplaylogger.model.world.*;
+import static com.tickreplaylogger.capture.ResolverEvidence.array;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 import lombok.extern.slf4j.Slf4j;
 
 /** Bundled factual identity and state references; never treats prose as an event. */
@@ -96,7 +85,7 @@ public final class CombatCatalog
 	}
 
 	/** Display context from an observed identity, never a damage-source assignment. */
-	public String observedBossName(com.tickreplaylogger.model.world.NpcState npc)
+	public String observedBossName(NpcState npc)
 	{
 		if (npc == null || npc.getNpcId() == null || !Boolean.TRUE.equals(npc.getNormalWorldContextObserved())
 			|| npc.getObservationIssues() != null && npc.getObservationIssues().containsKey("name")
@@ -110,8 +99,8 @@ public final class CombatCatalog
 		{
 			return null;
 		}
-		com.tickreplaylogger.model.world.NpcDefinitionStateReference definition = definitionStateReference(
-			npc.getNpcId(), npc.getName(), true, npc.getCombatLevel(), npc.getSize(), true);
+		NpcDefinitionStateReference definition = definitionStateReference(npc.getNpcId(), npc.getName(), true,
+			npc.getCombatLevel(), npc.getSize(), true);
 		if (definition != null && "Boss".equals(definition.getRole()))
 		{
 			return npc.getName().replaceAll("<[^>]*>", "").trim();
@@ -142,8 +131,8 @@ public final class CombatCatalog
 	}
 
 	/** A definition interpretation requires all independently observed identity/shape guards. */
-	public com.tickreplaylogger.model.world.NpcDefinitionStateReference definitionStateReference(Integer npcId,
-		String name, boolean nameKnown, Integer level, Integer size, boolean normalContext)
+	public NpcDefinitionStateReference definitionStateReference(Integer npcId, String name, boolean nameKnown,
+		Integer level, Integer size, boolean normalContext)
 	{
 		if (!normalContext || !nameKnown || npcId == null || level == null || size == null)
 		{
@@ -166,8 +155,8 @@ public final class CombatCatalog
 		{
 			refs.add(ref.getAsString());
 		}
-		return com.tickreplaylogger.model.world.NpcDefinitionStateReference.builder().key(string(row, "key"))
-			.catalogId(id()).npcId(npcId).name(string(row, "name")).role(string(row, "role")).form(string(row, "form"))
+		return NpcDefinitionStateReference.builder().key(string(row, "key")).catalogId(id()).npcId(npcId)
+			.name(string(row, "name")).role(string(row, "role")).form(string(row, "form"))
 			.modeReference(string(row, "modeReference")).evidence(string(row, "evidence"))
 			.sourceRefs(Collections.unmodifiableList(refs)).build();
 	}
@@ -192,23 +181,20 @@ public final class CombatCatalog
 		} // A successful unnamed read is distinct from a failed read.
 		JsonElement candidates = object(section("npcIdentities").get(String.valueOf(npcId))).get("candidates");
 		boolean namedReference = false;
-		if (candidates != null && candidates.isJsonArray())
+		for (JsonElement value : array(candidates))
 		{
-			for (JsonElement value : candidates.getAsJsonArray())
+			JsonObject candidate = object(value);
+			for (String field : Arrays.asList("name", "page"))
 			{
-				JsonObject candidate = object(value);
-				for (String field : Arrays.asList("name", "page"))
+				String expected = definitionName(string(candidate, field));
+				if (expected.isEmpty())
 				{
-					String expected = definitionName(string(candidate, field));
-					if (expected.isEmpty())
-					{
-						continue;
-					}
-					namedReference = true;
-					if (expected.equals(observed))
-					{
-						return true;
-					}
+					continue;
+				}
+				namedReference = true;
+				if (expected.equals(observed))
+				{
+					return true;
 				}
 			}
 		}
@@ -245,18 +231,14 @@ public final class CombatCatalog
 			return new JsonObject();
 		}
 		JsonElement rules = contextBindings().get("statusValueRules");
-		if (rules != null && rules.isJsonArray())
+		for (JsonElement value : array(rules))
 		{
-			for (JsonElement value : rules.getAsJsonArray())
+			JsonObject rule = value.getAsJsonObject();
+			if (key.equals(string(rule, "key")) && Arrays.asList("varp", "varbit").contains(string(rule, "namespace"))
+				&& "player".equals(string(rule, "actorRef")) && CaptureBuild
+					.supportsClientReference(string(rule, "clientApiVersion"), string(rule, "clientArtifactSha256")))
 			{
-				JsonObject rule = value.getAsJsonObject();
-				if (key.equals(string(rule, "key"))
-					&& Arrays.asList("varp", "varbit").contains(string(rule, "namespace"))
-					&& "player".equals(string(rule, "actorRef")) && CaptureBuild.supportsClientReference(
-						string(rule, "clientApiVersion"), string(rule, "clientArtifactSha256")))
-				{
-					return rule;
-				}
+				return rule;
 			}
 		}
 		return new JsonObject();
@@ -273,14 +255,11 @@ public final class CombatCatalog
 	{
 		JsonObject rule = localStatusRule(key);
 		JsonElement cases = rule.get("cases");
-		if (cases != null && cases.isJsonArray())
+		for (JsonElement value : array(cases))
 		{
-			for (JsonElement value : cases.getAsJsonArray())
+			if (damageType != null && damageType.equals(string(object(value), "state")))
 			{
-				if (damageType != null && damageType.equals(string(object(value), "state")))
-				{
-					return true;
-				}
+				return true;
 			}
 		}
 		return false;
@@ -290,15 +269,12 @@ public final class CombatCatalog
 	{
 		JsonObject rule = localStatusRule(key);
 		JsonElement cases = rule.get("cases");
-		if (cases != null && cases.isJsonArray())
+		for (JsonElement entry : array(cases))
 		{
-			for (JsonElement entry : cases.getAsJsonArray())
+			JsonObject range = entry.getAsJsonObject();
+			if (value >= range.get("min").getAsInt() && value <= range.get("max").getAsInt())
 			{
-				JsonObject range = entry.getAsJsonObject();
-				if (value >= range.get("min").getAsInt() && value <= range.get("max").getAsInt())
-				{
-					return range;
-				}
+				return range;
 			}
 		}
 		return new JsonObject();
@@ -312,17 +288,14 @@ public final class CombatCatalog
 	public JsonObject localGraphicReference(int id)
 	{
 		JsonElement rules = contextBindings().get("graphicReferenceRules");
-		if (rules != null && rules.isJsonArray())
+		for (JsonElement value : array(rules))
 		{
-			for (JsonElement value : rules.getAsJsonArray())
+			JsonObject rule = value.getAsJsonObject();
+			if (rule.has("id") && rule.get("id").getAsInt() == id && "graphic".equals(string(rule, "namespace"))
+				&& "player".equals(string(rule, "actorRef")) && CaptureBuild
+					.supportsClientReference(string(rule, "clientApiVersion"), string(rule, "clientArtifactSha256")))
 			{
-				JsonObject rule = value.getAsJsonObject();
-				if (rule.has("id") && rule.get("id").getAsInt() == id && "graphic".equals(string(rule, "namespace"))
-					&& "player".equals(string(rule, "actorRef")) && CaptureBuild.supportsClientReference(
-						string(rule, "clientApiVersion"), string(rule, "clientArtifactSha256")))
-				{
-					return rule;
-				}
+				return rule;
 			}
 		}
 		return new JsonObject();
@@ -499,7 +472,7 @@ public final class CombatCatalog
 	}
 
 	/** Positive context for the data-selected base branch; missing relevant samples preserve alternatives. */
-	public boolean baseProfileContextKnown(com.tickreplaylogger.model.world.ContextBlock context, List<String> blocked)
+	public boolean baseProfileContextKnown(ContextBlock context, List<String> blocked)
 	{
 		if (context == null || context.getTemplateRegionId() == null || context.isInInstance() == null
 			|| blocked == null)
@@ -589,14 +562,11 @@ public final class CombatCatalog
 	public boolean modeSensitive(int npcId)
 	{
 		JsonElement ids = root.get("modeSensitiveNpcIds");
-		if (ids != null && ids.isJsonArray())
+		for (JsonElement id : array(ids))
 		{
-			for (JsonElement id : ids.getAsJsonArray())
+			if (id.getAsInt() == npcId)
 			{
-				if (id.getAsInt() == npcId)
-				{
-					return true;
-				}
+				return true;
 			}
 		}
 		return hasConditionalVariants(npcId);
@@ -617,14 +587,11 @@ public final class CombatCatalog
 			return false;
 		}
 		JsonElement candidates = object(section("npcIdentities").get(String.valueOf(npcId))).get("candidates");
-		if (candidates != null && candidates.isJsonArray())
+		for (JsonElement value : array(candidates))
 		{
-			for (JsonElement value : candidates.getAsJsonArray())
+			if (String.valueOf(level).equals(string(value.getAsJsonObject(), "combat_level")))
 			{
-				if (String.valueOf(level).equals(string(value.getAsJsonObject(), "combat_level")))
-				{
-					return true;
-				}
+				return true;
 			}
 		}
 		return false;
@@ -660,38 +627,6 @@ public final class CombatCatalog
 			: null;
 		return new GraphicSurface(string(rule, "name"), string(rule, "state"), damaging, string(rule, "mapRef"),
 			string(rule, "key"));
-	}
-
-	/** A damaging surface is not automatically typeless; its own binding must say so. */
-	public String hazardDamageType(String name)
-	{
-		if (name == null)
-		{
-			return null;
-		}
-		String resolved = null;
-		for (String family : new String[]
-		{ "objectRules", "graphicRules", "npcHazardRules" })
-		{
-			JsonObject rules = object(section("reviewedBindings").get(family));
-			for (java.util.Map.Entry<String, JsonElement> entry : rules.entrySet())
-			{
-				JsonObject rule = object(entry.getValue());
-				JsonElement damaging = rule.get("damaging");
-				if (damaging == null || !damaging.isJsonPrimitive() || !damaging.getAsJsonPrimitive().isBoolean()
-					|| !damaging.getAsBoolean() || !name.equals(string(rule, "name")))
-				{
-					continue;
-				}
-				String type = string(rule, "damageType");
-				if (type == null || type.isEmpty() || (resolved != null && !resolved.equals(type)))
-				{
-					return null;
-				}
-				resolved = type;
-			}
-		}
-		return resolved;
 	}
 
 	public String npcContactHazardName(int npcId, Integer level, boolean normalContext)
@@ -732,30 +667,27 @@ public final class CombatCatalog
 		}
 		String resolved = null;
 		JsonElement rules = section("reviewedBindings").get("projectileStyleRules");
-		if (rules != null && rules.isJsonArray())
+		for (JsonElement element : array(rules))
 		{
-			for (JsonElement element : rules.getAsJsonArray())
+			JsonObject rule = element.getAsJsonObject();
+			boolean npc = false;
+			for (JsonElement id : rule.getAsJsonArray("npcIds"))
 			{
-				JsonObject rule = element.getAsJsonObject();
-				boolean npc = false;
-				for (JsonElement id : rule.getAsJsonArray("npcIds"))
+				if (id.getAsInt() == npcId)
 				{
-					if (id.getAsInt() == npcId)
-					{
-						npc = true;
-					}
+					npc = true;
 				}
-				if (npc)
+			}
+			if (npc)
+			{
+				String style = string(object(rule.get("styles")), String.valueOf(projectileId));
+				if (style != null)
 				{
-					String style = string(object(rule.get("styles")), String.valueOf(projectileId));
-					if (style != null)
+					if (resolved != null && !resolved.equals(style))
 					{
-						if (resolved != null && !resolved.equals(style))
-						{
-							return null;
-						}
-						resolved = style;
+						return null;
 					}
+					resolved = style;
 				}
 			}
 		}
@@ -815,25 +747,22 @@ public final class CombatCatalog
 		}
 		String key = null;
 		JsonElement rows = section("reviewedBindings").get("projectileStyleRules");
-		if (rows != null && rows.isJsonArray())
+		for (JsonElement element : array(rows))
 		{
-			for (JsonElement element : rows.getAsJsonArray())
+			JsonObject row = element.getAsJsonObject();
+			boolean actor = false;
+			for (JsonElement id : row.getAsJsonArray("npcIds"))
 			{
-				JsonObject row = element.getAsJsonObject();
-				boolean actor = false;
-				for (JsonElement id : row.getAsJsonArray("npcIds"))
+				actor |= id.getAsInt() == npcId;
+			}
+			if (actor && style.equals(string(object(row.get("styles")), String.valueOf(projectileId))))
+			{
+				String candidate = string(row, "key");
+				if (candidate == null || key != null)
 				{
-					actor |= id.getAsInt() == npcId;
+					return null;
 				}
-				if (actor && style.equals(string(object(row.get("styles")), String.valueOf(projectileId))))
-				{
-					String candidate = string(row, "key");
-					if (candidate == null || key != null)
-					{
-						return null;
-					}
-					key = candidate;
-				}
+				key = candidate;
 			}
 		}
 		return key;
@@ -859,12 +788,6 @@ public final class CombatCatalog
 		return string(hitsplatRule(id), "npcDamageReductionStyle");
 	}
 
-	public String hitsplatPlayerPrayerEffect(int id)
-	{
-		String effect = string(hitsplatRule(id), "prayerEffect");
-		return effect == null ? null : effect.toUpperCase(Locale.ROOT) + "_REVIEWED";
-	}
-
 	public JsonArray phaseRules()
 	{
 		JsonElement value = section("reviewedBindings").get("phaseRules");
@@ -880,12 +803,9 @@ public final class CombatCatalog
 	{
 		JsonElement value = section("observationReferences").get(namespace + ":" + id);
 		List<String> keys = new ArrayList<>();
-		if (value != null && value.isJsonArray())
+		for (JsonElement key : array(value))
 		{
-			for (JsonElement key : value.getAsJsonArray())
-			{
-				keys.add(key.getAsString());
-			}
+			keys.add(key.getAsString());
 		}
 		return keys;
 	}
@@ -894,20 +814,14 @@ public final class CombatCatalog
 	{
 		JsonArray result = new JsonArray();
 		JsonElement v = object(section("npcIdentities").get(String.valueOf(id))).get("candidates");
-		if (v != null && v.isJsonArray())
+		for (JsonElement item : array(v))
 		{
-			for (JsonElement item : v.getAsJsonArray())
-			{
-				result.add(item);
-			}
+			result.add(item);
 		}
 		JsonElement conditional = section("conditionalNpcIdentities").get(String.valueOf(id));
-		if (conditional != null && conditional.isJsonArray())
+		for (JsonElement item : array(conditional))
 		{
-			for (JsonElement item : conditional.getAsJsonArray())
-			{
-				result.add(item);
-			}
+			result.add(item);
 		}
 		return result;
 	}
@@ -916,34 +830,25 @@ public final class CombatCatalog
 	{
 		Set<String> keys = new LinkedHashSet<>();
 		JsonElement direct = section("attackReferencesByNpcId").get(String.valueOf(id));
-		if (direct != null && direct.isJsonArray())
+		for (JsonElement key : array(direct))
 		{
-			for (JsonElement key : direct.getAsJsonArray())
-			{
-				keys.add(key.getAsString());
-			}
+			keys.add(key.getAsString());
 		}
 		for (JsonElement candidate : npcCandidates(id))
 		{
 			JsonElement values = object(candidate).get("referenceKeys");
-			if (values != null && values.isJsonArray())
+			for (JsonElement key : array(values))
 			{
-				for (JsonElement key : values.getAsJsonArray())
-				{
-					keys.add(key.getAsString());
-				}
+				keys.add(key.getAsString());
 			}
 			String page = string(object(candidate), "page");
 			if (page != null)
 			{
 				JsonElement references = section("attackReferencesByPage")
 					.get(page.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim());
-				if (references != null && references.isJsonArray())
+				for (JsonElement key : array(references))
 				{
-					for (JsonElement key : references.getAsJsonArray())
-					{
-						keys.add(key.getAsString());
-					}
+					keys.add(key.getAsString());
 				}
 			}
 		}
@@ -1012,17 +917,6 @@ public final class CombatCatalog
 			return "reaction";
 		}
 		return tokens.contains("ATTACK") ? "attack" : "action";
-	}
-
-	/** Exact reviewed animation binding only; generic symbol/name guesses are not attack proof. */
-	public boolean reviewedAttackCue(int npcId, int animationId, Integer level, boolean normalContext)
-	{
-		if (!baseVariantEstablished(npcId, level, normalContext))
-		{
-			return false;
-		}
-		JsonObject npc = object(object(section("reviewedBindings").get("npcOverrides")).get(String.valueOf(npcId)));
-		return "attack".equals(string(object(object(npc.get("animations")).get(String.valueOf(animationId))), "kind"));
 	}
 
 	public String animationEvidence(int npcId, int animationId)

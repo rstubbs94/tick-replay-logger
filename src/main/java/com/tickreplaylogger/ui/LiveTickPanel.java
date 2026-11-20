@@ -26,14 +26,11 @@ package com.tickreplaylogger.ui;
 
 import com.tickreplaylogger.util.DisplayFormat;
 import com.tickreplaylogger.model.*;
-import net.runelite.api.SpriteID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Utility class for creating tick panels in the live timeline view.
@@ -54,62 +51,11 @@ public class LiveTickPanel
 	private static final Color ROW_COLOR_1 = ColorScheme.DARK_GRAY_COLOR;
 	private static final Color ROW_COLOR_2 = new Color(45, 45, 45);
 
-	private static final int ICON_SIZE = 18;
+	private static final ReplayIcons icons = ReplayIcons.load(null);
 
-	// Cached icons - shared across all panels
-	private static final AtomicReference<ImageIcon> iconHitpoints = new AtomicReference<>();
-	private static final AtomicReference<ImageIcon> iconPrayer = new AtomicReference<>();
-	private static final AtomicReference<ImageIcon> iconAttack = new AtomicReference<>();
-	private static final AtomicReference<ImageIcon> iconAgility = new AtomicReference<>();
-
-	private static volatile boolean iconsLoaded = false;
-
-	/**
-	 * Load sprite icons if not already loaded.
-	 */
 	public static void loadSprites(SpriteManager spriteManager)
 	{
-		if (spriteManager == null)
-		{
-			return;
-		}
-		if (iconsLoaded)
-		{
-			return;
-		}
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_HITPOINTS, 0, img ->
-		{
-			iconHitpoints.set(scaleIcon(img));
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_PRAYER, 0, img ->
-		{
-			iconPrayer.set(scaleIcon(img));
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_ATTACK, 0, img ->
-		{
-			iconAttack.set(scaleIcon(img));
-		});
-
-		spriteManager.getSpriteAsync(SpriteID.SKILL_AGILITY, 0, img ->
-		{
-			iconAgility.set(scaleIcon(img));
-		});
-
-		CombatIcons.load(spriteManager);
-		iconsLoaded = true;
-	}
-
-	private static ImageIcon scaleIcon(BufferedImage img)
-	{
-		if (img == null)
-		{
-			return null;
-		}
-		Image scaled = img.getScaledInstance(ICON_SIZE, ICON_SIZE, Image.SCALE_SMOOTH);
-		return new ImageIcon(scaled);
+		ReplayIcons.load(spriteManager);
 	}
 
 	/**
@@ -139,8 +85,8 @@ public class LiveTickPanel
 		gbc.fill = GridBagConstraints.HORIZONTAL;
 		gbc.anchor = GridBagConstraints.WEST;
 
-		panel.add(createTickHeader(tick, "#" + tick.getTickNumber(), Color.WHITE, bgColor, iconPrayer.get(),
-			iconHitpoints.get(), null), gbc);
+		panel.add(createTickHeader(tick, "#" + tick.getTickNumber(), Color.WHITE, bgColor, icons.prayer(),
+			icons.hitpoints(), null), gbc);
 		gbc.gridy++;
 
 		// Content
@@ -149,7 +95,7 @@ public class LiveTickPanel
 		// Active prayers - each on its own line
 		if (Boolean.FALSE.equals(tick.getPrayerStateKnown()))
 		{
-			panel.add(createIconLabel("Prayer state unavailable", iconPrayer.get(), PRAYER_COLOR), gbc);
+			panel.add(createIconLabel("Prayer state unavailable", icons.prayer(), PRAYER_COLOR), gbc);
 			gbc.gridy++;
 			hasContent = true;
 		}
@@ -157,20 +103,20 @@ public class LiveTickPanel
 			? java.util.Collections.<String>emptyList()
 			: tick.getActivePrayers())
 		{
-			JLabel label = createIconLabel(prayer, iconPrayer.get(), PRAYER_COLOR);
+			JLabel label = createIconLabel(prayer, icons.prayer(), PRAYER_COLOR);
 			panel.add(label, gbc);
 			gbc.gridy++;
 			hasContent = true;
 		}
 
-		hasContent |= appendCombatRows(panel, gbc, tick, iconAgility.get(), LiveTickPanel::getActionIcon);
+		hasContent |= appendCombatRows(panel, gbc, tick, icons.agility(), icons::action);
 
 		// Combat effects (freeze/teleblock/stun/knockback/drain/disarm/poison)
 		if (tick.getEffectNotes() != null)
 		{
 			for (String note : tick.getEffectNotes())
 			{
-				JLabel label = createIconLabel(note, iconPrayer.get(), EFFECT_COLOR);
+				JLabel label = createIconLabel(note, icons.prayer(), EFFECT_COLOR);
 				panel.add(label, gbc);
 				gbc.gridy++;
 				hasContent = true;
@@ -365,29 +311,6 @@ public class LiveTickPanel
 			sb.append(lossPercent).append("% failed");
 		}
 		return sb.toString();
-	}
-
-	private static ImageIcon getActionIcon(PlayerAction action)
-	{
-		String desc = action.getDescription().toLowerCase();
-		if (desc.startsWith("ate") || desc.startsWith("drank"))
-		{
-			return iconHitpoints.get();
-		}
-		else if (desc.contains("prayer") || desc.startsWith("activated") || desc.startsWith("deactivated")
-			|| desc.contains("disabled"))
-		{
-			return iconPrayer.get();
-		}
-		else if (desc.startsWith("equipped") || desc.startsWith("unequipped"))
-		{
-			return iconAttack.get();
-		}
-		else if (desc.startsWith("attacked") || desc.startsWith("special"))
-		{
-			return iconAttack.get();
-		}
-		return null;
 	}
 
 	public static JLabel createIconLabel(String text, ImageIcon icon, Color color)

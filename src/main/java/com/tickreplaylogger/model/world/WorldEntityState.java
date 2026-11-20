@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Value;
+import lombok.*;
 
 /** Observed carrier pose. RuneLite reports these locations/orientations in the top-level world. */
 @Value

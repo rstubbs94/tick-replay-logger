@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Later same-boundary recipient evidence. Never rewrites the original callback or identifies its cause. */
 @Data

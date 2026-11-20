@@ -24,10 +24,8 @@
  */
 package com.tickreplaylogger.model.world;
 
-import java.util.Map;
-import java.util.List;
-import lombok.Builder;
-import lombok.Value;
+import java.util.*;
+import lombok.*;
 
 /** Neutral scene observation. An unfamiliar ID is retained; being an object does not imply damage. */
 @Value

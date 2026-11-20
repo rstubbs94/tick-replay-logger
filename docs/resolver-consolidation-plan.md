@@ -1,7 +1,10 @@
 # Standard-build and single-resolver consolidation plan
 
-Status: implementation in progress on `refactor/standard-single-resolver-20261119`.
-The public candidate is unchanged until the functionality and review gates pass.
+Status: correctness checks pass on `refactor/direct-observation-resolver-20261119`;
+the review-size gate remains open. The formatted production code is 222,270
+tokens against the 200,000 limit. The full regression run passes 1,189 tests,
+and the standard-build/API checks pass after removing a test-only constructor.
+The public candidate is unchanged until all review gates pass.
 
 ## Objective and release gates
 
@@ -18,7 +21,7 @@ Its tree matches local validated candidate `1505ed1653c8b7996a3880fb3aada99a41bb
 The Hub-published baseline remains `72b4aee221a4bd2c490eb0d52528b9ae68554323`.
 [PR #20986](https://github.com/runelite/plugin-hub/pull/20986) is blocked on
 standard packaging and review size: **302,079 tokens against a 200,000 limit**.
-Production Java currently totals 109 files and 36,561 physical lines.
+Those submission measurements are separate from the current refactor's size.
 
 ### Reviewer's clarified requirements
 
@@ -29,11 +32,10 @@ RuneLite utilities, reference data in resources, and keeping test code out of
 `src/main`. Comments, resources, test sources and the README do not count toward
 the limit. Removing documentation or tests cannot solve this review problem.
 
-The standard-build migration has passed 27 targeted checks in an isolated copy of
-the official build. This does not validate the combined refactor. Duplicate
-evaluators remain during migration; their presence currently increases the
-working tree's size. They must be removed after their behaviour is covered by
-the shared path. A predicted reduction is not a passed size gate.
+The combined refactor passes the full regression suite and builds with the
+official standard template. It has one runtime evaluator; frozen previous
+implementations remain in tests. These results do not satisfy the separate
+review-size gate.
 
 ## Intended end state
 
@@ -55,9 +57,9 @@ flowchart LR
     E --> H
 ```
 
-There will be one evidence-normalization implementation, one rule evaluator and
-one result projection. Live View, death completion, snapshots and exports will
-call that same path. Different evidence windows may require recomputation; this
+One window index reads the original observations, one evaluator matches the
+rules, and one projection supplies the results. Live View, death completion,
+snapshots and exports use this path. Different windows may require recomputation; this
 does not justify separate matching implementations. Identical observations,
 window boundaries and data versions must produce equivalent results.
 

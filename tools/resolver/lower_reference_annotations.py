@@ -129,7 +129,7 @@ def lower_reference_annotations(references, capture):
             if rule.get('damageType') is None:
                 raise ValueError('Attack annotation lacks its existing type: ' + npc + '/' + animation)
             emit('cue', annotations, source=source, signals=signals,
-                 when=[static, flag('actorCallbackObserved'), single], group='base_reference', priority=30)
+                 when=[static, flag('actorAnimationObserved'), single], group='base_reference', priority=30)
 
     projectile_matches = defaultdict(list)
     bindings = references.get('reviewedBindings', {})

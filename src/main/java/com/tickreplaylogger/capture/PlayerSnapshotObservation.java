@@ -24,72 +24,27 @@
  */
 package com.tickreplaylogger.capture;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Supplier;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 
 /** Independent actor reads shared by local and enabled other-player snapshots. */
-final class PlayerSnapshotObservation
+final class PlayerSnapshotObservation extends ActorObservation
 {
-	final Map<String, String> issues = new LinkedHashMap<>();
-	final WorldPoint world;
-	final LocalPoint local;
-	final WorldView view;
-	final Integer viewId, level, orientation, currentOrientation, animation, animationFrame, pose, poseFrame,
-		overheadCycle;
-	final Actor target;
-	final Boolean interactionFlag;
-	final String speech;
 	final HeadIcon icon;
-	final int[] graphics;
-	final boolean graphicsKnown;
-	final com.tickreplaylogger.model.world.ActorGraphicsState graphicsState;
 
 	PlayerSnapshotObservation(Player actor, WorldPoint observedWorld, String worldIssue)
 	{
-		world = observedWorld;
-		if (worldIssue != null)
-		{
-			issues.put("worldPosition", worldIssue);
-		}
-		local = read("localPosition", actor::getLocalLocation);
-		view = read("worldView", actor::getWorldView);
-		viewId = view == null ? null : read("worldViewId", view::getId);
+		super(actor, observedWorld, worldIssue);
+		position(true);
 		level = read("combatLevel", actor::getCombatLevel);
-		orientation = read("orientation", actor::getOrientation);
-		currentOrientation = read("currentOrientation", actor::getCurrentOrientation);
-		animation = read("animationId", actor::getAnimation);
-		animationFrame = animation == null || animation == -1 ? null : read("animationFrame", actor::getAnimationFrame);
-		pose = read("poseAnimationId", actor::getPoseAnimation);
-		poseFrame = pose == null || pose == -1 ? null : read("poseAnimationFrame", actor::getPoseAnimationFrame);
-		speech = read("overheadText", actor::getOverheadText);
-		overheadCycle = speech == null ? null : read("overheadCycle", actor::getOverheadCycle);
+		orientation();
+		animations();
+		speech();
 		icon = read("overheadIcon", actor::getOverheadIcon);
-		target = read("interactionTarget", actor::getInteracting);
-		interactionFlag = read("reportedInteracting", actor::isInteracting);
-		ActorGraphicsObservation observedGraphics = new ActorGraphicsObservation(actor);
-		graphicsState = observedGraphics.getState();
-		graphics = observedGraphics.getIds();
-		graphicsKnown = observedGraphics.isIdsKnown();
-		if (graphicsState.getObservationIssues() != null)
-		{
-			issues.putAll(graphicsState.getObservationIssues());
-		}
-	}
-
-	<T> T read(String field, Supplier<T> getter)
-	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
+		interaction(true);
+		graphics();
 	}
 }

@@ -26,8 +26,7 @@ package com.tickreplaylogger.util;
 
 import static net.runelite.client.util.Text.removeTags;
 import com.tickreplaylogger.model.world.SourceResolution;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 /** Display only. Naming surviving alternatives never merges actor identities or selects an attack. */
 public final class SourceResolutionLabels

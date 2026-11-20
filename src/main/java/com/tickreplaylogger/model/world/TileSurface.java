@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Value;
+import lombok.*;
 
 /** Native scene terrain observation. Color/texture presence is not proof of a hazard. */
 @Value

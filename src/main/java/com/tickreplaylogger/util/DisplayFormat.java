@@ -91,13 +91,6 @@ public final class DisplayFormat
 		}
 	}
 
-	/** {@code #rrggbb} form of {@link #colorFor} for use inside HTML labels. */
-	public static String hexFor(DamageEvent.DamageType type)
-	{
-		Color c = colorFor(type);
-		return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
-	}
-
 	/**
 	 * Friendly label for a captured source/attack/hazard name. Coded names (ALL_CAPS or containing
 	 * underscores) become sentence case with spaces — {@code MAIDEN_LINGERING_BLOOD} →

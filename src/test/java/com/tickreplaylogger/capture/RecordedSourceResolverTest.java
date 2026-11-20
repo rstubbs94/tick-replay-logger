@@ -272,7 +272,7 @@ public class RecordedSourceResolverTest
 
 	private static DamageMap toyEnvelopeMap() throws Exception
 	{
-		DamageMap map = LegacyCombatCatalog.isolate(DamageMap.load(GSON));
+		LegacyDamageMap map = LegacyDamageMap.from(LegacyCombatCatalog.isolate(DamageMap.load(GSON)));
 		java.lang.reflect.Field rootField = CombatCatalog.class.getDeclaredField("root");
 		rootField.setAccessible(true);
 		rootField.set(map.catalog(), ((JsonObject) rootField.get(map.catalog())).deepCopy());
@@ -285,10 +285,8 @@ public class RecordedSourceResolverTest
 		root.getAsJsonObject("reviewedBindings").getAsJsonArray("projectileStyleRules").add(GSON.fromJson(
 			"{\"npcIds\":[900001],\"styles\":{\"777778\":\"ranged\"},\"outcomeMechanism\":\"ORDINARY_ATTACK\"}",
 			com.google.gson.JsonObject.class));
-		java.lang.reflect.Field attacks = DamageMap.class.getDeclaredField("npcAttackRules");
-		attacks.setAccessible(true);
-		attacks.set(map, Collections.singletonMap("900001", Collections.singletonMap("777777",
-			GSON.fromJson("{\"damageType\":\"melee\"}", DamageMap.AttackRule.class))));
+		map.attackRules(Collections.singletonMap("900001", Collections.singletonMap("777777",
+			GSON.fromJson("{\"damageType\":\"melee\"}", PreRuleIrDamageMap.AttackRule.class))));
 		com.google.gson.JsonObject namespace = new com.google.gson.JsonObject();
 		namespace.addProperty("version", 1);
 		com.google.gson.JsonObject rule = new com.google.gson.JsonObject();

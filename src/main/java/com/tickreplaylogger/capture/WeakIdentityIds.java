@@ -26,8 +26,7 @@ package com.tickreplaylogger.capture;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /** Monotonic object identities without retaining unloaded API containers. Hashes are bucket hints only. */
 final class WeakIdentityIds

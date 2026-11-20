@@ -20,7 +20,7 @@ public class RecordedProjectileSelectionTest
 	@Test
 	public void anObservationAfterTheHitCannotReplaceItsOriginalOwner()
 	{
-		JsonArray cues = normalize(Arrays.asList(event(projectile(99L, 320, 9, 280, "Before"), 10, 280),
+		List<ResolverEvidence.Source> cues = normalize(Arrays.asList(event(projectile(99L, 320, 9, 280, "Before"), 10, 280),
 			event(projectile(99L, 320, 10, 302, "After"), 21, 302)), Collections.emptyList());
 		assertTrue(hasOwner(cues, "Before"));
 		assertFalse(hasOwner(cues, "After"));
@@ -31,7 +31,7 @@ public class RecordedProjectileSelectionTest
 	{
 		ProjectileState original = projectile(99L, 320, 9, 280, "Original");
 		ProjectileState changed = changedOwner(original, 290);
-		JsonArray cues = normalize(Collections.singletonList(event(original, 10, 280)), Collections.singletonList(frame(changed, 290)));
+		List<ResolverEvidence.Source> cues = normalize(Collections.singletonList(event(original, 10, 280)), Collections.singletonList(frame(changed, 290)));
 		assertTrue(hasHistoryConflict(cues));
 		assertEquals(1, apiCount(cues));
 	}
@@ -41,7 +41,7 @@ public class RecordedProjectileSelectionTest
 	{
 		ProjectileState original = projectile(99L, 320, 9, 280, "Original");
 		ProjectileState after = changedOwner(original, 302);
-		JsonArray cues = normalize(Collections.singletonList(event(original, 10, 280)), Collections.singletonList(frame(after, 302)));
+		List<ResolverEvidence.Source> cues = normalize(Collections.singletonList(event(original, 10, 280)), Collections.singletonList(frame(after, 302)));
 		assertFalse(hasHistoryConflict(cues));
 		assertTrue(hasOwner(cues, "Original"));
 		assertEquals(1, apiCount(cues));
@@ -53,7 +53,7 @@ public class RecordedProjectileSelectionTest
 		for (Long instance : Arrays.asList(99L, null))
 		{
 			ProjectileState projectile = projectile(instance, null, 9, 280, "Untimed");
-			JsonArray cues = normalize(Collections.singletonList(event(projectile, 10, 280)), Collections.emptyList());
+			List<ResolverEvidence.Source> cues = normalize(Collections.singletonList(event(projectile, 10, 280)), Collections.emptyList());
 			assertTrue("Original owner with instance " + instance, hasOwner(cues, "Untimed"));
 			assertNull(projectile.getEndCycle());
 			assertEquals(instance, projectile.getObservationId());
@@ -68,13 +68,11 @@ public class RecordedProjectileSelectionTest
 		WorldSnapshot frame = WorldSnapshot.builder().tick(9).gameCycle(290).gameCycleKnown(true)
 			.nativeContextKnown(true).sceneKey("room").worldViewId(0).plane(0)
 			.projectiles(Collections.singletonList(sampled)).build();
-		JsonArray cues = normalize(Collections.singletonList(event(callback, 10, 280)), Collections.singletonList(frame));
+		List<ResolverEvidence.Source> cues = normalize(Collections.singletonList(event(callback, 10, 280)), Collections.singletonList(frame));
 		boolean found = false;
-		for (JsonElement value : cues)
+		for (ResolverEvidence.Source cue : cues)
 		{
-			JsonObject cue = value.getAsJsonObject();
-			if (!cue.has("originalSourceObservation")) continue;
-			JsonObject witness = cue.getAsJsonObject("witness");
+			JsonObject witness = cue.raw();
 			found |= witness.get("observedCycle").getAsInt() == 290 && witness.get("endCycle").getAsInt() == 320;
 		}
 		assertTrue("Use the independently recorded native frame, without filling the callback's missing clock", found);
@@ -108,21 +106,14 @@ public class RecordedProjectileSelectionTest
 			.sceneKey("room").worldViewId(0).plane(0).projectiles(Collections.singletonList(projectile)).build();
 	}
 
-	private static int apiCount(JsonArray cues)
+	private static int apiCount(List<ResolverEvidence.Source> cues)
 	{
-		int count = 0;
-		for (JsonElement value : cues) if (value.getAsJsonObject().has("apiSourceObserved")) count++;
-		return count;
+		return cues.size();
 	}
 
-	private static boolean hasHistoryConflict(JsonArray cues)
+	private static boolean hasHistoryConflict(List<ResolverEvidence.Source> cues)
 	{
-		for (JsonElement value : cues)
-		{
-			JsonObject cue = value.getAsJsonObject();
-			if (cue.has("apiSourceObserved") && cue.getAsJsonObject("witness").getAsJsonObject("sourceHistory").get("actorChanged").getAsBoolean()) return true;
-		}
-		return false;
+		return cues.stream().anyMatch(cue -> cue.raw().getAsJsonObject("sourceHistory").get("actorChanged").getAsBoolean());
 	}
 
 	private static ObservedEvent event(ProjectileState projectile, long sequence, int cycle)
@@ -131,7 +122,7 @@ public class RecordedProjectileSelectionTest
 			.sceneKey("room").data(Collections.singletonMap("projectile", projectile)).build();
 	}
 
-	private static JsonArray normalize(List<ObservedEvent> projectiles, List<WorldSnapshot> frames)
+	private static List<ResolverEvidence.Source> normalize(List<ObservedEvent> projectiles, List<WorldSnapshot> frames)
 	{
 		Map<String, Object> data = new LinkedHashMap<>();
 		data.put("amount", 12); data.put("hitsplatType", 16); data.put("receiverKind", "PLAYER");
@@ -141,20 +132,19 @@ public class RecordedProjectileSelectionTest
 		DeathRecordingV2 recording = DeathRecordingV2.builder().ticks(frames).events(DeathRecordingV2.Events.builder()
 			.damageEvents(Collections.singletonList(HIT)).observations(events).build()).build();
 		String original = GSON.toJson(recording);
-		JsonArray cues = new ResolverV1Recording(ResolverV1.load(GSON), GSON, recording).normalize(HIT).getAsJsonArray("cues");
+		ResolverV1Recording.EvidenceWindow window = new ResolverV1Recording.EvidenceWindow(frames, null, events,
+			Collections.singletonList(HIT), null, Integer.MIN_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE, 0);
+		List<ResolverEvidence.Source> cues = new ArrayList<>();
+		for (ResolverEvidence.Source source : new RawEvidenceWindow(window, GSON).hit(HIT).sources())
+		{
+			if (source.channel() == ResolverEvidence.Channel.PROJECTILE) cues.add(source);
+		}
 		assertEquals(original, GSON.toJson(recording));
 		return cues;
 	}
 
-	private static boolean hasOwner(JsonArray cues, String name)
+	private static boolean hasOwner(List<ResolverEvidence.Source> cues, String name)
 	{
-		for (JsonElement value : cues)
-		{
-			JsonObject cue = value.getAsJsonObject();
-			if (cue.has("originalSourceObservation")
-				&& name.equals(cue.getAsJsonObject("originalSourceObservation").get("sourceObservedName").getAsString()))
-				return true;
-		}
-		return false;
+		return cues.stream().anyMatch(cue -> name.equals(cue.identity().name));
 	}
 }

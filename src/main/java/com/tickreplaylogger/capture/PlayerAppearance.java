@@ -26,8 +26,7 @@ package com.tickreplaylogger.capture;
 
 import com.tickreplaylogger.model.world.PlayerAppearanceState;
 import java.util.Arrays;
-import net.runelite.api.Player;
-import net.runelite.api.PlayerComposition;
+import net.runelite.api.*;
 import net.runelite.api.kit.KitType;
 
 /** Decodes appearance with the API; raw kit/item-offset codes are never mislabeled as item IDs. */

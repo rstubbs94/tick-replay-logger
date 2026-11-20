@@ -49,7 +49,7 @@ public final class ObservedSelfDamageTextResolver
 			"observedHitsplatTypes", "admissionMaximum", "contextPredicate", "provenance"));
 	private final Map<String, Rule> literals = new HashMap<>();
 	private final Map<Integer, List<Cue>> ticks = new HashMap<>();
-	private final ObservedHpCallbackContext hpCallbackContexts;
+	private final LegacyObservedHpCallbackContext hpCallbackContexts;
 	private boolean unavailable;
 
 	private static final class Rule
@@ -87,11 +87,11 @@ public final class ObservedSelfDamageTextResolver
 
 	public ObservedSelfDamageTextResolver(JsonObject namespace, List<ObservedEvent> events)
 	{
-		this(namespace, events, new ObservedHpCallbackContext(events));
+		this(namespace, events, new LegacyObservedHpCallbackContext(events));
 	}
 
 	public ObservedSelfDamageTextResolver(JsonObject namespace, List<ObservedEvent> events,
-		ObservedHpCallbackContext hpCallbackContexts)
+		LegacyObservedHpCallbackContext hpCallbackContexts)
 	{
 		this.hpCallbackContexts = hpCallbackContexts;
 		if (namespace == null || namespace.size() == 0)
@@ -263,7 +263,7 @@ public final class ObservedSelfDamageTextResolver
 			&& hit.getImpactSceneKey().equals(cue.event.getSceneKey()) && cue.event.getSequence() > 0
 			&& hit.getObservationSequence() != null && hit.getObservationSequence() > 0
 			&& Boolean.TRUE.equals(data.get("messagePresent")) && "LOGGED_IN".equals(data.get("callbackGameState"))
-			&& data.get("captureIssues") == null && hpCallbackContexts != null && ObservedHpCallbackContext
+			&& data.get("captureIssues") == null && hpCallbackContexts != null && LegacyObservedHpCallbackContext
 				.normal(hpCallbackContexts.forHit(hit), cue.rule.zeroVariables, cue.rule.excludedTypes);
 	}
 

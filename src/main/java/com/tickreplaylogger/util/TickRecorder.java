@@ -25,8 +25,7 @@
 package com.tickreplaylogger.util;
 
 import com.tickreplaylogger.model.*;
-import com.tickreplaylogger.model.world.SourceResolution;
-import com.tickreplaylogger.model.world.DamageRecord;
+import com.tickreplaylogger.model.world.*;
 import com.tickreplaylogger.capture.ResolverV1Recording;
 import lombok.extern.slf4j.Slf4j;
 import java.util.*;
@@ -357,36 +356,10 @@ public class TickRecorder
 		return history;
 	}
 
-	/** Attach retrospective results only to the original received callback in the selected tick. */
-	public synchronized void applyReceivedSourceResolutions(int tick, Map<Long, SourceResolution> resolutions)
-	{
-		applyReceivedSourceResults(tick, resolutions, Collections.emptyMap());
-	}
-
+	/** Attach completed annotations only to exact callbacks in the selected original tick. */
 	public synchronized void applyResolvedDamageRecords(int tick, Map<Long, DamageRecord> records)
 	{
 		if (records == null || records.isEmpty())
-		{
-			return;
-		}
-		Map<Long, SourceResolution> resolutions = new LinkedHashMap<>();
-		for (Map.Entry<Long, DamageRecord> entry : records.entrySet())
-		{
-			if (entry.getValue() != null && entry.getValue().getImpactTick() == tick
-				&& Objects.equals(entry.getKey(), entry.getValue().getObservationSequence())
-				&& (entry.getValue().getDirection() == null || "RECEIVED".equals(entry.getValue().getDirection())
-					|| "RESOURCE_IMPACT".equals(entry.getValue().getDirection())))
-			{
-				resolutions.put(entry.getKey(), entry.getValue().getSourceResolution());
-			}
-		}
-		applyReceivedSourceResults(tick, resolutions, records);
-	}
-
-	private void applyReceivedSourceResults(int tick, Map<Long, SourceResolution> resolutions,
-		Map<Long, DamageRecord> records)
-	{
-		if (resolutions == null || resolutions.isEmpty())
 		{
 			return;
 		}
@@ -406,92 +379,23 @@ public class TickRecorder
 		{
 			return;
 		}
-		List<DamageEvent> updated = selected.getDamageEvents() == null ? new ArrayList<>()
-			: new ArrayList<>(selected.getDamageEvents());
-		List<String> updatedNotes = selected.getEffectNotes() == null ? null
-			: new ArrayList<>(selected.getEffectNotes());
-		boolean changed = false;
-		for (int index = 0; index < updated.size(); index++)
+		TickData replacement = ResolverV1Recording.projectJournalTick(selected, records);
+		if (replacement == selected)
 		{
-			DamageEvent damage = updated.get(index);
-			if (damage.getDirection() != DamageEvent.DamageDirection.RECEIVED
-				|| damage.getObservationSequence() == null)
-			{
-				continue;
-			}
-			SourceResolution resolution = resolutions.get(damage.getObservationSequence());
-			if (resolution != null)
-			{
-				DamageRecord projected = records.get(damage.getObservationSequence());
-				if (projected != null)
-				{
-					if (projected.getAmount() != damage.getAmount()
-						|| "RESOURCE_IMPACT".equals(projected.getDirection()))
-					{
-						continue;
-					}
-					updated.set(index, ResolverV1Recording.projectJournalDamage(damage, projected));
-				}
-				else
-				{
-					updated.set(index, damage.toBuilder().sourceResolution(resolution).build());
-				}
-				changed = true;
-			}
+			return;
 		}
-		if (updatedNotes != null && selected.getEffectNoteSourceSequences() != null)
+		Map<Integer, Long> links = selected.getEffectNoteSourceSequences();
+		replacement = replacement.toBuilder().effectNoteSourceSequences(links == null ? null
+			: selectedIndex >= 0 ? Collections.unmodifiableMap(new LinkedHashMap<>(links)) : new LinkedHashMap<>(links))
+			.build();
+		if (selectedIndex >= 0)
 		{
-			for (Map.Entry<Integer, Long> note : selected.getEffectNoteSourceSequences().entrySet())
-			{
-				DamageRecord projected = records.get(note.getValue());
-				int index = note.getKey();
-				if (projected == null || index < 0 || index >= updatedNotes.size()
-					|| !resolutions.containsKey(note.getValue()))
-				{
-					continue;
-				}
-				String before = updatedNotes.get(index);
-				String after = ResolverV1Recording.projectResourceNote(before, projected);
-				if (!Objects.equals(before, after))
-				{
-					updatedNotes.set(index, after);
-					changed = true;
-				}
-			}
+			buffer[selectedIndex] = replacement;
 		}
-		if (changed)
+		else
 		{
-			TickData replacement = selected.toBuilder()
-				.damageEvents(selected.getDamageEvents() == null ? null : updated).effectNotes(updatedNotes)
-				.effectNoteSourceSequences(selected.getEffectNoteSourceSequences() == null ? null
-					: selectedIndex >= 0
-						? Collections.unmodifiableMap(new LinkedHashMap<>(selected.getEffectNoteSourceSequences()))
-						: new LinkedHashMap<>(selected.getEffectNoteSourceSequences()))
-				.build();
-			if (selectedIndex >= 0)
-			{
-				buffer[selectedIndex] = replacement;
-			}
-			else
-			{
-				currentTick = replacement;
-			}
+			currentTick = replacement;
 		}
-	}
-
-	/**
-	 * Get recorded ticks in reverse chronological order (newest first).
-	 * This is the order we display in the UI.
-	 */
-	public List<TickData> getTickHistoryReversed()
-	{
-		List<TickData> history = getTickHistory();
-		List<TickData> reversed = new ArrayList<>(history.size());
-		for (int i = history.size() - 1; i >= 0; i--)
-		{
-			reversed.add(history.get(i));
-		}
-		return reversed;
 	}
 
 	/**

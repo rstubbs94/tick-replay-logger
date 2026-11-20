@@ -71,7 +71,7 @@ public class ObservedNpcContactHintResolverTest
 		Map<String, Integer> area = new LinkedHashMap<>(); area.put("minX", 100); area.put("minY", 200);
 		area.put("maxX", 104); area.put("maxY", 204); area.put("plane", 0); return area;
 	}
-	private static NpcState.NpcStateBuilder npc()
+	private static NpcState.NpcStateBuilder<?, ?> npc()
 	{
 		return NpcState.builder().actorRef(REF).npcId(ID).name("Unseen body").definitionEvidence("NPC_API_ID")
 			.normalWorldContextObserved(true).modelOverridesPresent(false).combatLevel(50).animationId(777777)

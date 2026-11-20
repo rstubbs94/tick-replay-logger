@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /**
  * Represents a player action that occurred during a tick.
@@ -119,12 +118,4 @@ public class PlayerAction
 			.description("Attacked " + targetName + " (" + weaponName + ")").build();
 	}
 
-	/**
-	 * Create a special attack action
-	 */
-	public static PlayerAction specialAttack(String weaponName)
-	{
-		return PlayerAction.builder().type(ActionType.SPECIAL_ATTACK).itemName(weaponName)
-			.description("Special attack (" + weaponName + ")").build();
-	}
 }

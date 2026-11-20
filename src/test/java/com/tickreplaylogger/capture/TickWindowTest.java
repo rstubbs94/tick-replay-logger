@@ -33,7 +33,7 @@ public class TickWindowTest
 	@Test
 	public void journalBoundariesExpireEventsAndScenesEvenWhenNoSnapshotsArrive()
 	{
-		WorldSnapshotRecorder recorder = new WorldSnapshotRecorder(2, new com.google.gson.Gson());
+		InspectableWorldSnapshotRecorder recorder = new InspectableWorldSnapshotRecorder(2, new com.google.gson.Gson());
 		recorder.putScene(SceneData.builder().sceneKey("old").build());
 		recorder.addSnapshot(WorldSnapshot.builder().tick(1).sceneKey("old").build());
 		recorder.addDamage(DamageRecord.builder().impactTick(1).amount(7).build());

@@ -184,15 +184,7 @@ public final class ProjectileObservation
 
 	private <T> T read(String field, Supplier<T> getter)
 	{
-		try
-		{
-			return getter.get();
-		}
-		catch (RuntimeException unavailable)
-		{
-			issues.put(field, unavailable.getClass().getSimpleName());
-			return null;
-		}
+		return ObservationReads.read(issues, field, getter);
 	}
 
 	private Double finite(String field, Supplier<Double> getter)

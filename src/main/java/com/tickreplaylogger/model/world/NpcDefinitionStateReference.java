@@ -25,8 +25,7 @@
 package com.tickreplaylogger.model.world;
 
 import java.util.List;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Source interpretation of a matched definition; not an observed attack, HP or raid-wide mode. */
 @Data

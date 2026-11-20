@@ -24,8 +24,7 @@
  */
 package com.tickreplaylogger.model.world;
 
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 
 /** Public client appearance, distinct from the local player's actual inventory/equipment container. */
 @Data

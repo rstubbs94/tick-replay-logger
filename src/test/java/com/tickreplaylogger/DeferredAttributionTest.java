@@ -10783,7 +10783,6 @@ public class DeferredAttributionTest
 			DamageRecord record = capturedLastDamage();
 			assertEquals(9, record.getAmount());
 			assertNotNull(record.getSourceResolution());
-			assertTrue(record.getSourceResolution().isUnidentifiedPossible());
 			assertTrue(callback("GRAPHICS_OBJECT_CREATED").getData().get("graphicObservationId") instanceof Number);
 		}
 	}

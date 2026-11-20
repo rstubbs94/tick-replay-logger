@@ -11,8 +11,8 @@ public class DamageResolverTest
 {
 	private static final String CATALOG = "{\"version\":1,\"hitsplats\":{\"status\":{\"5\":\"Venom\",\"65\":\"Poison\"},"
 		+ "\"nonHp\":[6,60]},\"npcs\":{\"2042\":[41,3,0,[5069]],\"2045\":[15,3,0,[]],\"9035\":[10,5,1,[]],"
-		+ "\"7000\":[20,4,0,[100]],\"9041\":[5,4,0,[8425]]},\"venomous\":[2042],\"attackAnims\":[100,5069,8339],\"projectileStyles\":{\"1046\":\"magic\"},"
-		+ "\"hazardGraphics\":{\"1483\":\"Vorkath acid travel\"},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{\"9039\":\"Corrupted tornado\"},"
+		+ "\"7000\":[20,4,0,[100]],\"7222\":[22,4,0,[10693],{\"melee\":13}],\"9041\":[5,4,0,[8425]]},\"venomous\":[2042],\"attackAnims\":[100,5069,8339],\"projectileStyles\":{\"1046\":\"magic\"},"
+		+ "\"hazardGraphics\":{\"1483\":\"Vorkath acid travel\",\"2644\":\"Scurrius falling debris\"},\"animationStyles\":{\"10693\":\"melee\"},\"surfaces\":{\"11700\":\"Poison cloud\"},\"contactNpcs\":{\"9039\":\"Corrupted tornado\"},"
 		+ "\"selfDamageItems\":{\"7510\":[\"Dwarven rock cake\",[\"Eat\"]]},\"prayerDisablers\":[1714]}";
 	private static final int TICK = 50, CYCLE = 5000;
 
@@ -254,6 +254,48 @@ public class DamageResolverTest
 		DamageRecord result = resolver.resolve(recording(before)).get(1L);
 		assertEquals("Vorkath acid", result.getAttackerName());
 		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
+	}
+
+	/** 16 damage is above Scurrius's melee max (13); the debris on the player's tile ends a tick later, as it lands. */
+	@Test
+	public void landingDebrisBeatsAMeleeSwingAboveItsStyleMax()
+	{
+		npcs.add(NpcState.builder().actorRef("npc:1").npcId(7222).name("Scurrius").worldX(3201).worldY(3200).plane(0)
+			.size(1).interactingWithPlayer(true).worldViewId(0).build());
+		animation("npc:1", 10693, TICK);
+		HazardState debris = HazardState.builder().kind("graphicsObject").id(2644).worldX(3200).worldY(3200).plane(0)
+			.startCycle(CYCLE - 270).build();
+		hazards.add(debris);
+		WorldSnapshot after = WorldSnapshot.builder().tick(TICK + 1).gameCycle(CYCLE + 30).sceneKey("scene")
+			.hazards(List.of(debris)).build();
+		hit(1, 16, 16);
+		DeathRecordingV2 recording = recording();
+		List<WorldSnapshot> frames = new ArrayList<>(recording.getTicks());
+		frames.add(after);
+		DamageRecord result = resolver.resolve(recording.toBuilder().ticks(frames).build()).get(1L);
+		assertEquals("Scurrius falling debris", result.getAttackerName());
+		assertEquals("IDENTIFIED", result.getSourceResolution().getStatus());
+	}
+
+	/** The player clicked the prayer off; the derived "cause not established" entry is the same event. */
+	@Test
+	public void ownPrayerClickReplacesTheDerivedSwitchOff()
+	{
+		DeathRecordingV2 recording = recording();
+		List<DeathRecordingV2.Events.PlayerActionRecord> actions = List.of(
+			DeathRecordingV2.Events.PlayerActionRecord.builder().tick(TICK).type("PRAYER_DEACTIVATED")
+				.detail("Deactivated Protect from Missiles").observationKind("INPUT").build(),
+			DeathRecordingV2.Events.PlayerActionRecord.builder().tick(TICK).type("PRAYER_DEACTIVATED")
+				.target("Protect From Missiles").detail("Protect From Missiles (deactivated; cause not established)")
+				.observationKind("DERIVED").build());
+		recording = recording.toBuilder().events(recording.getEvents().toBuilder().playerActions(actions)
+			.effectEvents(List.of(EffectEvent.builder().type("prayer_state_change").startTick(TICK)
+				.magnitude("Protect From Missiles (deactivated; cause not established)").build()))
+			.build()).build();
+		DeathRecordingV2 explained = resolver.explainPrayerLoss(recording);
+		assertEquals(1, explained.getEvents().getPlayerActions().size());
+		assertEquals("Deactivated Protect from Missiles", explained.getEvents().getPlayerActions().get(0).getDetail());
+		assertTrue(explained.getEvents().getEffectEvents().isEmpty());
 	}
 
 	@Test

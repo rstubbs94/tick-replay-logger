@@ -25,7 +25,7 @@
 - [ ] Run the official formatter on the new files.
 - [ ] Phase B: remove remaining capture-time classification and the unused resolver section of `runtime-mechanics.json`.
 - [ ] Website: show the plugin's resolution instead of re-resolving on import.
-- [ ] Capture: a manual prayer switch-off is also logged as "deactivated; cause not established" (double entry).
+- [x] A manual prayer switch-off was also logged as "cause not established"; the resolver now drops the derived duplicate.
 
 ## Before resubmission
 

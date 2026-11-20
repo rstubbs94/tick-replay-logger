@@ -18,6 +18,8 @@ final class ResolverCatalog
 		Integer attackSpeed;
 		boolean scaled;
 		Set<Integer> attackAnimations;
+		/** Max hit per combat style from the wiki, when every listed value is certain. */
+		Map<String, Integer> styleMaxHits;
 	}
 
 	private final String id;
@@ -31,6 +33,8 @@ final class ResolverCatalog
 	private final Map<Integer, String> surfaces = new HashMap<>();
 	private final Map<Integer, String> contactNpcs = new HashMap<>();
 	private final Map<Integer, String> selfDamageItems = new HashMap<>();
+	/** Combat style of an attack animation, from its cache name. */
+	private final Map<Integer, String> animationStyles = new HashMap<>();
 	/** Projectiles the cache names as prayer-disabling attacks. */
 	private final Set<Integer> prayerDisablers = new HashSet<>();
 
@@ -45,8 +49,13 @@ final class ResolverCatalog
 			JsonArray row = e.getValue().getAsJsonArray();
 			Set<Integer> animations = new HashSet<>();
 			row.get(3).getAsJsonArray().forEach(a -> animations.add(a.getAsInt()));
+			Map<String, Integer> styles = new HashMap<>();
+			if (row.size() > 4)
+			{
+				row.get(4).getAsJsonObject().entrySet().forEach(s -> styles.put(s.getKey(), s.getValue().getAsInt()));
+			}
 			npcs.put(Integer.parseInt(e.getKey()), new Npc(integer(row.get(0)), integer(row.get(1)),
-				row.get(2).getAsInt() == 1, animations));
+				row.get(2).getAsInt() == 1, animations, styles));
 		});
 		json.getAsJsonArray("venomous").forEach(e -> venomous.add(e.getAsInt()));
 		json.getAsJsonArray("attackAnims").forEach(e -> attackAnimations.add(e.getAsInt()));
@@ -54,6 +63,10 @@ final class ResolverCatalog
 		names(json.getAsJsonObject("hazardGraphics"), hazardGraphics);
 		names(json.getAsJsonObject("surfaces"), surfaces);
 		names(json.getAsJsonObject("contactNpcs"), contactNpcs);
+		if (json.has("animationStyles"))
+		{
+			names(json.getAsJsonObject("animationStyles"), animationStyles);
+		}
 		if (json.has("prayerDisablers"))
 		{
 			json.getAsJsonArray("prayerDisablers").forEach(e -> prayerDisablers.add(e.getAsInt()));
@@ -109,7 +122,15 @@ final class ResolverCatalog
 
 	boolean canDeal(Integer npcId, int amount)
 	{
-		Integer max = ceiling(npcId);
+		return canDeal(npcId, amount, null);
+	}
+
+	/** As above, using the max hit of the attack's style when the wiki lists one (Scurrius melee 13, rockfall 22). */
+	boolean canDeal(Integer npcId, int amount, String style)
+	{
+		Npc npc = npcId == null ? null : npcs.get(npcId);
+		Integer max = npc == null || npc.scaled ? null
+			: style != null && npc.styleMaxHits.containsKey(style) ? npc.styleMaxHits.get(style) : npc.maxHit;
 		return max == null || amount <= max;
 	}
 

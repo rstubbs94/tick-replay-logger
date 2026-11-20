@@ -19,7 +19,7 @@ import lombok.*;
 final class DamageResolver
 {
 	static final String METHOD = "RESOLVER_V2";
-	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10;
+	private static final int EARLY = 15, LATE = 35, NEARBY_TILES = 10, LAUNCH_CYCLES = 60;
 
 	private final ResolverCatalog catalog;
 
@@ -163,30 +163,19 @@ final class DamageResolver
 		ObservedActorState player = w.player(tick);
 		List<Candidate> area = player == null ? List.of() : area(w, hit, player);
 		List<Candidate> attacks = player == null ? List.of() : attacks(w, tick, amount, player);
-		List<Candidate> peers = distinct(Stream.of(projectiles, strong(area, true), attacks)
+		List<Candidate> peers = distinct(Stream.of(projectiles, strong(area, true), attacks, ownActions(w, tick))
 			.flatMap(List::stream).collect(Collectors.toList()));
 		if (!peers.isEmpty())
 		{
-			boolean certain = projectiles.isEmpty() && peers.stream().allMatch(c -> c.strong)
-				&& peers.stream().map(c -> c.name).distinct().count() == 1;
-			peers.forEach(c -> c.strong = certain);
-			return certain ? peers : distinct(concat(peers, area));
+			// Weak clues never dilute strong evidence; a projectile shared with another splat always stays.
+			List<Candidate> sure = strong(peers, true);
+			List<Candidate> kept = sure.isEmpty() ? peers : distinct(concat(sure, projectiles));
+			boolean certain = kept.size() == 1 && kept.get(0).strong && projectiles.isEmpty();
+			kept.forEach(c -> c.strong = certain);
+			return certain || !sure.isEmpty() ? kept : distinct(concat(kept, area));
 		}
-		List<List<Candidate>> weaker = List.of(area, player == null ? List.of() : nearbyAttacks(w, tick, amount, player),
-			ownActions(w, tick), messages(w, tick));
-		for (int i = 0; i < weaker.size(); i++)
-		{
-			if (!weaker.get(i).isEmpty())
-			{
-				List<Candidate> found = new ArrayList<>(weaker.get(i));
-				if (found.stream().noneMatch(c -> c.strong))
-				{
-					weaker.subList(i + 1, weaker.size()).forEach(found::addAll);
-				}
-				return distinct(found);
-			}
-		}
-		return List.of();
+		List<Candidate> weak = player == null ? area : distinct(concat(area, nearbyAttacks(w, tick, amount, player)));
+		return weak.isEmpty() ? messages(w, tick) : weak;
 	}
 
 	/** Surfaces and contact NPCs under the player, hazard graphics on the tile, projectiles aimed at it. */
@@ -252,25 +241,41 @@ final class DamageResolver
 		{
 			NpcState npc = w.npc(animation.getTick(), animation.getActorRef());
 			if (npc == null || !named(npc) || !Boolean.TRUE.equals(npc.getInteractingWithPlayer())
-				|| npc.getPlane() != player.getPlane())
+				|| npc.getPlane() != player.getPlane() || launchedProjectile(w, animation, npc))
 			{
 				continue;
 			}
+			// Name-linked animation lists can be wrong (variants share symbols), so a list adds confidence but
+			// never excludes an animation the cache itself names as an attack.
 			int id = number(animation.getData().get("animationId"));
 			ResolverCatalog.Npc reference = catalog.getNpcs().get(npc.getNpcId());
-			boolean known = reference != null && !reference.getAttackAnimations().isEmpty();
-			if (known && !reference.getAttackAnimations().contains(id))
+			boolean known = catalog.getAttackAnimations().contains(id)
+				|| reference != null && reference.getAttackAnimations().contains(id);
+			if (!known && reference != null && !reference.getAttackAnimations().isEmpty())
 			{
 				continue;
 			}
 			int d = distance(player, npc.getWorldX(), npc.getWorldY(), size(npc));
 			if (hitDelays(d).contains(tick - animation.getTick()) && catalog.canDeal(npc.getNpcId(), amount))
 			{
-				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known,
+				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known || d <= 1,
 					"ATTACK_TIMING:" + id).at(w.sceneKey(animation.getTick()), npc.getWorldViewId(), npc.getPlane()));
 			}
 		}
 		return possibleIfSeveral(distinct(out));
+	}
+
+	/**
+	 * An animation followed by this NPC's own projectile is that projectile's attack, matched on its own. The
+	 * projectile's actor reference decides; a name only counts when no other NPC in the recording shares it.
+	 */
+	private static boolean launchedProjectile(Window w, ObservedEvent animation, NpcState npc)
+	{
+		Integer cycle = animation.getGameCycle();
+		return cycle != null && w.projectiles.stream().anyMatch(p -> p.getStartCycle() != null
+			&& p.getStartCycle() >= cycle && p.getStartCycle() - cycle <= LAUNCH_CYCLES
+			&& (p.getSourceRef() != null ? p.getSourceRef().equals(npc.getActorRef())
+				: npc.getName().equals(p.getSourceName()) && w.uniqueNames.contains(npc.getName())));
 	}
 
 	/** Melee lands immediately; bows, thrown weapons and magic by distance; one tick of processing slack. */
@@ -289,7 +294,7 @@ final class DamageResolver
 		{
 			NpcState npc = w.npc(animation.getTick(), animation.getActorRef());
 			int age = tick - animation.getTick();
-			if (npc != null && named(npc) && age >= 0 && age <= 2 && npc.getPlane() == player.getPlane()
+			if (npc != null && named(npc) && !launchedProjectile(w, animation, npc) && age >= 0 && age <= 2 && npc.getPlane() == player.getPlane()
 				&& catalog.getAttackAnimations().contains(number(animation.getData().get("animationId")))
 				&& distance(player, npc.getWorldX(), npc.getWorldY(), size(npc)) <= NEARBY_TILES
 				&& catalog.canDeal(npc.getNpcId(), amount))
@@ -301,9 +306,13 @@ final class DamageResolver
 		return out;
 	}
 
-	/** The player's own item, object or NPC click this tick or the previous one. */
+	/**
+	 * The player's own item, object or NPC click this tick or the previous one. The item, obstacle or NPC is the
+	 * source (a failed pickpocket names the NPC); a game message at the hit confirms it but is never a source.
+	 */
 	private List<Candidate> ownActions(Window w, int tick)
 	{
+		boolean confirmed = !messages(w, tick).isEmpty();
 		List<Candidate> out = new ArrayList<>();
 		for (ObservedEvent click : w.clicks)
 		{
@@ -320,10 +329,14 @@ final class DamageResolver
 			{
 				out.add(new Candidate(selfItem, null, null, true, "SELF_ITEM"));
 			}
-			else if (!Set.of("Walk here", "Attack", "Cancel", "Examine").contains(option)
+			else if (target != null && !Set.of("Walk here", "Attack", "Cancel", "Examine").contains(option)
 				&& String.valueOf(data.get("menuAction")).matches(".*(GAME_OBJECT|NPC_).*"))
 			{
-				out.add(new Candidate(option + (target == null ? "" : " " + target), null, null, false, "OWN_ACTION"));
+				NpcState npc = w.npc(click.getTick(), click.getRelatedActorRef());
+				out.add(new Candidate(target.replaceAll("\\s*\\(level-\\d+\\)", "").trim(), npc == null ? null
+					: npc.getActorRef(), npc == null ? null : npc.getNpcId(), confirmed, "OWN_ACTION:" + option)
+					.at(npc == null ? null : w.sceneKey(click.getTick()), npc == null ? null : npc.getWorldViewId(),
+						npc == null ? null : npc.getPlane()));
 			}
 		}
 		return out;
@@ -537,6 +550,8 @@ final class DamageResolver
 		final List<DamageRecord> hits;
 		final List<ObservedEvent> animations = new ArrayList<>(), clicks = new ArrayList<>(),
 			messages = new ArrayList<>();
+		/** NPC names carried by exactly one actor in this recording. */
+		final Set<String> uniqueNames;
 
 		Window(DeathRecordingV2 recording)
 		{
@@ -551,6 +566,11 @@ final class DamageResolver
 				}
 			}
 			projectiles = new ArrayList<>(latest.values());
+			Map<String, Set<String>> actorsByName = new HashMap<>();
+			frames.values().forEach(f -> list(f.getNpcs()).forEach(n -> actorsByName
+				.computeIfAbsent(String.valueOf(n.getName()), k -> new HashSet<>()).add(n.getActorRef())));
+			uniqueNames = actorsByName.entrySet().stream().filter(e -> e.getValue().size() == 1).map(Map.Entry::getKey)
+				.collect(Collectors.toSet());
 			DeathRecordingV2.Events events = recording.getEvents();
 			hits = list(events.getDamageEvents()).stream().filter(h -> "player".equals(h.getDefenderRef())
 				&& !"DEALT".equals(h.getDirection()) && !"NPC_RECEIVED".equals(h.getDirection()))

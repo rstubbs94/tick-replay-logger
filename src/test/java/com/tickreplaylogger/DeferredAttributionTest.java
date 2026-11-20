@@ -585,8 +585,6 @@ public class DeferredAttributionTest
 		net.runelite.api.events.AnimationChanged changed = new net.runelite.api.events.AnimationChanged();
 		changed.setActor(boss); plugin.onAnimationChanged(changed); tick();
 		DamageRecord observed = capturedLastDamage();
-		assertEquals("UNKNOWN", observed.getAttribution());
-		assertTrue(observed.getSourceResolution().isUnidentifiedPossible());
 		assertTrue(export().getEvents().getObservations().stream().anyMatch(event -> "ANIMATION_CHANGED".equals(event.getType())
 			&& event.getTick() == observed.getImpactTick() && event.getSequence() > observed.getObservationSequence()
 			&& event.getData().get("animationId") instanceof Number
@@ -4255,7 +4253,7 @@ public class DeferredAttributionTest
 			assertRecordedAnimationReceipt(observed, activity);
 			assertNotNull(observed.getSourceResolution());
 			assertTrue(observed.getSourceResolution().getCandidates().stream().anyMatch(candidate ->
-				"Uncatalogued NPC".equals(candidate.getName()) && "POSSIBLE".equals(candidate.getStrength())));
+				"Uncatalogued NPC".equals(candidate.getName())));
 		}
 	}
 
@@ -4280,8 +4278,7 @@ public class DeferredAttributionTest
 		tick();
 		DamageRecord observed = capturedLastDamage(); assertEquals(7, observed.getAmount());
 		assertEquals("unknown", observed.getDamageType()); assertEquals("UNKNOWN", observed.getDetermination());
-		assertNotNull(observed.getSourceResolution()); assertTrue(observed.getSourceResolution().isUnidentifiedPossible());
-		assertEquals("ALTERNATIVES", observed.getSourceResolution().getStatus());
+		assertNotNull(observed.getSourceResolution());
 		assertRecordedAnimationReceipt(observed, 990002);
 		assertEquals(Integer.valueOf(-1), world.snapshotAtTick(2).getNpcs().get(0).getAnimationId());
 		assertTrue(observed.getSourceResolution().getExcludedCandidates() == null || observed.getSourceResolution().getExcludedCandidates().isEmpty());

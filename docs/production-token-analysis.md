@@ -1,5 +1,7 @@
 # Production source token analysis
 
+> Superseded on 20 November 2026 by the generic resolver; see HANDOFF.md. Kept for history.
+
 Later cleanup: the current production total is **211,045 in 106 Java files**,
 after wildcard imports, shorter qualified type references, obsolete recorder
 queries, a redundant prayer wrapper and unused/test-only helper removals.

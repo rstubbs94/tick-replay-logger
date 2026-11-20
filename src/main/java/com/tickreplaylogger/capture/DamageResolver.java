@@ -95,7 +95,8 @@ final class DamageResolver
 		Map<DamageRecord, List<Candidate>> found = new LinkedHashMap<>();
 		for (DamageRecord hit : window.hits)
 		{
-			found.put(hit, resolve(window, hit, assigned.getOrDefault(hit, new Assignment(Collections.emptyList(), true))));
+			found.put(hit,
+				resolve(window, hit, assigned.getOrDefault(hit, new Assignment(Collections.emptyList(), true))));
 		}
 		Map<Long, DamageRecord> out = new LinkedHashMap<>();
 		found.forEach((hit, candidates) ->
@@ -106,7 +107,8 @@ final class DamageResolver
 			if (from != null)
 			{
 				applied.put(onset, from);
-				candidates = List.of(new Candidate(status + " from " + from, null, null, true, "STATUS_APPLIED:" + onset));
+				candidates = List
+					.of(new Candidate(status + " from " + from, null, null, true, "STATUS_APPLIED:" + onset));
 			}
 			if (hit.getObservationSequence() != null)
 			{
@@ -184,11 +186,13 @@ final class DamageResolver
 		{
 			return recording;
 		}
-		List<EffectEvent> effects = recording.getEvents().getEffectEvents().stream().map(e -> e == null
-			|| !"dot".equals(e.getType()) || !applied.containsKey(e.getStartTick()) ? e
-				: e.toBuilder().sourceName(applied.get(e.getStartTick()))
-					.journalNote(e.getJournalNote() == null ? null : e.getJournalNote() + " by " + applied.get(e.getStartTick()))
-					.build())
+		List<EffectEvent> effects = recording.getEvents().getEffectEvents().stream()
+			.map(
+				e -> e == null || !"dot".equals(e.getType()) || !applied.containsKey(e.getStartTick()) ? e
+					: e.toBuilder().sourceName(applied.get(e.getStartTick()))
+						.journalNote(e.getJournalNote() == null ? null
+							: e.getJournalNote() + " by " + applied.get(e.getStartTick()))
+						.build())
 			.collect(Collectors.toList());
 		return recording.toBuilder().events(recording.getEvents().toBuilder().effectEvents(effects).build()).build();
 	}
@@ -203,13 +207,15 @@ final class DamageResolver
 			: only.evidence.startsWith("PROJECTILE:")
 				? catalog.getProjectileStyles().get(Integer.parseInt(only.evidence.substring(11)))
 				: only.evidence.startsWith("ATTACK_TIMING:")
-					? catalog.getAnimationStyles().get(Integer.parseInt(only.evidence.substring(14))) : null;
+					? catalog.getAnimationStyles().get(Integer.parseInt(only.evidence.substring(14)))
+					: null;
 		String label = SourceResolutionLabels.label(resolution);
 		return hit.toBuilder().sourceResolution(resolution).attackerName(label == null ? "Unknown" : label)
 			.attackerRef(only == null ? null : only.actorRef).attackerNpcId(only == null ? null : only.npcId)
 			.attribution(status != null ? "ENVIRONMENTAL" : only != null ? "OBSERVED" : "UNKNOWN")
-			.attributionEvidence(status != null ? "STATUS_HITSPLAT" : only != null ? only.evidence
-				: found.isEmpty() ? "UNRESOLVED_OBSERVATIONS" : "MULTIPLE_POSSIBLE_DAMAGE_SOURCES")
+			.attributionEvidence(status != null ? "STATUS_HITSPLAT"
+				: only != null ? only.evidence
+					: found.isEmpty() ? "UNRESOLVED_OBSERVATIONS" : "MULTIPLE_POSSIBLE_DAMAGE_SOURCES")
 			.damageType(colour != null ? colour.toLowerCase(Locale.ROOT) : style != null ? style : hit.getDamageType())
 			.build();
 	}
@@ -224,8 +230,9 @@ final class DamageResolver
 		DeathRecordingV2.Events events = recording.getEvents();
 		Window w = new Window(recording);
 		Map<Integer, String[]> causes = new HashMap<>();
-		Set<String> clicked = list(events.getPlayerActions()).stream().filter(a -> a != null
-			&& "PRAYER_DEACTIVATED".equals(a.getType()) && "INPUT".equals(a.getObservationKind()))
+		Set<String> clicked = list(events.getPlayerActions()).stream()
+			.filter(
+				a -> a != null && "PRAYER_DEACTIVATED".equals(a.getType()) && "INPUT".equals(a.getObservationKind()))
 			.map(a -> a.getTick() + ":" + prayerName(a)).collect(Collectors.toSet());
 		Set<String> duplicates = new HashSet<>();
 		List<DeathRecordingV2.Events.PlayerActionRecord> actions = new ArrayList<>();
@@ -237,8 +244,10 @@ final class DamageResolver
 				duplicates.add(action.getTick() + ":" + prayerName(action));
 				continue;
 			}
-			String[] cause = action != null && "PRAYER_DEACTIVATED".equals(action.getType()) && action.getDetail() != null
-				&& action.getDetail().endsWith("cause not established)") ? prayerCause(w, action.getTick()) : null;
+			String[] cause = action != null && "PRAYER_DEACTIVATED".equals(action.getType())
+				&& action.getDetail() != null && action.getDetail().endsWith("cause not established)")
+					? prayerCause(w, action.getTick())
+					: null;
 			if (cause != null)
 			{
 				causes.put(action.getTick(), cause);
@@ -250,11 +259,12 @@ final class DamageResolver
 		{
 			return recording;
 		}
-		List<EffectEvent> effects = list(events.getEffectEvents()).stream().filter(e -> e == null
-			|| !"prayer_state_change".equals(e.getType()) || e.getMagnitude() == null || !duplicates.contains(
-				e.getStartTick() + ":" + e.getMagnitude().replaceAll(" \\(.*", "").toLowerCase(Locale.ROOT)))
-			.map(e -> e == null
-			|| !"prayer_state_change".equals(e.getType()) || !causes.containsKey(e.getStartTick()) ? e
+		List<EffectEvent> effects = list(events.getEffectEvents()).stream()
+			.filter(e -> e == null || !"prayer_state_change".equals(e.getType()) || e.getMagnitude() == null
+				|| !duplicates.contains(
+					e.getStartTick() + ":" + e.getMagnitude().replaceAll(" \\(.*", "").toLowerCase(Locale.ROOT)))
+			.map(e -> e == null || !"prayer_state_change".equals(e.getType()) || !causes.containsKey(e.getStartTick())
+				? e
 				: e.toBuilder().sourceName(causes.get(e.getStartTick())[0]).evidence(causes.get(e.getStartTick())[2])
 					.build())
 			.collect(Collectors.toList());
@@ -279,9 +289,9 @@ final class DamageResolver
 			return null;
 		}
 		// Same landing window as damage: the visual end can trail the registered impact by about a tick.
-		List<ProjectileState> landed = w.projectiles.stream().filter(p -> "player".equals(p.getTargetRef())
-			&& p.getEndCycle() != null && lands(p, frame.getGameCycle())
-			&& SourceResolutionLabels.usableName(p.getSourceName()) != null)
+		List<ProjectileState> landed = w.projectiles
+			.stream().filter(p -> "player".equals(p.getTargetRef()) && p.getEndCycle() != null
+				&& lands(p, frame.getGameCycle()) && SourceResolutionLabels.usableName(p.getSourceName()) != null)
 			.collect(Collectors.toList());
 		List<ProjectileState> prayer = landed.stream()
 			.filter(p -> catalog.getPrayerDisablers().contains(p.getProjectileId())).collect(Collectors.toList());
@@ -292,9 +302,9 @@ final class DamageResolver
 			return null;
 		}
 		String source = sources.iterator().next();
-		return prayer.isEmpty()
-			? new String[]{source, "deactivated as " + source + "'s attack landed", "PROJECTILE_LANDED_SAME_TICK"}
-			: new String[]{source, "disabled by " + source + "'s prayer attack", "PRAYER_ATTACK_PROJECTILE"};
+		return prayer.isEmpty() ? new String[]
+		{ source, "deactivated as " + source + "'s attack landed", "PROJECTILE_LANDED_SAME_TICK" } : new String[]
+		{ source, "disabled by " + source + "'s prayer attack", "PRAYER_ATTACK_PROJECTILE" };
 	}
 
 	/** Every source behind the hits in one tick (the death tick); a single shared resolution is kept as is. */
@@ -346,7 +356,8 @@ final class DamageResolver
 		List<Candidate> area = player == null ? List.of() : area(w, hit, player);
 		List<Candidate> attacks = player == null ? List.of() : attacks(w, tick, amount, player);
 		List<Candidate> actions = ownActions(w, tick);
-		List<Candidate> items = actions.stream().filter(c -> "SELF_ITEM".equals(c.evidence)).collect(Collectors.toList());
+		List<Candidate> items = actions.stream().filter(c -> "SELF_ITEM".equals(c.evidence))
+			.collect(Collectors.toList());
 		List<Candidate> peers = distinct(Stream.of(projectiles, strong(area, true), attacks, items)
 			.flatMap(List::stream).collect(Collectors.toList()));
 		if (!peers.isEmpty())
@@ -393,7 +404,8 @@ final class DamageResolver
 					continue;
 				}
 				String surface = catalog.getSurfaces().get(h.getId());
-				String graphic = "graphicsObject".equals(h.getKind()) ? catalog.getHazardGraphics().get(h.getId()) : null;
+				String graphic = "graphicsObject".equals(h.getKind()) ? catalog.getHazardGraphics().get(h.getId())
+					: null;
 				if (surface != null)
 				{
 					out.add(new Candidate(surface, null, null, true, "SURFACE:" + h.getId()));
@@ -428,10 +440,11 @@ final class DamageResolver
 			String graphic = catalog.getHazardGraphics().get(p.getProjectileId());
 			if (d <= 1 && (graphic != null || SourceResolutionLabels.usableName(p.getSourceName()) != null))
 			{
-				out.add(new Candidate(graphic != null ? graphic.replaceAll("(?i)\\s+travel$", "")
-					: p.getSourceName() == null ? "Area attack" : p.getSourceName() + " (area attack)", p.getSourceRef(),
-					w.sourceNpcId(p), d == 0, "TILE_PROJECTILE:" + p.getProjectileId())
-					.at(p.getSourceSceneKey(), p.getSourceWorldViewId(), p.getSourcePlane()));
+				out.add(new Candidate(
+					graphic != null ? graphic.replaceAll("(?i)\\s+travel$", "")
+						: p.getSourceName() == null ? "Area attack" : p.getSourceName() + " (area attack)",
+					p.getSourceRef(), w.sourceNpcId(p), d == 0, "TILE_PROJECTILE:" + p.getProjectileId())
+						.at(p.getSourceSceneKey(), p.getSourceWorldViewId(), p.getSourcePlane()));
 			}
 		}
 		return out;
@@ -463,8 +476,9 @@ final class DamageResolver
 			if (hitDelays(d).contains(tick - animation.getTick()) && !landedEarlier(w, animation.getTick(), d, tick)
 				&& catalog.canDeal(npc.getNpcId(), amount, catalog.getAnimationStyles().get(id)))
 			{
-				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known || d <= 1,
-					"ATTACK_TIMING:" + id).at(w.sceneKey(animation.getTick()), npc.getWorldViewId(), npc.getPlane()));
+				out.add(
+					new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), known || d <= 1, "ATTACK_TIMING:" + id)
+						.at(w.sceneKey(animation.getTick()), npc.getWorldViewId(), npc.getPlane()));
 			}
 		}
 		return possibleIfSeveral(distinct(out));
@@ -477,10 +491,11 @@ final class DamageResolver
 	private static boolean launchedProjectile(Window w, ObservedEvent animation, NpcState npc)
 	{
 		Integer cycle = animation.getGameCycle();
-		return cycle != null && w.projectiles.stream().anyMatch(p -> p.getStartCycle() != null
-			&& p.getStartCycle() >= cycle && p.getStartCycle() - cycle <= LAUNCH_CYCLES
-			&& (p.getSourceRef() != null ? p.getSourceRef().equals(npc.getActorRef())
-				: npc.getName().equals(p.getSourceName()) && w.uniqueNames.contains(npc.getName())));
+		return cycle != null && w.projectiles.stream()
+			.anyMatch(p -> p.getStartCycle() != null && p.getStartCycle() >= cycle
+				&& p.getStartCycle() - cycle <= LAUNCH_CYCLES
+				&& (p.getSourceRef() != null ? p.getSourceRef().equals(npc.getActorRef())
+					: npc.getName().equals(p.getSourceName()) && w.uniqueNames.contains(npc.getName())));
 	}
 
 	private static String graphicKey(HazardState h)
@@ -495,8 +510,10 @@ final class DamageResolver
 	private boolean landedEarlier(Window w, int animationTick, int distance, int tick)
 	{
 		Set<Integer> delays = hitDelays(distance);
-		return w.hits.stream().anyMatch(h -> h.getImpactTick() >= animationTick && h.getImpactTick() < tick
-			&& delays.contains(h.getImpactTick() - animationTick) && !catalog.getStatuses().containsKey(h.getHitsplatType()));
+		return w.hits.stream()
+			.anyMatch(h -> h.getImpactTick() >= animationTick && h.getImpactTick() < tick
+				&& delays.contains(h.getImpactTick() - animationTick)
+				&& !catalog.getStatuses().containsKey(h.getHitsplatType()));
 	}
 
 	/** Melee lands immediately; bows, thrown weapons and magic by distance; one tick of processing slack. */
@@ -515,10 +532,11 @@ final class DamageResolver
 		{
 			NpcState npc = w.npc(animation.getTick(), animation.getActorRef());
 			int age = tick - animation.getTick();
-			if (npc != null && named(npc) && !launchedProjectile(w, animation, npc) && age >= 0 && age <= 2 && npc.getPlane() == player.getPlane()
+			if (npc != null && named(npc) && !launchedProjectile(w, animation, npc) && age >= 0 && age <= 2
+				&& npc.getPlane() == player.getPlane()
 				&& catalog.getAttackAnimations().contains(number(animation.getData().get("animationId")))
-				&& w.closest(animation.getTick(), player, npc) <= NEARBY_TILES && catalog.canDeal(npc.getNpcId(), amount,
-					catalog.getAnimationStyles().get(number(animation.getData().get("animationId")))))
+				&& w.closest(animation.getTick(), player, npc) <= NEARBY_TILES && catalog.canDeal(npc.getNpcId(),
+					amount, catalog.getAnimationStyles().get(number(animation.getData().get("animationId")))))
 			{
 				out.add(new Candidate(name(npc), npc.getActorRef(), npc.getNpcId(), false, "NEARBY_ATTACK")
 					.at(w.sceneKey(animation.getTick()), npc.getWorldViewId(), npc.getPlane()));
@@ -533,12 +551,14 @@ final class DamageResolver
 	 */
 	private List<Candidate> ownActions(Window w, int tick)
 	{
-		List<String> said = messageTexts(w, tick), harm = said.stream().filter(m -> HARM.matcher(m).find())
-			.collect(Collectors.toList());
+		List<String> said = messageTexts(w, tick),
+			harm = said.stream().filter(m -> HARM.matcher(m).find()).collect(Collectors.toList());
 		boolean confirmed = !said.isEmpty();
 		// With a confirming message, walking to the object first is allowed: the latest click of the last few ticks.
-		int latest = !confirmed ? tick - 1 : w.clicks.stream().filter(c -> c.getTick() <= tick && c.getTick() >= tick - CLICK_TICKS
-			&& interaction(c.getData())).mapToInt(ObservedEvent::getTick).max().orElse(tick - 1);
+		int latest = !confirmed ? tick - 1
+			: w.clicks.stream()
+				.filter(c -> c.getTick() <= tick && c.getTick() >= tick - CLICK_TICKS && interaction(c.getData()))
+				.mapToInt(ObservedEvent::getTick).max().orElse(tick - 1);
 		List<Candidate> out = new ArrayList<>();
 		for (ObservedEvent click : w.clicks)
 		{
@@ -550,7 +570,8 @@ final class DamageResolver
 			Map<String, Object> data = click.getData();
 			String option = text(data.get("option")), target = text(data.get("target"));
 			Object item = data.get("itemId");
-			String selfItem = item instanceof Number ? catalog.getSelfDamageItems().get(((Number) item).intValue()) : null;
+			String selfItem = item instanceof Number ? catalog.getSelfDamageItems().get(((Number) item).intValue())
+				: null;
 			if (age < 0 || age > 1 || option == null)
 			{
 				continue;
@@ -568,10 +589,9 @@ final class DamageResolver
 					continue;
 				}
 				NpcState npc = w.npc(click.getTick(), click.getRelatedActorRef());
-				out.add(new Candidate(name, npc == null ? null
-					: npc.getActorRef(), npc == null ? null : npc.getNpcId(), confirmed, "OWN_ACTION:" + option)
-					.at(npc == null ? null : w.sceneKey(click.getTick()), npc == null ? null : npc.getWorldViewId(),
-						npc == null ? null : npc.getPlane()));
+				out.add(new Candidate(name, npc == null ? null : npc.getActorRef(), npc == null ? null : npc.getNpcId(),
+					confirmed, "OWN_ACTION:" + option).at(npc == null ? null : w.sceneKey(click.getTick()),
+						npc == null ? null : npc.getWorldViewId(), npc == null ? null : npc.getPlane()));
 			}
 		}
 		return out;
@@ -602,16 +622,16 @@ final class DamageResolver
 	{
 		return w.messages.stream().filter(m -> tick - m.getTick() >= 0 && tick - m.getTick() <= 1)
 			.map(m -> text(m.getData().get("message"))).filter(Objects::nonNull)
-			.map(m -> m.replaceAll("<[^>]+>", "").replaceAll("[.!]+$", "").trim()).filter(m -> !m.isEmpty())
-			.distinct().collect(Collectors.toList());
+			.map(m -> m.replaceAll("<[^>]+>", "").replaceAll("[.!]+$", "").trim()).filter(m -> !m.isEmpty()).distinct()
+			.collect(Collectors.toList());
 	}
 
 	/** The message names the clicked thing ("stung by the nettles", "the brazier is broken"). */
 	private static boolean mentions(String message, String target)
 	{
 		String lower = message.toLowerCase(Locale.ROOT);
-		return Arrays.stream(target.toLowerCase(Locale.ROOT).split("[^a-z]+")).anyMatch(word -> word.length() >= 4
-			&& lower.contains(word));
+		return Arrays.stream(target.toLowerCase(Locale.ROOT).split("[^a-z]+"))
+			.anyMatch(word -> word.length() >= 4 && lower.contains(word));
 	}
 
 	private static final java.util.regex.Pattern HARM = java.util.regex.Pattern.compile(
@@ -635,7 +655,8 @@ final class DamageResolver
 			{
 				continue;
 			}
-			byCycle.keySet().stream().filter(c -> lands(p, c)).min(Comparator.comparingInt(c -> Math.abs(p.getEndCycle() - c)))
+			byCycle.keySet().stream().filter(c -> lands(p, c))
+				.min(Comparator.comparingInt(c -> Math.abs(p.getEndCycle() - c)))
 				.ifPresent(c -> landing.computeIfAbsent(c, k -> new ArrayList<>()).add(p));
 		}
 		Map<DamageRecord, Assignment> out = new HashMap<>();
@@ -649,7 +670,8 @@ final class DamageResolver
 		int weakest = projectiles.stream().map(p -> catalog.ceiling(w.sourceNpcId(p))).filter(Objects::nonNull)
 			.min(Integer::compare).orElse(Integer.MAX_VALUE);
 		List<List<ProjectileState>> best = new ArrayList<>();
-		int[] bestScore = {-1, -1};
+		int[] bestScore =
+		{ -1, -1 };
 		permute(hits, projectiles, new ArrayList<>(), new HashSet<>(), choice ->
 		{
 			int matched = 0, forced = 0;
@@ -688,8 +710,9 @@ final class DamageResolver
 	}
 
 	/** Every one-to-one choice of a projectile (or none) per hit. Groups are a few splats on one cycle. */
-	private static void permute(List<DamageRecord> hits, List<ProjectileState> projectiles, List<ProjectileState> chosen,
-		Set<ProjectileState> used, java.util.function.Consumer<List<ProjectileState>> visit)
+	private static void permute(List<DamageRecord> hits, List<ProjectileState> projectiles,
+		List<ProjectileState> chosen, Set<ProjectileState> used,
+		java.util.function.Consumer<List<ProjectileState>> visit)
 	{
 		if (chosen.size() == hits.size())
 		{
@@ -716,16 +739,17 @@ final class DamageResolver
 	{
 		boolean identified = found.size() == 1 && found.get(0).strong;
 		boolean actors = !found.isEmpty() && found.stream().allMatch(Candidate::located);
-		List<SourceResolution.Candidate> candidates = found.stream().map(c -> SourceResolution.Candidate.builder()
-			.key(c.evidence + ":" + c.key()).name(c.name).familyKey(c.family())
-			.actorRef(actors ? c.actorRef : null).npcId(c.npcId).sceneKey(actors ? c.sceneKey : null)
-			.worldViewId(actors ? c.worldViewId : null).plane(actors ? c.plane : null)
-			.strength(identified ? "STRONG" : "POSSIBLE").evidence(List.of(c.evidence)).build())
+		List<SourceResolution.Candidate> candidates = found.stream()
+			.map(c -> SourceResolution.Candidate.builder().key(c.evidence + ":" + c.key()).name(c.name)
+				.familyKey(c.family()).actorRef(actors ? c.actorRef : null).npcId(c.npcId)
+				.sceneKey(actors ? c.sceneKey : null).worldViewId(actors ? c.worldViewId : null)
+				.plane(actors ? c.plane : null).strength(identified ? "STRONG" : "POSSIBLE")
+				.evidence(List.of(c.evidence)).build())
 			.collect(Collectors.toList());
 		return SourceResolution.builder().version(1)
 			.status(found.isEmpty() ? "UNIDENTIFIED" : identified ? "IDENTIFIED" : "ALTERNATIVES")
-			.identityLevel(found.isEmpty() ? "NONE" : actors ? "ACTOR" : "FAMILY")
-			.candidates(candidates).unidentifiedPossible(!identified).catalogId(catalog.getId()).method(METHOD).build();
+			.identityLevel(found.isEmpty() ? "NONE" : actors ? "ACTOR" : "FAMILY").candidates(candidates)
+			.unidentifiedPossible(!identified).catalogId(catalog.getId()).method(METHOD).build();
 	}
 
 	private static List<Candidate> possibleIfSeveral(List<Candidate> found)
@@ -844,10 +868,12 @@ final class DamageResolver
 			uniqueNames = actorsByName.entrySet().stream().filter(e -> e.getValue().size() == 1).map(Map.Entry::getKey)
 				.collect(Collectors.toSet());
 			DeathRecordingV2.Events events = recording.getEvents();
-			hits = list(events.getDamageEvents()).stream().filter(h -> "player".equals(h.getDefenderRef())
-				&& !"DEALT".equals(h.getDirection()) && !"NPC_RECEIVED".equals(h.getDirection()))
-				.sorted(Comparator.comparing((DamageRecord h) -> h.getObservedCycle() == null ? 0 : h.getObservedCycle())
-					.thenComparing(h -> h.getObservationSequence() == null ? 0 : h.getObservationSequence()))
+			hits = list(events.getDamageEvents()).stream()
+				.filter(h -> "player".equals(h.getDefenderRef()) && !"DEALT".equals(h.getDirection())
+					&& !"NPC_RECEIVED".equals(h.getDirection()))
+				.sorted(
+					Comparator.comparing((DamageRecord h) -> h.getObservedCycle() == null ? 0 : h.getObservedCycle())
+						.thenComparing(h -> h.getObservationSequence() == null ? 0 : h.getObservationSequence()))
 				.collect(Collectors.toList());
 			// Hits whose HP effect is unknown (unlisted hitsplat types) are kept on their hitsplat observation.
 			Set<Long> listed = hits.stream().map(DamageRecord::getObservationSequence).filter(Objects::nonNull)
@@ -867,8 +893,9 @@ final class DamageResolver
 				.thenComparing(h -> h.getObservationSequence() == null ? 0 : h.getObservationSequence()));
 			for (ObservedEvent e : list(events.getObservations()))
 			{
-				if ("ANIMATION_CHANGED".equals(e.getType()) && e.getActorRef() != null && e.getActorRef().startsWith("npc")
-					&& e.getData() != null && number(e.getData().get("animationId")) >= 0)
+				if ("ANIMATION_CHANGED".equals(e.getType()) && e.getActorRef() != null
+					&& e.getActorRef().startsWith("npc") && e.getData() != null
+					&& number(e.getData().get("animationId")) >= 0)
 				{
 					animations.add(e);
 				}
@@ -885,10 +912,12 @@ final class DamageResolver
 
 		ObservedActorState player(int tick)
 		{
-			for (int t : new int[]{tick, tick - 1, tick + 1})
+			for (int t : new int[]
+			{ tick, tick - 1, tick + 1 })
 			{
 				WorldSnapshot frame = frames.get(t);
-				if (frame != null && frame.getPlayer() != null && Boolean.TRUE.equals(frame.getPlayer().getWorldPositionKnown()))
+				if (frame != null && frame.getPlayer() != null
+					&& Boolean.TRUE.equals(frame.getPlayer().getWorldPositionKnown()))
 				{
 					return frame.getPlayer();
 				}
@@ -916,7 +945,8 @@ final class DamageResolver
 		private int closest(int tick, ObservedActorState fallback, int x, int y, int size, int plane)
 		{
 			int best = distance(fallback, x, y, size);
-			for (int t : new int[]{tick, tick - 1})
+			for (int t : new int[]
+			{ tick, tick - 1 })
 			{
 				WorldSnapshot frame = frames.get(t);
 				if (frame != null && located(frame) && frame.getPlayer().getPlane() == plane)
@@ -935,7 +965,8 @@ final class DamageResolver
 
 		NpcState npc(int tick, String ref)
 		{
-			for (int t : new int[]{tick, tick - 1, tick + 1})
+			for (int t : new int[]
+			{ tick, tick - 1, tick + 1 })
 			{
 				WorldSnapshot frame = frames.get(t);
 				for (NpcState npc : frame == null ? List.<NpcState>of() : list(frame.getNpcs()))
@@ -962,8 +993,8 @@ final class DamageResolver
 				return source.getNpcId();
 			}
 			return frames.values().stream().flatMap(f -> list(f.getNpcs()).stream())
-				.filter(n -> p.getSourceName() != null && p.getSourceName().equals(n.getName()))
-				.map(NpcState::getNpcId).filter(Objects::nonNull).distinct()
+				.filter(n -> p.getSourceName() != null && p.getSourceName().equals(n.getName())).map(NpcState::getNpcId)
+				.filter(Objects::nonNull).distinct()
 				.max(Comparator.comparing(id -> Optional.ofNullable(catalog.ceiling(id)).orElse(Integer.MAX_VALUE)))
 				.orElse(null);
 		}

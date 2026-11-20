@@ -1,9 +1,11 @@
 # Release notes draft
 
 Tick Replay Logger now does a better job of matching recorded damage to its
-source. It uses recorded attacks, projectiles, hit types, positions and known
-attack rules. When several sources fit, their names can appear together; when
-the source cannot be identified, the hit shows Unknown.
+source. It uses projectiles landing on you, attacks timed to the hit, floors and
+hazards under you, max hits per attack style and your own actions. Poison and
+venom name what applied them, and prayers switched off by an attack name that
+attack. When several sources fit, their names appear together; when the source
+cannot be identified, the hit shows Unknown.
 
 - Added recorded tick intervals and sampled world ping for context during review.
 - Expanded JSON exports with more NPC, position, animation, projectile, object

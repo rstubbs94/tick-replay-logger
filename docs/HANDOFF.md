@@ -3,27 +3,27 @@
 ## Generic resolver branch - 20 November 2026
 
 Branch `rebuild/generic-resolver-20261120` replaces the damage resolver and keeps
-capture, storage, export and UI unchanged. Plan, spikes and evidence are in
-`C:\Dev	ick-replay-testebuild-plan-20261120` (`PLAN-v3.md`, `SPIKE-RESULTS.md`).
+capture, storage, export and UI unchanged.
 
-- Removed: `ResolverV1`, `OriginalSourceProof`, `RawEvidenceWindow`,
-  `SourceEvidenceResolver`, `ResolverV1Recording`, `SourceAnnotations`,
-  `ResolverEvidence`, `ResolutionCandidate`, `ResolutionResult`,
-  `ObservedInventorySourceHints`, `SelfDamageInputs`, `SourceAssociationNpcIndex`,
-  and the capture code that only fed them.
-- Added: `capture/DamageResolver` (generic evidence ladder: status hitsplats,
-  projectiles matched jointly per cycle with max-hit limits, surfaces and timed
-  attacks, nearby attacks, the player's own actions, game messages) and
-  `capture/ResolverCatalog` with `resolver-catalog.json` (0.22 MB, generated from
-  the research data). Max-hit exclusion is off for scaled content.
-- Output keeps the `SourceResolution` version 1 contract (`method: RESOLVER_V2`).
-- Production size: **165,990 tokens** (local counter). Full suite: 1,022 tests,
-  0 failures. Thin-JAR restricted-API scan: 0 findings.
-- On the 7 local recordings: 95 identified / 37 alternatives / 0 unknown received
-  damage hits, against 15 / 41 / 21 from the previous resolver.
-- Not yet done: in-game testing of the new build, official formatter pass,
-  slimming the remaining capture-time classification (phase B), website change
-  to display the plugin's resolution instead of re-resolving.
+- Removed the `ResolverV1` evidence-proof path (`ResolverV1`, `OriginalSourceProof`,
+  `RawEvidenceWindow`, `SourceEvidenceResolver`, `ResolverV1Recording`,
+  `SourceAnnotations`, `ResolverEvidence`, `ResolutionCandidate`, `ResolutionResult`,
+  `ObservedInventorySourceHints`, `SelfDamageInputs`, `SourceAssociationNpcIndex`)
+  and the capture code that only fed it.
+- Added `capture/DamageResolver` and `capture/ResolverCatalog` with
+  `resolver-catalog.json` (0.22 MB, generated from wiki and cache data). The
+  evidence codes, rules and output contract are documented in
+  `export-schema-v1.3.md` ("Optional resolved sources").
+- Production size: **169,781 tokens** (local counter). Full suite: 1,038 tests,
+  0 failures. Thin-JAR restricted-API scan: 0 findings. The official formatter
+  pass is AST-equal and idempotent for every changed production file.
+- Checked hit by hit on owner recordings: Zulrah, Corrupted Gauntlet, rock cake,
+  pickpocketing, a guard, Vorkath, Scurrius, Kalphite Soldiers (poison), Barrows,
+  barehanded nettles and Wintertodt. Every fix was a generic rule or catalog
+  entry; there is no encounter-specific code.
+- Not done: slimming remaining capture-time classification and the unused
+  resolver section of `runtime-mechanics.json`; the website still re-resolves
+  imports instead of showing the plugin's resolution.
 
 The section below describes the previous branch state.
 

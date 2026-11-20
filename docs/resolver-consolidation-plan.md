@@ -1,5 +1,7 @@
 # Standard-build and single-resolver consolidation plan
 
+> Superseded on 20 November 2026 by the generic resolver; see HANDOFF.md. Kept for history.
+
 Status, 20 November: the continuous-capture refactor passes 1,200 checks and
 the standard build/API checks. Production source measures 211,045 tokens;
 the strict below-200,000 review gate remains open. The public candidate is

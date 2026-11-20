@@ -54,8 +54,8 @@ final class ResolverCatalog
 			{
 				row.get(4).getAsJsonObject().entrySet().forEach(s -> styles.put(s.getKey(), s.getValue().getAsInt()));
 			}
-			npcs.put(Integer.parseInt(e.getKey()), new Npc(integer(row.get(0)), integer(row.get(1)),
-				row.get(2).getAsInt() == 1, animations, styles));
+			npcs.put(Integer.parseInt(e.getKey()),
+				new Npc(integer(row.get(0)), integer(row.get(1)), row.get(2).getAsInt() == 1, animations, styles));
 		});
 		json.getAsJsonArray("venomous").forEach(e -> venomous.add(e.getAsInt()));
 		json.getAsJsonArray("attackAnims").forEach(e -> attackAnimations.add(e.getAsInt()));
@@ -71,8 +71,8 @@ final class ResolverCatalog
 		{
 			json.getAsJsonArray("prayerDisablers").forEach(e -> prayerDisablers.add(e.getAsInt()));
 		}
-		json.getAsJsonObject("selfDamageItems").entrySet()
-			.forEach(e -> selfDamageItems.put(Integer.parseInt(e.getKey()), e.getValue().getAsJsonArray().get(0).getAsString()));
+		json.getAsJsonObject("selfDamageItems").entrySet().forEach(
+			e -> selfDamageItems.put(Integer.parseInt(e.getKey()), e.getValue().getAsJsonArray().get(0).getAsString()));
 	}
 
 	private static volatile ResolverCatalog bundled;
@@ -86,7 +86,8 @@ final class ResolverCatalog
 			{
 				if (bundled == null)
 				{
-					try (InputStream in = ResolverCatalog.class.getResourceAsStream("/com/tickreplaylogger/resolver-catalog.json"))
+					try (InputStream in = ResolverCatalog.class
+						.getResourceAsStream("/com/tickreplaylogger/resolver-catalog.json"))
 					{
 						bundled = load(gson, in);
 					}

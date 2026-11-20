@@ -20,17 +20,17 @@
 ## Generic resolver (branch rebuild/generic-resolver-20261120)
 
 - [x] Replace the resolver path with the generic data-driven resolver; keep capture, export and UI.
-- [x] Full suite green, thin-JAR API scan clean, production under 200,000 tokens (165,990).
-- [ ] Owner tests the new build in game (test client in `C:\Dev	ick-replay-test\generic-resolver-test`).
-- [ ] Run the official formatter on the new files.
+- [x] Full suite green, thin-JAR API scan clean, production under 200,000 tokens (169,781).
+- [x] Owner tests the new build in game; recordings reviewed hit by hit and fixes made generically.
+- [x] Run the official formatter on the new files.
 - [ ] Phase B: remove remaining capture-time classification and the unused resolver section of `runtime-mechanics.json`.
 - [ ] Website: show the plugin's resolution instead of re-resolving on import.
 - [x] A manual prayer switch-off was also logged as "cause not established"; the resolver now drops the derived duplicate.
 
 ## Before resubmission
 
-- [ ] Reduce readable production source below the maintainer's 200,000-token limit, with headroom.
-- [ ] Validate the final reduced source and the exact standard-built artifact.
+- [x] Reduce readable production source below the maintainer's 200,000-token limit, with headroom (169,781 locally).
+- [x] Validate the final reduced source and the exact standard-built artifact (Hub template build; local API scan, 0 findings).
 - [ ] Update the existing public source/Plugin Hub PR only after that gate passes.
 - [ ] Address actual CI/reviewer feedback and obtain maintainer approval.
 

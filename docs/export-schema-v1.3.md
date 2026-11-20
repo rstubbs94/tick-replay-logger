@@ -80,47 +80,44 @@ Raw callbacks retain original actor/effective-definition samples, field availabi
 ## Optional resolved sources
 
 Current damage records can add `sourceResolution` without changing schema 1.3.
-It describes the best supported source after the hit. It never replaces the
-recorded amount, hitsplat type, original source fields or candidate observations.
-
-Optional source hints can also retain a source-qualified body association,
-graphic creation or exact public system response. These remain `POSSIBLE` and
-leave an unidentified alternative. A system response does not establish an item
-instance or accepted input; its reference family is separate from an actor ref.
+It describes where the hit most likely came from, worked out after capture. It
+never replaces the recorded amount, hitsplat type or observations.
 
 | Field | Meaning |
 | --- | --- |
 | `version` | `1` for this source-resolution contract. |
-| `status` | `IDENTIFIED`, `ALTERNATIVES` or `UNIDENTIFIED`. |
-| `identityLevel` | `ACTOR`, `FAMILY` or `NONE`. Source identity is separate from identifying the exact attack. |
-| `candidates` | Remaining source hypotheses, each with a stable key, usable name, evidence and `STRONG` or `POSSIBLE` strength. |
-| `excludedCandidates` | Hypotheses ruled out by an applicable constraint, with the rule and comparison retained. |
-| `unidentifiedPossible` | An observation gap or unqualified correlation leaves room for another source. |
-| `catalogId` / `method` | The reference catalog and resolver used. |
+| `status` | `IDENTIFIED` (one source remains), `ALTERNATIVES` (several remain, or one remains with only weak evidence) or `UNIDENTIFIED`. |
+| `identityLevel` | `ACTOR` when every candidate carries an actor reference with its scene, world view and plane; `FAMILY` otherwise; `NONE` with no candidates. |
+| `candidates` | Remaining sources, each with a unique `key`, usable `name`, `familyKey`, `STRONG` or `POSSIBLE` strength and an `evidence` code. |
+| `excludedCandidates` | Optional. Not produced by `RESOLVER_V2`; older recordings may contain it. |
+| `unidentifiedPossible` | False only for `IDENTIFIED`. |
+| `catalogId` / `method` | The bundled resolver catalog version and `RESOLVER_V2`. |
 
-Candidate identity can include `actorRef`, `npcId`, `familyKey`, `sceneKey`,
-`worldViewId` and `plane`. An actor match requires its recorded lifetime and
-native scope; identical names never establish identical actors. A family match
-can establish the source family without selecting an individual minion, object
-or tile. `IDENTIFIED` means one supported source hypothesis remains; it is not
-server-confirmed causality. No numerical probability is invented.
+`IDENTIFIED` has exactly one candidate. It means one supported source remains in
+the recorded evidence; it is not server-confirmed causality. Labels join candidate
+names, such as `Zulrah` or `Snakeling or Zulrah`; with no candidate they show
+`Unknown`.
 
-Primary labels use the source names, such as `Entity A`, `Entity A or Entity B`,
-or `Entity A or unidentified source`. With no named candidate they use `Unknown`.
-Evidence and excluded alternatives remain available separately.
+Evidence codes, from strongest to weakest:
 
-Maximum-hit rules use their own declared applicability. An ordinary base profile
-requires the observed variant, style and modifier facts; it cannot cap an unknown
-special attack. Independently reviewed component or whole-NPC ceilings have their
-own exact source, context and callback requirements. Missing facts never default
-to normal values. A component limit cannot erase a separately supported contact
-or area hypothesis. Every observed amount and zero-damage callback remains intact.
+| Code | Recorded evidence |
+| --- | --- |
+| `STATUS` | Poison, venom, disease, burn or bleed hitsplat while that status is recorded. |
+| `STATUS_APPLIED:<tick>` | As `STATUS`, naming whatever hit the player on the tick the poison counter turned on ("Poison from Kalphite Soldier"). |
+| `PROJECTILE:<id>` | A projectile aimed at the player whose end cycle matches the hit. Projectiles landing on one cycle are matched jointly with splats, under max hits. |
+| `SURFACE:<id>`, `CONTACT_NPC` | A reviewed damaging object or contact NPC on the player's tile in that frame or the previous one. |
+| `GRAPHIC_ON_TILE:<id>` | A cache-named hazard graphic on the player's tile; `STRONG` when it ends on or just after the hit. |
+| `TILE_PROJECTILE:<id>` | A projectile aimed at a tile landing on, or next to, where the player stood. |
+| `ATTACK_TIMING:<animation>` | An NPC targeting the player whose attack animation lands on this tick by the hit-delay rules. |
+| `SELF_ITEM` | A listed self-damage item used on the hit tick or the tick before. |
+| `NEARBY_ATTACK` | An attack-named animation from a nearby NPC not targeting the player. |
+| `OWN_ACTION:<option>` | The player's own scenery or NPC click, used when nothing attacked them (pickpocket, nettles). |
+| `MESSAGE` | A game message at the hit, used last; its text is the candidate name. |
 
-An actual projectile source can occupy a different native view from its target.
-Its original actor reference and source scope remain separate from impact scope.
-Later model, level, form or animation readings cannot replace unavailable or
-contradictory original facts for numerical exclusions. Shared or reused projectile
-witnesses retain uncertainty about their association with individual hits.
+A source is removed only by a positive fact: an amount above the source's max hit
+for that attack style (unscaled content only), a different plane, or an attack
+that already landed on an earlier tick. Scaled content (raids and modes) never
+uses max-hit exclusion. Missing facts weaken strength; they never exclude.
 
 Additional supporting fields are optional:
 
@@ -131,18 +128,18 @@ Additional supporting fields are optional:
 - Rich damage `impactContextEpoch` records the capture-context generation at the
   original hit callback. `finalizationContextEpoch` records the generation when
   that hit was finalized. Observation `data.causalSceneEpoch` and projectile
-  source-history `contextEpoch` use the same counter. Missing values remain
-  unknown. A later context change prevents borrowing later scene state; it does
-  not erase independently recorded original hit or source facts.
+  source-history `contextEpoch` use the same counter. Missing values remain unknown.
 - Projectile `proximitySourceCandidate` records a structured hypothesis. It is
   separate from the API's `sourceRef` and includes its own scope and availability.
-- `sourceHistory.firstObservedSource.proximitySampleRetained` records that the
-  first proximity-sample outcome was retained, including a null or failed read.
-  Its optional `proximityCandidate` is an immutable original hypothesis; later
-  current samples cannot replace it. Observation issues still distinguish a
-  failed read from a successful null. First observed is not proof of server launch time.
-- Rich `summary.sourceResolution` and wrapper `fatalSourceResolution` mirror the
-  chosen fatal record's result without changing the original fatal-hit facts.
+- Rich `summary.sourceResolution` and wrapper `fatalSourceResolution` describe
+  the hits in the death tick without changing the original fatal-hit facts.
+- Hits whose HP effect is unknown keep their resolution on the hitsplat
+  observation (`data.sourceResolution`) beside `data.attributionContext`.
+
+Prayer and status explanations are also written after capture: a prayer switched
+off without the player's click is explained by the projectile that landed that
+tick, and a `Poisoned`/`Venomed` effect names what hit the player as it began. A
+derived switch-off duplicating the player's own click is dropped.
 
 All resolution uses already recorded observations. There are no future gameplay
 instructions or automatically generated attacks, damage or player actions.
@@ -154,13 +151,12 @@ an original type read, including a real type zero. False records an unavailable
 read. Older records without the flag can use a known nonzero type as best-effort
 information; missing/default zero does not prove a corruption hitsplat.
 
-The resolver checks complete, source-qualified outcome signatures before numeric
-bounds or source consensus. Signatures and observed-cue mechanism bindings come
-from the reference data. A mismatch adds `HITSPLAT_TYPE_MISMATCH` to excluded
-hypotheses; numerical-reference recovery cannot revive that contradiction.
-Unknown types, incomplete rules and unqualified mechanisms stay unestablished.
-Ordinary hitsplats do not distinguish melee, ranged and magic attack styles.
-Raw amounts, type IDs, attribution fields and observations remain unchanged.
+A poison- or venom-coloured hitsplat while the recorded poison counter shows no
+such status (including anti-venom immunity) is a one-off hit in that colour and
+is resolved from the other evidence; with nothing else it remains the status.
+Ordinary hitsplats do not distinguish melee, ranged and magic; a damage type
+comes from the projectile's or attack animation's cache name when known. Raw
+amounts, type IDs and observations remain unchanged.
 
 ## Partial object and graphic samples
 
@@ -222,25 +218,12 @@ from the observed fields; a cycle estimate is not an observed future event.
 
 ## Qualified retrospective source hints
 
-The bundled catalog can declare item-operation bounds, observed outcome types,
-system-response hints and projectile endpoint clues. The resolver applies the
-same operators to each qualified declaration. A canonical item ID, operation,
-source reference and source-page hash must match before an item rule applies.
-An observed input is not proof that the action was accepted or executed.
-
-Source qualifications use facts observed at the relevant callback. A later NPC
-form, combat level, definition or native view must not supply missing earlier
-facts. Source-wide ceilings are distinct from ordinary-attack ceilings: an
-ordinary attack profile cannot exclude a separate contact or area component.
-Overlapping viable source models remain alternatives until the recorded evidence
-rules each one out.
-
-Projectile endpoint clues retain the original observed API source, its native
-scope and the latest pre-hit destination and client end cycle. Their timing
-window is an analysis policy, not a measured server impact clock. They remain
-`POSSIBLE`, retain an unidentified alternative and do not establish attack style,
-an ordinary-attack damage ceiling or a unique hit assignment. Original raw
-attacker and damage fields remain unchanged.
+The resolver catalog (`resolver-catalog.json`) is generated from wiki and cache
+data and contains facts only: NPC max hits overall and per combat style, attack
+speeds, a scaled-content flag, cache-named attack animations and projectile
+styles, prayer-attack projectiles, labelled hazard graphics, reviewed damaging
+surfaces and contact NPCs, and self-damage items. Missing entries leave the
+generic rules in place; they never exclude a source.
 
 ## Export completion and old files
 

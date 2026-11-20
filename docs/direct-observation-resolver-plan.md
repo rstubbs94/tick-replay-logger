@@ -1,5 +1,7 @@
 ﻿# Direct observation resolver: review-size implementation contract
 
+> Superseded on 20 November 2026 by the generic resolver; see HANDOFF.md. Kept for history.
+
 Status: implementation work, not ready for submission.
 
 The direct-path checkpoints reduced the targeted failures from 91 of 530 to
